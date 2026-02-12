@@ -1,7 +1,7 @@
 ---
 name: product-owner
 description: Validate epic business requirements, review story breakdown, and update product documentation with discoveries during epic refinement.
-model: sonnet
+model: opus
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, TaskList, TaskGet, TaskUpdate
 skills: agent-summary-complex, project-documentation, project-tracking, session-id-finder
 phases:

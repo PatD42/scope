@@ -33,15 +33,15 @@ Story 1:
     ↓
   dev-story-1 (blocked by sdet-story-1)
 
-Story 2:
+Story 2 (depends on Story 1):
   sdet-story-2 (blocked by sdet-story-1)  ← SDET is sequential
     ↓
-  dev-story-2 (blocked by sdet-story-2)   ← dev starts when its SDET done
+  dev-story-2 (blocked by sdet-story-2 + dev-story-1)  ← dev waits for its SDET + story deps
 
 Story N:
   sdet-story-N (blocked by sdet-story-(N-1))
     ↓
-  dev-story-N (blocked by sdet-story-N)
+  dev-story-N (blocked by sdet-story-N + dev tasks of declared dependencies)
 
 After all complete:
   /audit_epic {epic-id}
@@ -50,7 +50,9 @@ After all complete:
 
 **Key rules:**
 - SDET tasks are **sequential** (no concurrent SDET — test design needs prior context)
-- Developer tasks start as soon as their SDET task completes (developers **can** run concurrently)
+- Developer tasks start when their SDET task AND all implementation dependencies complete
+- **ONE developer agent at a time** — concurrent writes to the same worktree cause race conditions and inconsistent state
+- The developer agent processes tasks sequentially, picking the lowest-ID unblocked dev task
 - Story 0 (scaffolding) is done by the architect before any SDET/dev work
 
 ---
@@ -122,13 +124,20 @@ file_plans.sort()  # Ensures story-00, story-01, story-02... order
 # Parse story info from each file plan
 stories = []
 for plan_path in file_plans:
+    plan_content = Read(plan_path)
     plan = read_yaml(plan_path)
     story_num = extract_story_number(plan_path)  # "00", "01", etc.
+
+    # Parse dependency comment: "# Dependencies: Stories 01a, 01b, 02"
+    dep_line = [l for l in plan_content.split('\n') if l.startswith('# Dependencies:')]
+    story_deps = parse_story_refs(dep_line)  # Returns ["01a", "01b", "02", ...]
+
     stories.append({
         "number": story_num,
         "story_id": plan["story_id"],
         "story_title": plan["story_title"],
         "file_plan_path": plan_path,
+        "dependencies": story_deps,
         "is_scaffolding": story_num == "00"
     })
 
@@ -233,12 +242,23 @@ Instructions:
     )
     task_ids[f"dev-story-{num}"] = dev_task_id
 
-    # Wire dependencies
+    # Wire dependencies: sdet blocked by prev sdet, dev blocked by its sdet
     if sdet_blocked_by:
         TaskUpdate(taskId=sdet_task_id, addBlockedBy=sdet_blocked_by)
     TaskUpdate(taskId=dev_task_id, addBlockedBy=[sdet_task_id])
 
     prev_sdet_task_id = sdet_task_id
+
+# --- Second pass: wire inter-story implementation dependencies ---
+# dev-story-N is also blocked by dev tasks of its declared dependencies
+for story in impl_stories:
+    num = story["number"]
+    dev_task_id = task_ids[f"dev-story-{num}"]
+
+    for dep_num in story["dependencies"]:
+        dep_key = f"dev-story-{dep_num}"
+        if dep_key in task_ids:
+            TaskUpdate(taskId=dev_task_id, addBlockedBy=[task_ids[dep_key]])
 ```
 
 ### Step 3: Launch Agents
@@ -263,9 +283,21 @@ Task(
     run_in_background=True
 )
 
-# 3. Developer agent(s) (can run concurrently — one agent polls for unblocked dev tasks)
+# 3. Developer agent — SINGLE agent, sequential execution
+# 🚨 NEVER spawn more than ONE developer agent. Multiple developers writing to
+#    the same worktree causes race conditions, merge conflicts, and corrupted state.
+#    If you need to re-launch after failure, wait for the current one to finish first.
 Task(
-    prompt="Take the role of developer agent. Find and execute your tasks in order. Poll for new tasks after completing each one.",
+    prompt="""Take the role of developer agent.
+    Process dev tasks ONE AT A TIME in dependency order:
+    1. Check TaskList for the lowest-ID dev task that is pending and has NO blockedBy
+    2. If none available, STOP — you will be re-launched when tasks unblock
+    3. Implement it, run tests
+    4. Mark completed
+    5. Check TaskList again for next unblocked dev task
+    6. Repeat until no more dev tasks available
+
+    CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.""",
     subagent_type="general-purpose",
     description="Developer: implement",
     run_in_background=True
@@ -325,35 +357,70 @@ if audit.has_critical_or_major:
     Skill(skill="audit_epic", args=epic_id)
 ```
 
+### Step 6: Run All Epic Tests
+
+After fixes are applied (or immediately after audit if no fixes needed), run all tests created/modified during this epic.
+
+```python
+# Collect all test files from file plans
+test_files = []
+for plan_path in file_plans:
+    plan = read_yaml(plan_path)
+    for f in plan.get("files_to_create", []) + plan.get("files_to_modify", []):
+        if "/tests/" in f["path"] or f["path"].endswith(".test.ts") or f["path"].endswith("_test.py"):
+            test_files.append(f["path"])
+
+# Run all epic tests
+Bash(f"run_tests {' '.join(test_files)}")  # Adapt to project test runner
+
+# Present results
+if all_passed:
+    Output: f"""
+    All {len(test_files)} test files pass.
+    Epic {epic_id} implementation complete.
+    """
+else:
+    Output: f"""
+    {failed_count} test failures detected after audit fixes.
+    Failing tests: {failing_tests}
+
+    Investigating failures...
+    """
+    # Debug and fix remaining failures
+    # Re-run tests until all pass or escalate to user
+```
+
 ---
 
 ## Task Dependency Diagram
 
-For an epic with Story 0 + 3 implementation stories:
+For stories where Story 3 depends on Stories 1 and 2:
 
 ```
 architect-story-00
        ↓
-sdet-story-01 ──────→ dev-story-01
-       ↓
-sdet-story-02 ──────→ dev-story-02
-       ↓
-sdet-story-03 ──────→ dev-story-03
-                            ↓
-                     audit_epic (after all complete)
+sdet-story-01 ──→ dev-story-01 ──────────┐
+       ↓                                  │
+sdet-story-02 ──→ dev-story-02 ──────────┤
+       ↓                                  │
+sdet-story-03 ──→ dev-story-03 ←─────────┘  (blocked by dev-01 AND dev-02)
+                        ↓
+                 audit_epic (after all complete)
 ```
 
-**Concurrency timeline:**
+Developer tasks respect BOTH:
+1. Their SDET task (tests must exist first)
+2. Their story's implementation dependencies (imported code must exist)
+
+**Concurrency timeline (single developer agent, sequential):**
 ```
 Time →
 architect:  [====story-0====]
 sdet:                        [====story-1====][====story-2====][====story-3====]
-developer:                                    [====story-1====]
-developer:                                                    [====story-2====]
-developer:                                                                    [====story-3====]
+developer:                                    [====story-1====][====story-2====][====story-3====]
 ```
 
-Note: Developer stories may overlap if the developer agent finishes one before the next SDET task completes. In practice, developer often takes longer than SDET, so they tend to be sequential.
+Note: Developer processes tasks one at a time. A dev task only starts when both its SDET task AND all declared story dependencies (other dev tasks) are complete. This prevents concurrent writes to the same worktree.
 
 ---
 

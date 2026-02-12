@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Design technical architecture for epics. Define components, APIs, data models, and document decisions as ADRs.
-model: sonnet
+model: opus
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, TaskList, TaskGet, TaskUpdate
 skills: agent-summary-complex, project-documentation, project-tracking, session-id-finder, user-approval, spec-validator, spec-merger
 phases:
@@ -507,13 +507,20 @@ errors:
 Each story must be implementable by a coding agent **in a single session without running out of context**. Size stories by asking: "Can a coding agent read the required context, write the code, and write the tests without losing context?"
 
 **Right-sized story:**
-- Touches 1-3 files (new or modified) + their test files
+- Max **7 non-trivial files** (new or modified production code + tests)
+- Max **~600 LOC** of new/modified production code (excluding tests)
 - One logical unit: one component, one endpoint, one data model
 - Testable independently (unit tests at minimum)
 - Clear inputs/outputs for dependency ordering
 
+**Trivial files** (don't count toward the 7-file limit):
+- `__init__.py`, `index.ts` (re-exports only)
+- Config file one-liners (adding a key to existing YAML)
+- Type re-exports, barrel files
+
 **Too large (split it):**
-- Touches 5+ files across multiple modules
+- More than 7 non-trivial files
+- More than ~600 LOC of new production code
 - Mixes concerns (data model + API endpoint + config + UI)
 - Would require reading 10+ existing files for context
 
