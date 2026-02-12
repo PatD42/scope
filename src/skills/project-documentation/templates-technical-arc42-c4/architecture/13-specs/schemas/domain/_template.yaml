@@ -1,0 +1,61 @@
+# Domain Schema Template
+# Copy this file to {entity-name}.yaml and fill in
+
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: /schemas/domain/{entity-name}
+title: "{EntityName}"
+description: |
+  {Description of the domain entity}
+
+type: object
+required:
+  - id
+  # Add other required fields
+
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier
+    readOnly: true
+
+  # Add domain-specific properties
+  # name:
+  #   type: string
+  #   minLength: 1
+  #   maxLength: 255
+  #   description: Entity name
+
+  # status:
+  #   type: string
+  #   enum: [active, inactive, pending]
+  #   description: Entity status
+
+  # Reference to other entities
+  # related_id:
+  #   type: string
+  #   format: uuid
+  #   description: Reference to related entity
+
+  created_at:
+    type: string
+    format: date-time
+    description: Creation timestamp
+    readOnly: true
+
+  updated_at:
+    type: string
+    format: date-time
+    description: Last update timestamp
+    readOnly: true
+
+# For create requests, use a separate schema that excludes readOnly fields
+# See: {entity-name}-create.yaml
+
+# For update requests, make fields optional
+# See: {entity-name}-update.yaml
+
+# Changelog
+# | Epic | Date | Changes |
+# |------|------|---------|
+# | SCOPE-XXX | YYYY-MM-DD | Initial creation |

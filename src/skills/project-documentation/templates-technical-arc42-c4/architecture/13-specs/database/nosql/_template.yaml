@@ -1,0 +1,136 @@
+# NoSQL Collection Schema Template
+# Supports: MongoDB, DynamoDB, Firestore, CouchDB
+# Copy to {collection-name}.yaml
+
+collection: "{collection_name}"
+description: "{Description of the collection}"
+epic: "SCOPE-XXX"
+
+# Database-specific settings
+mongodb:
+  database: "{db_name}"
+  capped: false
+  # capped_size: 1048576  # For capped collections
+
+dynamodb:
+  table_name: "{table_name}"
+  billing_mode: "PAY_PER_REQUEST"  # or PROVISIONED
+  # read_capacity: 5
+  # write_capacity: 5
+
+firestore:
+  collection_path: "{collection_path}"
+
+# Document Schema (JSON Schema format)
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required:
+    - _id
+    # Add required fields
+
+  properties:
+    _id:
+      type: string
+      description: Document identifier
+
+    # Domain fields
+    # name:
+    #   type: string
+    #   minLength: 1
+    #   maxLength: 255
+
+    # Nested objects
+    # metadata:
+    #   type: object
+    #   properties:
+    #     created_at:
+    #       type: string
+    #       format: date-time
+    #     tags:
+    #       type: array
+    #       items:
+    #         type: string
+
+    # Arrays
+    # items:
+    #   type: array
+    #   items:
+    #     type: object
+    #     properties:
+    #       item_id:
+    #         type: string
+
+    # Timestamps
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+# Indexes
+indexes:
+  # MongoDB indexes
+  - name: "idx_created_at"
+    keys:
+      created_at: -1
+    options:
+      background: true
+
+  # - name: "idx_compound"
+  #   keys:
+  #     field1: 1
+  #     field2: -1
+
+  # - name: "idx_text"
+  #   keys:
+  #     name: "text"
+  #     description: "text"
+
+  # - name: "idx_ttl"
+  #   keys:
+  #     expires_at: 1
+  #   options:
+  #     expireAfterSeconds: 0
+
+# DynamoDB-specific keys
+dynamodb_keys:
+  partition_key:
+    name: "pk"
+    type: "S"  # S=String, N=Number, B=Binary
+  sort_key:
+    name: "sk"
+    type: "S"
+
+  # Global Secondary Indexes
+  gsi:
+    # - name: "gsi_by_status"
+    #   partition_key:
+    #     name: "status"
+    #     type: "S"
+    #   sort_key:
+    #     name: "created_at"
+    #     type: "S"
+    #   projection: "ALL"
+
+# Validation rules (MongoDB)
+validation:
+  validator:
+    $jsonSchema:
+      bsonType: "object"
+      required: ["_id"]
+      # Add validation rules
+  validationLevel: "moderate"
+  validationAction: "warn"
+
+# TTL settings
+ttl:
+  enabled: false
+  # field: "expires_at"
+  # duration_seconds: 86400
+
+# Changelog
+# | Epic | Date | Changes |
+# |------|------|---------|
+# | SCOPE-XXX | YYYY-MM-DD | Initial creation |

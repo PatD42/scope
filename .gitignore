@@ -1,0 +1,5 @@
+.env
+.mcp.json
+.DS_Store
+tmp_debug/
+wip/

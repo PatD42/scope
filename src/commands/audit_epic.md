@@ -1,0 +1,622 @@
+---
+name: audit_epic
+description: Audit epic implementation against original architecture and ADRs. Detects divergence and creates fix plan.
+args: "{epic-id}"
+skills: project-documentation
+---
+
+# /audit_epic
+
+Audit an epic's implementation to detect divergence from original architecture, ADRs, and requirements. Produces a comprehensive audit report with prioritized fix plan.
+
+**Syntax:** `/audit_epic {epic-id}`
+
+**Output:** `docs/epics/{epic-dir}/epic_audit.md`
+
+## When to Run
+
+| Trigger | Use Case |
+|---------|----------|
+| After Auto Claude completes | Verify implementation matches design |
+| Before merging to main | Gate check for architectural compliance |
+| After discovering bugs | Determine if root cause is architectural drift |
+| Periodic review | Quarterly audit of implemented epics |
+
+---
+
+## What Gets Audited
+
+```
+/audit_epic {epic-id}
+
+SOURCES:
+├── Our architecture: docs/epics/{epic-id}/architecture.md
+├── Our ADRs: docs/epics/{epic-id}/adr.md
+├── Acceptance criteria: docs/epics/{epic-id}/acceptance-criteria.md
+├── Auto Claude spec: .auto-claude/specs/*/spec.md
+└── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
+
+AUDIT CHECKS:
+├── 1. Architecture Compliance
+│   ├── Components match design
+│   ├── APIs match contracts
+│   └── Data models match schemas
+│
+├── 2. ADR Compliance
+│   ├── Technology decisions followed
+│   ├── Patterns applied correctly
+│   └── Constraints respected
+│
+├── 3. Acceptance Criteria
+│   ├── All scenarios implemented
+│   ├── Edge cases handled
+│   └── Error scenarios covered
+│
+├── 4. Auto Claude Spec Alignment
+│   ├── Spec matches our architecture
+│   ├── Implementation matches spec
+│   └── Test coverage as specified
+│
+└── 5. Code Quality
+    ├── Follows project patterns
+    ├── Error handling consistent
+    └── Documentation complete
+
+OUTPUT:
+└── docs/epics/{epic-dir}/epic_audit.md
+    ├── Executive summary
+    ├── Findings by severity
+    ├── Root cause analysis
+    └── Prioritized fix plan
+```
+
+---
+
+## Execution
+
+### Step 0: Initialize
+
+```bash
+EPIC_ID="{epic-id}"
+EPIC_DIR=$(ls docs/epics/ | grep -i "^${EPIC_ID}" | head -1)
+
+if [ -z "$EPIC_DIR" ]; then
+  echo "Epic not found in docs/epics/"
+  exit 1
+fi
+
+AUDIT_FILE="docs/epics/${EPIC_DIR}/epic_audit.md"
+```
+
+### Step 1: Load Sources
+
+```python
+# Our design documents
+architecture = Read(f"docs/epics/{epic_dir}/architecture.md")
+adrs = Read(f"docs/epics/{epic_dir}/adr.md")
+acceptance_criteria = Read(f"docs/epics/{epic_dir}/acceptance-criteria.md")
+
+# Auto Claude spec
+ac_spec = find_auto_claude_spec(epic_id)  # grep -l epic-id in .auto-claude/specs/*/spec.md
+
+# Implementation
+implemented_files = scan_implementation(epic_id)
+```
+
+---
+
+## Audit Phase 1: Architecture Compliance
+
+### 1.1 Component Verification
+
+**Check:** Do implemented components match architecture design?
+
+```python
+# From architecture.md
+designed_components = extract_components(architecture)
+# Example: FileMapper, HierarchyBuilder, ConfigLoader
+
+# From implementation
+implemented_components = scan_src_structure()
+# Example: file_mapper/, hierarchy/, config_manager/
+
+# Compare
+missing = designed_components - implemented_components
+extra = implemented_components - designed_components
+renamed = detect_renames(designed_components, implemented_components)
+```
+
+**Report:**
+```markdown
+### Component Compliance
+
+✅ MATCHES (N components):
+- FileMapper → src/file_mapper/ ✓
+- HierarchyBuilder → src/hierarchy/ ✓
+
+⚠️  DEVIATIONS (N issues):
+- ConfigLoader → src/config_manager/ (renamed without ADR)
+- Missing: FrontmatterHandler (designed but not implemented)
+- Extra: src/utils/retry.py (implemented but not in design)
+```
+
+### 1.2 API Contract Verification
+
+**Check:** Do APIs match architecture design?
+
+```python
+# From architecture.md API section
+designed_apis = extract_api_endpoints(architecture)
+
+# From implementation
+implemented_apis = scan_api_routes(src_dir)
+
+# From 13-specs
+spec_apis = parse_openapi(f"docs/architecture/13-specs/api/")
+
+# Three-way comparison
+api_audit = compare_apis(designed_apis, spec_apis, implemented_apis)
+```
+
+**Report:**
+```markdown
+### API Contract Compliance
+
+✅ MATCHES:
+- GET /api/sync-status (design → spec → implementation) ✓
+
+⚠️  DEVIATIONS:
+- POST /api/force-sync: Missing required field "direction" (spec has it, code doesn't)
+- GET /api/config: Returns 200 instead of designed 201 for new configs
+```
+
+### 1.3 Data Model Verification
+
+**Check:** Do data models match schemas?
+
+```python
+# From architecture.md
+designed_models = extract_data_models(architecture)
+
+# From implementation
+implemented_models = scan_dataclasses_and_models(src_dir)
+
+# From 13-specs/schemas
+spec_schemas = parse_json_schemas(f"docs/architecture/13-specs/schemas/domain/")
+
+# Compare
+model_audit = compare_models(designed_models, spec_schemas, implemented_models)
+```
+
+**Report:**
+```markdown
+### Data Model Compliance
+
+✅ MATCHES:
+- PageNode: All fields match schema ✓
+
+⚠️  DEVIATIONS:
+- SyncConfig: Added field "retry_count" (not in schema or design)
+- LocalPage: Missing field "last_modified" (in schema, not in code)
+```
+
+---
+
+## Audit Phase 2: ADR Compliance
+
+### 2.1 Technology Decisions
+
+**Check:** Were ADR technology selections followed?
+
+```python
+adrs_list = parse_adrs(adrs)
+
+for adr in adrs_list:
+    decision = adr['decision']
+    # Check if decision was implemented correctly
+    compliance = verify_adr_implementation(adr, src_dir)
+```
+
+**Report:**
+```markdown
+### ADR Compliance
+
+✅ ADR-008: CQL-based page discovery
+   Implementation: Using CQL queries ✓
+   Limit: 100 pages enforced ✓
+
+❌ ADR-010: Filesafe conversion with case preservation
+   VIOLATION: Implementation converts to lowercase only
+   Location: src/file_mapper/filesafe_converter.py:15
+   Impact: CRITICAL - Data loss for case-sensitive titles
+
+⚠️  ADR-011: Atomic file operations (two-phase commit)
+   PARTIAL: Two-phase commit implemented, but no rollback on failure
+   Location: src/file_mapper/file_mapper.py:45-60
+   Impact: MAJOR - Could leave partial state on error
+```
+
+### 2.2 Pattern Compliance
+
+**Check:** Were architectural patterns applied correctly?
+
+```python
+# From ADRs and cross-cutting docs
+required_patterns = extract_patterns(adrs)
+# Example: Exception hierarchy, dataclass pattern, module organization
+
+# From implementation
+implemented_patterns = analyze_code_patterns(src_dir)
+
+# Compare
+pattern_audit = verify_patterns(required_patterns, implemented_patterns)
+```
+
+**Report:**
+```markdown
+### Pattern Compliance
+
+✅ Exception Hierarchy Pattern:
+   All exceptions inherit from ConfluenceError ✓
+   Typed exception parameters ✓
+
+⚠️  Dataclass Pattern:
+   DEVIATION: SyncConfig uses dict instead of @dataclass
+   Location: src/file_mapper/models.py:25
+   Impact: MINOR - Inconsistent with project pattern
+```
+
+---
+
+## Audit Phase 3: Acceptance Criteria
+
+### 3.1 Scenario Coverage
+
+**Check:** Are all acceptance criteria scenarios implemented and tested?
+
+```python
+acceptance_scenarios = parse_acceptance_criteria(acceptance_criteria)
+
+for scenario in acceptance_scenarios:
+    # Check implementation
+    implemented = find_implementation(scenario, src_dir)
+    # Check tests
+    tested = find_tests(scenario, tests_dir)
+
+    scenario_audit.append({
+        'scenario': scenario,
+        'implemented': implemented,
+        'tested': tested
+    })
+```
+
+**Report:**
+```markdown
+### Acceptance Criteria Coverage
+
+✅ AC-1: Filesafe Filename Conversion
+   Implemented: ✓
+   Tested: ✓
+   Coverage: 95%
+
+❌ AC-6: Initial Sync Direction
+   Implemented: ✗ (forcePull/forcePush flags missing)
+   Tested: ✗
+   Impact: CRITICAL - Core requirement not implemented
+
+⚠️  AC-8: Exclusion Patterns
+   Implemented: ✓
+   Tested: Partial (only unit tests, no E2E)
+   Impact: MINOR - Missing E2E test coverage
+```
+
+### 3.2 Edge Case Handling
+
+**Report:**
+```markdown
+### Edge Case Coverage
+
+✅ Malformed frontmatter: Error handling implemented ✓
+✅ Network failure: APIUnreachableError raised ✓
+❌ 100 page limit: No error message, silent truncation
+   Impact: MAJOR - Users won't know why pages missing
+```
+
+---
+
+## Audit Phase 4: Auto Claude Spec Alignment
+
+### 4.1 Spec vs Architecture
+
+**Check:** Does Auto Claude's spec align with our architecture?
+
+```python
+ac_spec_components = extract_components_from_spec(ac_spec)
+our_components = extract_components(architecture)
+
+spec_alignment = compare_components(ac_spec_components, our_components)
+```
+
+**Report:**
+```markdown
+### Auto Claude Spec Alignment
+
+✅ Auto Claude spec references our architecture ✓
+✅ ADR references match (ADR-008 through ADR-015) ✓
+
+⚠️  SPEC DEVIATION:
+   Auto Claude spec added: DirectoryScanner
+   Not in our architecture.md
+   Reason: Auto Claude optimization for performance
+   Impact: MINOR - Enhancement not breaking change
+```
+
+### 4.2 Spec vs Implementation
+
+**Check:** Did implementation follow Auto Claude's spec?
+
+```python
+spec_requirements = extract_requirements(ac_spec)
+implementation_features = scan_implementation_features(src_dir)
+
+spec_compliance = verify_spec_implementation(spec_requirements, implementation_features)
+```
+
+**Report:**
+```markdown
+### Spec Implementation Compliance
+
+✅ All "Files to Modify" created ✓
+✅ All "Patterns to Follow" applied ✓
+
+❌ SUCCESS CRITERIA NOT MET:
+   Spec requires: Unit test coverage >90%
+   Actual: 75% coverage
+   Impact: MAJOR - Quality gate not met
+```
+
+---
+
+## Audit Phase 5: Code Quality
+
+### 5.1 Pattern Consistency
+
+**Report:**
+```markdown
+### Code Quality
+
+✅ Follows project structure ✓
+✅ Error handling consistent ✓
+
+⚠️  DEVIATIONS:
+- Missing docstrings: 15 functions
+- Hardcoded config values: 3 instances (should be in YAML)
+  Impact: MINOR - Maintainability issue
+```
+
+---
+
+## Issue Classification
+
+All findings are classified by severity:
+
+| Severity | Definition | Examples |
+|----------|------------|----------|
+| **CRITICAL** | Breaks core functionality or violates key ADR | Missing acceptance criteria, ADR violations causing data loss |
+| **MAJOR** | Significant deviation from design | Partial ADR implementation, missing edge case handling, test coverage gaps |
+| **MINOR** | Cosmetic or consistency issues | Naming inconsistencies, missing docstrings, pattern deviations |
+| **ENHANCEMENT** | Improvements not in original design | Performance optimizations, additional features |
+
+---
+
+## Audit Report Output
+
+Write to: `docs/epics/{epic-dir}/epic_audit.md`
+
+### Report Template
+
+```markdown
+# Epic Audit Report: {epic-id}
+
+**Date**: {date}
+**Auditor**: Claude Code
+**Status**: {PASS / FAIL / PASS WITH CONDITIONS}
+
+---
+
+## Executive Summary
+
+{2-3 sentence summary of audit outcome}
+
+**Overall Compliance**: {percentage}%
+
+**Critical Issues**: {N}
+**Major Issues**: {N}
+**Minor Issues**: {N}
+**Enhancements**: {N}
+
+**Recommendation**: {APPROVE / FIX CRITICAL / FIX ALL}
+
+---
+
+## Findings
+
+### Critical Issues (Blocking)
+
+#### 1. {Issue Title}
+- **Category**: {Architecture / ADR / Acceptance Criteria}
+- **Location**: {file:line}
+- **Description**: {what's wrong}
+- **Impact**: {why it matters}
+- **Expected**: {what should be}
+- **Actual**: {what was implemented}
+
+### Major Issues (Should Fix)
+
+{...}
+
+### Minor Issues (Nice to Fix)
+
+{...}
+
+### Enhancements (Unexpected Improvements)
+
+{...}
+
+---
+
+## Root Cause Analysis
+
+**Why did divergence occur?**
+
+1. {Root cause 1 - e.g., Auto Claude misinterpreted ADR}
+2. {Root cause 2 - e.g., Architecture ambiguous on edge case}
+3. {Root cause 3 - e.g., Implementation added feature not in design}
+
+---
+
+## Fix Plan
+
+### Priority 1: Critical Fixes (BLOCKING)
+
+| # | Issue | Fix | Effort | Files |
+|---|-------|-----|--------|-------|
+| 1 | AC-6 not implemented | Add forcePull/forcePush flags | 4h | file_mapper.py, config_loader.py |
+| 2 | ADR-010 violated | Fix case preservation in filesafe converter | 2h | filesafe_converter.py |
+
+**Total Effort**: 6 hours
+
+### Priority 2: Major Fixes (Should Address)
+
+| # | Issue | Fix | Effort | Files |
+|---|-------|-----|--------|-------|
+| 3 | ADR-011 partial | Add rollback on failure | 3h | file_mapper.py |
+| 4 | Test coverage gap | Add E2E tests for AC-8 | 4h | tests/e2e/ |
+
+**Total Effort**: 7 hours
+
+### Priority 3: Minor Fixes (Optional)
+
+| # | Issue | Fix | Effort | Files |
+|---|-------|-----|--------|-------|
+| 5 | Missing docstrings | Add docstrings to 15 functions | 2h | Various |
+| 6 | Hardcoded config | Move to YAML files | 1h | config_loader.py |
+
+**Total Effort**: 3 hours
+
+---
+
+## Compliance Scorecard
+
+| Area | Score | Status |
+|------|-------|--------|
+| Architecture Compliance | 85% | ⚠️  Issues found |
+| ADR Compliance | 70% | ❌ Critical violations |
+| Acceptance Criteria | 75% | ❌ Missing scenarios |
+| Auto Claude Spec | 95% | ✅ Mostly aligned |
+| Code Quality | 90% | ✅ Good |
+| **OVERALL** | **83%** | ⚠️  **PASS WITH CONDITIONS** |
+
+---
+
+## Recommendations
+
+1. **IMMEDIATE**: Fix Critical issues (Priority 1) before merging
+2. **SHORT-TERM**: Address Major issues (Priority 2) within 1 week
+3. **LONG-TERM**: Clean up Minor issues (Priority 3) when convenient
+4. **DOCUMENT**: Update architecture.md to include enhancements
+
+---
+
+## Next Steps
+
+After reviewing this audit:
+
+1. Decide which fixes to implement
+2. Run `/audit_epic {epic-id}` again after fixes to verify
+3. Once CRITICAL issues resolved, run `/sync_architecture {epic-id}`
+4. Mark epic as "audit-passed" in tracking system
+
+---
+
+## Appendix: Detailed Findings
+
+{Full detailed findings with code snippets, comparisons, etc.}
+```
+
+---
+
+## Completion Flow
+
+After generating audit report:
+
+```
+Audit Complete: {epic-id}
+
+Report saved to: docs/epics/{epic-dir}/epic_audit.md
+
+Summary:
+├── Status: {PASS / FAIL / PASS WITH CONDITIONS}
+├── Overall Compliance: {percentage}%
+├── Critical Issues: {N}
+├── Major Issues: {N}
+└── Minor Issues: {N}
+
+{If CRITICAL issues exist:}
+⚠️  CRITICAL ISSUES FOUND - Blocking issues must be fixed
+
+Fix Plan Summary:
+├── Priority 1 (Critical): {N} issues, {X} hours estimated
+├── Priority 2 (Major): {N} issues, {X} hours estimated
+└── Priority 3 (Minor): {N} issues, {X} hours estimated
+
+Implement fixes now? [yes / review report first / skip]
+```
+
+**If user says "yes":**
+1. Start with Priority 1 (Critical) fixes
+2. Implement each fix from the plan
+3. Re-run audit to verify fixes
+4. Repeat until Critical issues resolved
+
+**If user says "review report first":**
+- Display report location
+- Wait for further instructions
+
+**If user says "skip":**
+- End command, report remains for manual review
+
+---
+
+## Re-Audit After Fixes
+
+After implementing fixes:
+
+```bash
+/audit_epic {epic-id}
+```
+
+The audit will update the existing `epic_audit.md` with new findings, showing progress:
+
+```markdown
+## Audit History
+
+### Audit #2 - {date}
+Status: PASS ✅
+Critical: 0 (was 2)
+Major: 1 (was 4)
+Minor: 2 (was 6)
+
+### Audit #1 - {date}
+Status: FAIL ❌
+Critical: 2
+Major: 4
+Minor: 6
+```
+
+---
+
+## Example Session
+
+```
+User: /audit_epic {epic-id}

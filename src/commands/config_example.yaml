@@ -1,0 +1,61 @@
+# SCOPE Configuration Template
+# Copy this file to .scope/config.yaml and customize for your project
+
+# Project Information
+project:
+  name: "my-project"  # Project name (used in documentation)
+
+# ============================================================================
+# TRACKING SYSTEM CONFIGURATION
+# ============================================================================
+
+tracking:
+  method: arc42-c4                   # Infers: tracking-guide-arc42-c4.md
+# Option 1: File-based tracking (local YAML files)
+  skill: local-tracking-bash       # Use file-based tracking
+  project_key: MYPROJ                # Prefix for display IDs (e.g., MYPROJ-E0001)
+  base_path: ./tracking              # Directory for tracking files
+
+# Option 2: Jira (via Sooperset MCP Atlassian)
+#  skill: jira-sooperset-mcp          # Use Jira MCP for tracking
+#  project_key: MYPROJ                # Your Jira project key (e.g., SCOPE, CODINT)
+#  atlassian_url: https://yoursite.atlassian.net  # Your Atlassian instance URL
+
+# ============================================================================
+# DOCUMENTATION SYSTEM CONFIGURATION
+# ============================================================================
+
+documentation:
+  technical-doc: arc42-c4            # Infers: technical-guide-arc42-c4.md + templates-technical-arc42-c4/
+  product-doc: atlassian             # Infers: product-guide-atlassian.md + templates-product-atlassian/
+
+# Option 1: File-based documentation (local Markdown files)
+  skill: project-documentation-file  # Use file-based documentation
+  docs_path: ./docs             # Directory for documentation files
+
+# Option 2: Confluence (via Atlassian MCP)
+#  skill: confluence-sooperset-mcp    # Use Confluence MCP for documentation
+#  space_key: MYSPACE                 # Your Confluence space key
+#  atlassian_url: https://yoursite.atlassian.net  # Your Atlassian instance URL
+
+# ============================================================================
+# ORCHESTRATION CONFIGURATION
+# ============================================================================
+
+orchestration:
+  usable_window: 160000                  # Max context usage (keeps ~20% of 200k window free)
+  min_available_default: 40000           # Default minimum tokens that must be available to resume
+  min_available_architect: 50000         # Architect needs more room for complex architectural work
+  min_available_product-owner: 20000     # Product owner needs less (simpler workflows)
+  # Add more agent-specific minimums as needed
+  # Format: min_available_{agent-name} where agent-name uses dashes
+
+# Decision logic:
+# - If agent doesn't exist: spawn new agent
+# - If context_usage > (usable_window - min_available): spawn new agent
+# - Else: resume existing agent
+#
+# Example: architect with context_usage=115k, min_available_architect=50k
+# - max_allowed = 160k - 50k = 110k
+# - 115k > 110k, so spawn new agent
+
