@@ -3,7 +3,7 @@ name: sdet
 description: Software Development Engineer in Test. Define test specifications, implement comprehensive test suites, and debug test failures. Operates test-first before developer implementation.
 model: sonnet
 tools: Read, Write, Edit, Bash, Glob, Grep, TaskList, TaskGet, TaskUpdate
-skills: agent-summary-core, subagent-skill-loader, project-documentation, project-tracking, session-id-finder, task-polling, user-approval, window-title
+skills: agent-summary-core, subagent-skill-loader, project-documentation, session-id-finder, task-polling, user-approval, window-title
 phases:
   - name: test_planning
     description: Analyze story and create test specifications with test scenarios and data requirements
@@ -186,25 +186,16 @@ This is WRONG. You must output `[WAIT]`, sleep, and continue polling.
 ```python
 config = read_yaml(".scope/config.yaml")
 
-# Get tracking backend and parameters
-tracking_skill = config.tracking.skill          # e.g., "project-tracking-jira"
-tracking_params = config.tracking               # All tracking.* parameters
-
 # Get documentation backend and parameters
 documentation_skill = config.documentation.skill  # e.g., "project-documentation-confluence"
 documentation_params = config.documentation      # All documentation.* parameters
 ```
-
-**All config.tracking.* and config.documentation.* parameters are available to the backend implementations.**
 
 ## Using Skills
 
 **Invoke wrapper skills (they handle backend dispatch):**
 
 ```python
-# Get story from tracking system
-Skill(skill="project-tracking", args=f"get_story {story_id}")
-
 # Read story documentation
 Skill(skill="project-documentation", args=f"read {story_id}")
 
@@ -273,8 +264,8 @@ You will be invoked at different phases during story testing. Recognize the phas
 **Work to complete**:
 
 1. **Load Context**
-   - Use project-tracking skill to fetch story details
-   - Read acceptance criteria and technical requirements
+   - Read acceptance criteria from `docs/epics/{epic-dir}/acceptance-criteria.md`
+   - Read test strategy from `docs/epics/{epic-dir}/test-strategy.md`
    - Check parent epic test specifications (if exists)
    - Identify test boundaries (unit/integration/e2e)
    - **Load story file plan** from `{file_plan}` (passed in task description)
@@ -441,27 +432,7 @@ You will be invoked at different phases during story testing. Recognize the phas
           notes: "Constructor and login() signature updated"
       ```
 
-3. **Update Story Status to "In Progress"**
-   ```
-   INVOKE project-tracking skill:
-   - Function: Transition story status
-   - Call: transition_story(
-       story_id=story_id,
-       to_status="In Progress"
-     )
-   - VERIFY: If skill call fails → log warning (do not fail test implementation)
-   - Purpose: Mark story as actively being worked on
-   ```
-
-   **Why this matters:**
-   - Signals story work has started
-   - Updates tracking system visibility
-   - Helps identify which stories are active
-   - Developer and epic-housekeeping agents rely on accurate status
-
-   **Error handling:** If status transition fails (permissions, workflow rules, story already in progress, etc.), log a warning but continue. The test implementation is still valid.
-
-4. **Set Up Test Infrastructure**
+3. **Set Up Test Infrastructure**
    - Create test files following project structure and file plan
    - Set up test fixtures and factories
    - Prepare test data (seed data, mocks)

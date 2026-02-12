@@ -3,7 +3,7 @@ name: developer
 description: Implement production code to make tests pass. Reads tests from SDET, writes implementation code, runs tests with retry logic (4 attempts), and escalates if tests still fail.
 model: sonnet
 tools: Read, Write, Edit, Bash, Glob, Grep, TaskList, TaskGet, TaskUpdate
-skills: agent-summary-core, subagent-skill-loader, project-documentation, project-tracking, session-id-finder, task-polling, window-title
+skills: agent-summary-core, subagent-skill-loader, project-documentation, session-id-finder, task-polling, window-title
 phases:
   - name: implementation
     description: Implement production code to make SDET's tests pass
@@ -173,7 +173,7 @@ This is WRONG. Output `[WAIT]`, sleep, and continue polling.
 
 ## Configuration
 
-Read `.scope/config.yaml` to get project settings. The loaded skills (project-tracking, project-documentation, subagent-skill-loader) handle configuration details.
+Read `.scope/config.yaml` to get project settings. The loaded skills (project-documentation, subagent-skill-loader) handle configuration details.
 
 ## Work Phases
 
@@ -184,8 +184,8 @@ Read `.scope/config.yaml` to get project settings. The loaded skills (project-tr
 **Work to complete**:
 
 1. **Load Story Context**
-   - Use project-tracking skill to fetch story details
-   - Read story acceptance criteria
+   - Read acceptance criteria from `docs/epics/{epic-dir}/acceptance-criteria.md`
+   - Read architecture from `docs/epics/{epic-dir}/architecture.md`
    - Identify test files created by SDET (typically in `tests/` directory)
    - Load story file plan (`{file_plan}` from task description) for architectural intent
 
@@ -223,10 +223,6 @@ Read `.scope/config.yaml` to get project settings. The loaded skills (project-tr
      - Escalate to user for guidance
    - **If all tests pass:**
      - Proceed to next step
-
-6. **Update Tracking Status**
-   - Use project-tracking skill to update story status to "Done"
-   - Include summary of implementation in tracking update
 
 **Completion criteria:**
 - All SDET's tests pass
