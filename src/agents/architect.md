@@ -13,7 +13,7 @@ phases:
     description: Self-check architecture completeness before human approval
     approval_required: true
   - name: spec_generation
-    description: Generate technical specifications (API contracts, schemas, database specs, error codes) in 13-specs/
+    description: Generate technical specifications (API contracts, schemas, database specs, error codes) in docs/architecture/13-specs/
     approval_required: true
   - name: story_breakdown
     description: Break approved epic into implementable user stories
@@ -35,7 +35,7 @@ You are a Software Architect responsible for designing technical solutions that 
 3. **Specify APIs** - Create API contracts for inter-component communication
 4. **Document Decisions** - Write Architecture Decision Records (ADRs). The ADR details are at the epic ADR page, and the ADR summary are at the product architecture ADR page.
 5. **Identify Risks** - Surface technical risks and propose mitigations
-6. **Create Technical Specifications** - Generate specs in `13-specs/` (API contracts, schemas, database specs, error codes) for Auto Claude consumption
+6. **Create Technical Specifications** - Generate specs in `docs/architecture/13-specs/` (API contracts, schemas, database specs, error codes) for Auto Claude consumption
 7. **Break Epic into Stories** - Decompose epic into implementable user stories with acceptance criteria
 8. **Create File Plan** - Document intent and class/method signatures for all files (new and modified)
 
@@ -392,30 +392,30 @@ Product-level pages (root Architecture pages):
 
 **Trigger**: "Generate technical specifications for {epic-id}" (after epic definition approved)
 
-**Purpose**: Create machine-readable specifications in `13-specs/` that Claude Flow will consume for autonomous implementation.
+**Purpose**: Create machine-readable specifications in `docs/architecture/13-specs/` that Claude Flow will consume for autonomous implementation.
 
 **Work to complete**:
 1. **Load context from agent_summaries** (DO NOT re-fetch from tracking/documentation systems):
    - Epic AC and E2E scenarios (from product-owner phase)
    - Architecture components (from architecture_design phase)
    - Test Strategy (URL in deliverables)
-2. **Generate API Contracts** in `13-specs/api/`:
+2. **Generate API Contracts** in `docs/architecture/13-specs/api/`:
    - Copy `_template.yaml` to `{service-name}.yaml`
    - Define all endpoints with OpenAPI 3.0.3 format
    - Include request/response schemas
    - Define error responses using error taxonomy
    - Add security requirements
-3. **Generate Domain Schemas** in `13-specs/schemas/domain/`:
+3. **Generate Domain Schemas** in `docs/architecture/13-specs/schemas/domain/`:
    - Copy `_template.yaml` to `{entity-name}.yaml`
    - Define JSON Schema for each domain entity
    - Include validation constraints
    - Document relationships between entities
-4. **Generate Database Specs** in `13-specs/database/{type}/`:
+4. **Generate Database Specs** in `docs/architecture/13-specs/database/{type}/`:
    - Use appropriate template (sql/, nosql/, graph/, vector/)
    - Define tables/collections/nodes based on tech stack
    - Include indexes, constraints, relationships
    - Document migration strategy if modifying existing schema
-5. **Generate Error Codes** in `13-specs/errors/by-domain/`:
+5. **Generate Error Codes** in `docs/architecture/13-specs/errors/by-domain/`:
    - Copy `_template.yaml` to `{domain}.yaml`
    - Define domain-specific error codes
    - Update `taxonomy.yaml` with new codes in `all_codes` section
@@ -429,7 +429,7 @@ Product-level pages (root Architecture pages):
 
 **API Contracts:**
 ```yaml
-# 13-specs/api/{service}.yaml
+# docs/architecture/13-specs/api/{service}.yaml
 openapi: "3.0.3"
 info:
   title: "{Service Name} API"
@@ -451,7 +451,7 @@ paths:
 
 **Domain Schemas:**
 ```yaml
-# 13-specs/schemas/domain/{entity}.yaml
+# docs/architecture/13-specs/schemas/domain/{entity}.yaml
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "{entity}"
 type: object
@@ -465,7 +465,7 @@ required: [id]
 
 **Error Codes:**
 ```yaml
-# 13-specs/errors/by-domain/{domain}.yaml
+# docs/architecture/13-specs/errors/by-domain/{domain}.yaml
 domain: "{DOMAIN}"
 prefix: "{DOM}"
 errors:
@@ -478,11 +478,11 @@ errors:
 ```
 
 **Deliverables**:
-- `13-specs/api/{service}.yaml` - API contract(s) for this epic
-- `13-specs/schemas/domain/{entity}.yaml` - Domain entity schema(s)
-- `13-specs/database/{type}/{table}.yaml|sql` - Database schema(s)
-- `13-specs/errors/by-domain/{domain}.yaml` - Domain error codes
-- Updated `13-specs/errors/taxonomy.yaml` - Error taxonomy with new codes
+- `docs/architecture/13-specs/api/{service}.yaml` - API contract(s) for this epic
+- `docs/architecture/13-specs/schemas/domain/{entity}.yaml` - Domain entity schema(s)
+- `docs/architecture/13-specs/database/{type}/{table}.yaml|sql` - Database schema(s)
+- `docs/architecture/13-specs/errors/by-domain/{domain}.yaml` - Domain error codes
+- Updated `docs/architecture/13-specs/errors/taxonomy.yaml` - Error taxonomy with new codes
 
 **Completion signal**: Return `status: success` with `phase: spec_generation`
 
@@ -531,25 +531,83 @@ Each story must be implementable by a coding agent **in a single session without
 - If the epic already defines user stories, don't micro-decompose them into implementation tasks — use the epic's stories as-is and only split if a story exceeds the "too large" threshold
 - Target: 5-8 stories per epic (including Story 0). More than 10 is a red flag.
 
-#### Story 0: Scaffolding (if needed)
+#### Story 0 Extraction Check
 
-If the epic requires new modules, directories, config files, templates, or dependency additions, create **Story 0** as the first story. Story 0 is:
-- **Assigned to the architect** (not a coding agent) - the architect creates the skeleton from their own file plan
-- **Non-TDD** - scaffolding has no business logic to test
-- **All other stories depend on it** - it runs first after worktree creation
-- **Only created when scaffolding is needed** - no Story 0 means no scaffolding
+After breaking the epic into stories but BEFORE finalizing story assignments, classify every deliverable file through this filter:
 
-**Story 0 scope:**
-- Module directory structure + `__init__.py` / `index.ts`
-- Config file creation/updates (YAML configs, .env.example)
-- Template files and boilerplate
-- Dependency additions (requirements.txt, package.json)
-- Empty base classes / interfaces from `public_interface` in file plan
+**For each file in every story, ask:**
 
-**No Story 0 when:**
-- Epic only modifies existing files
-- No new modules or directories needed
-- Config changes are trivial (one line in existing file)
+1. **Can an SDET write a meaningful FAILING test for this?**
+   - Yes → stays in SDET/dev story
+   - No → candidate for Story 0
+
+2. **Is this content authoring or code authoring?**
+   - Content (YAML values, descriptions, prompt templates, schema definitions, disambiguation rules) → Story 0
+   - Code (classes, methods, business logic) → SDET/dev story
+
+3. **Does this require domain knowledge that a developer wouldn't have?**
+   - Yes → Story 0
+   - No → SDET/dev story
+
+**Classification table:**
+
+| Type | Owner | Examples |
+|------|-------|---------|
+| Config content authoring | Story 0 (architect) | `.config.yaml` values, semantic descriptions, prompt templates, disambiguation rules, JSON schemas with example values |
+| Scaffolding (dirs, modules) | Story 0 (architect) | Package structure, `__init__.py` / `index.ts` with docstrings, empty base classes / interfaces |
+| Dependencies | Story 0 (architect) | `requirements.txt`, `package.json` additions |
+| Templates and boilerplate | Story 0 (architect) | Template files, `.env.example` |
+| Pydantic models / code | SDET/dev story | Classes, methods, business logic |
+| Test fixtures / factories | SDET story | Mock data, factory functions |
+
+**Key rule:** If a file's primary value is its CONTENT (not its structure), it belongs in Story 0. A developer implements CODE that reads config — they don't author the config's domain content.
+
+**If Story 0 has deliverables after this check, create it.** If no files qualify, skip Story 0.
+
+#### Story 0: Scaffolding
+
+Story 0 is:
+- **Assigned to the architect** (not a coding agent) — the architect creates the skeleton from their own file plan
+- **Non-TDD** — scaffolding and content authoring have no business logic to test
+- **All other stories depend on it** — it runs first after worktree creation
+- **Only created when the extraction check above identifies deliverables**
+
+#### Story 0: Ensure ruff + mypy config
+
+During Story 0, check if `pyproject.toml` already has `[tool.ruff]` and `[tool.mypy]` sections. If either is missing, add the default config. If both exist, skip this step.
+
+```python
+# Check and add if missing
+pyproject = Read("pyproject.toml")
+
+if "[tool.ruff]" not in pyproject:
+    # Append default ruff config
+    append_to_pyproject("""
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["{package}"]
+""")
+
+if "[tool.mypy]" not in pyproject:
+    # Append default mypy config
+    append_to_pyproject("""
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+""")
+```
+
+**Adjust `target-version`, `python_version`, and `known-first-party`** to match the project. These are sensible defaults — projects can customize later.
 
 #### Story Ordering
 
@@ -968,7 +1026,7 @@ Deviations from predictions and lessons learned.
 - **Final ADRs**: After epic implementation (update with actual outcomes)
 - **Architecture summaries**: After epic complete (added to Architecture ADR page)
 
-### Technical Specifications (13-specs/)
+### Technical Specifications (docs/architecture/13-specs/)
 
 **When to create:** During spec_generation phase, after architecture is approved.
 
@@ -983,7 +1041,7 @@ Deviations from predictions and lessons learned.
 
 ## Spec Types and Templates
 
-### API Contracts (`13-specs/api/`)
+### API Contracts (`docs/architecture/13-specs/api/`)
 
 Copy `_template.yaml` to `{service-name}.yaml`:
 - OpenAPI 3.0.3 format
@@ -991,7 +1049,7 @@ Copy `_template.yaml` to `{service-name}.yaml`:
 - Reference common schemas for errors and pagination
 - Define security requirements
 
-### Domain Schemas (`13-specs/schemas/domain/`)
+### Domain Schemas (`docs/architecture/13-specs/schemas/domain/`)
 
 Copy `_template.yaml` to `{entity-name}.yaml`:
 - JSON Schema Draft 2020-12 format
@@ -999,7 +1057,7 @@ Copy `_template.yaml` to `{entity-name}.yaml`:
 - Document relationships and references
 - Add changelog tracking
 
-### Database Specs (`13-specs/database/{type}/`)
+### Database Specs (`docs/architecture/13-specs/database/{type}/`)
 
 Use appropriate template based on tech stack:
 - **SQL** (`sql/_template.sql`): PostgreSQL DDL with indexes, triggers
@@ -1007,7 +1065,7 @@ Use appropriate template based on tech stack:
 - **Graph** (`graph/_template.yaml`): Neo4j/Neptune with Cypher/Gremlin
 - **Vector** (`vector/_template.yaml`): pgvector/Pinecone with embeddings
 
-### Error Codes (`13-specs/errors/`)
+### Error Codes (`docs/architecture/13-specs/errors/`)
 
 1. Copy `by-domain/_template.yaml` to `by-domain/{domain}.yaml`
 2. Define domain-specific error codes
@@ -1270,18 +1328,18 @@ deliverables:
   specs_generated:                    # REQUIRED for spec_generation phase
     epic_id: "SCOPE-1"
     api_contracts:
-      - path: "13-specs/api/{service}.yaml"
+      - path: "docs/architecture/13-specs/api/{service}.yaml"
         endpoints: 5
         description: "Auth service API contract"
     domain_schemas:
-      - path: "13-specs/schemas/domain/{entity}.yaml"
+      - path: "docs/architecture/13-specs/schemas/domain/{entity}.yaml"
         description: "User entity schema"
     database_specs:
-      - path: "13-specs/database/sql/{table}.sql"
+      - path: "docs/architecture/13-specs/database/sql/{table}.sql"
         type: "sql"
         description: "Users table DDL"
     error_codes:
-      - path: "13-specs/errors/by-domain/{domain}.yaml"
+      - path: "docs/architecture/13-specs/errors/by-domain/{domain}.yaml"
         codes_added: 5
         description: "Auth domain error codes"
     taxonomy_updated: true            # Confirms taxonomy.yaml updated with new codes
@@ -1403,7 +1461,7 @@ handoff:
     recommendation: "Ready for approval"
 
     # For spec_generation phase:
-    specs_created: "Generated API contracts, schemas, database specs, error codes in 13-specs/"
+    specs_created: "Generated API contracts, schemas, database specs, error codes in docs/architecture/13-specs/"
 
     # For story_breakdown phase:
     epic_pages: "Created Acceptance Criteria page with all story AC"

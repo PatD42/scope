@@ -1,6 +1,6 @@
 # Spec Validator Skill
 
-Validates technical specifications in `13-specs/` directory for correctness and completeness.
+Validates technical specifications in `docs/architecture/13-specs/` directory for correctness and completeness.
 
 ## Purpose
 
@@ -27,7 +27,7 @@ def validate_api(service_name: str) -> dict:
     Returns:
         {
             "valid": true/false,
-            "file": "13-specs/api/auth.yaml",
+            "file": "docs/architecture/13-specs/api/auth.yaml",
             "errors": [],
             "warnings": []
         }
@@ -57,7 +57,7 @@ def validate_schema(entity_name: str) -> dict:
     Returns:
         {
             "valid": true/false,
-            "file": "13-specs/schemas/domain/user.yaml",
+            "file": "docs/architecture/13-specs/schemas/domain/user.yaml",
             "errors": [],
             "warnings": []
         }
@@ -87,7 +87,7 @@ def validate_database(db_type: str, name: str) -> dict:
     Returns:
         {
             "valid": true/false,
-            "file": "13-specs/database/sql/users.sql",
+            "file": "docs/architecture/13-specs/database/sql/users.sql",
             "errors": [],
             "warnings": []
         }
@@ -130,7 +130,7 @@ def validate_errors(domain: str) -> dict:
     Returns:
         {
             "valid": true/false,
-            "file": "13-specs/errors/by-domain/auth.yaml",
+            "file": "docs/architecture/13-specs/errors/by-domain/auth.yaml",
             "errors": [],
             "warnings": [],
             "taxonomy_sync": true/false  # All codes in taxonomy?
@@ -152,7 +152,7 @@ Validate all specs in the directory.
 ```python
 def validate_all() -> dict:
     """
-    Validate all specs in 13-specs/ directory.
+    Validate all specs in docs/architecture/13-specs/ directory.
 
     Returns:
         {
@@ -232,7 +232,7 @@ else:
 ```yaml
 # Missing taxonomy entry
 error: "Error code AUTH_005 not found in taxonomy.yaml"
-fix: "Add AUTH_005 to 13-specs/errors/taxonomy.yaml all_codes section"
+fix: "Add AUTH_005 to docs/architecture/13-specs/errors/taxonomy.yaml all_codes section"
 
 # Invalid reference
 error: "API ref '../schemas/domain/user.yaml' does not exist"

@@ -1,6 +1,6 @@
 # Spec Merger Skill
 
-Validates and proposes merges for technical specifications in `13-specs/` directory. **All changes require explicit human approval.**
+Validates and proposes merges for technical specifications in `docs/architecture/13-specs/` directory. **All changes require explicit human approval.**
 
 ## Critical: Human Approval Required
 
@@ -37,7 +37,7 @@ def merge_errors(epic_id: str) -> dict:
         {
             "proposed_changes": [
                 {
-                    "file": "13-specs/errors/taxonomy.yaml",
+                    "file": "docs/architecture/13-specs/errors/taxonomy.yaml",
                     "action": "add",
                     "section": "all_codes",
                     "content": {...},
@@ -51,7 +51,7 @@ def merge_errors(epic_id: str) -> dict:
 ```
 
 **Implementation:**
-1. Read all `13-specs/errors/by-domain/*.yaml` files
+1. Read all `docs/architecture/13-specs/errors/by-domain/*.yaml` files
 2. Find codes with `added_by: {epic_id}`
 3. Check if they exist in `taxonomy.yaml`
 4. **Present proposed changes to user:**
@@ -61,7 +61,7 @@ def merge_errors(epic_id: str) -> dict:
 
 ### Error Taxonomy Updates
 
-The following error codes need to be added to `13-specs/errors/taxonomy.yaml`:
+The following error codes need to be added to `docs/architecture/13-specs/errors/taxonomy.yaml`:
 
 | Code | Domain | HTTP Status | Message | Reason |
 |------|--------|-------------|---------|--------|
@@ -70,7 +70,7 @@ The following error codes need to be added to `13-specs/errors/taxonomy.yaml`:
 
 ### Files to Modify
 
-1. `13-specs/errors/taxonomy.yaml`
+1. `docs/architecture/13-specs/errors/taxonomy.yaml`
    - Add AUTH_004 to all_codes section
    - Add AUTH_005 to all_codes section
 
@@ -87,7 +87,7 @@ Validate all specs for consistency (read-only, no changes).
 ```python
 def validate_specs() -> dict:
     """
-    Validate all specs in 13-specs/ directory.
+    Validate all specs in docs/architecture/13-specs/ directory.
     Read-only operation - does not modify any files.
 
     Returns:
@@ -177,7 +177,7 @@ response = AskUserQuestion(
         "question": "Approve the proposed spec updates?",
         "header": "Spec Update",
         "options": [
-            {"label": "Approve", "description": "Apply the proposed changes to 13-specs/"},
+            {"label": "Approve", "description": "Apply the proposed changes to docs/architecture/13-specs/"},
             {"label": "Modify", "description": "I want to adjust the changes first"},
             {"label": "Reject", "description": "Do not make any changes"}
         ],

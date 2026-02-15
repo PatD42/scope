@@ -117,7 +117,7 @@ Read `.scope/agents_catalog.json`.
         },
         {
           "name": "spec_generation",
-          "description": "Generate technical specifications in 13-specs/"
+          "description": "Generate technical specifications in docs/architecture/13-specs/"
         }
       ]
     }

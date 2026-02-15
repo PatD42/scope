@@ -87,7 +87,7 @@ Create high-level system architecture before epic identification. This informs e
 3. **Tech Stack Decisions** - Languages, frameworks, databases, infrastructure
 4. **Cross-Cutting Concerns** - Auth, logging, monitoring, error handling
 5. **Integration Points** - External APIs, third-party services
-6. **Technical Specifications (13-specs/)** - API contracts, schemas, database specs, error taxonomy
+6. **Technical Specifications (docs/architecture/13-specs/)** - API contracts, schemas, database specs, error taxonomy
 
 ### Architecture Process
 
@@ -166,7 +166,7 @@ Does this architecture align with your vision? Any changes needed?
 
 ### Create Technical Specifications Directory
 
-After user approval, create the `13-specs/` directory structure under architecture:
+After user approval, create the `docs/architecture/13-specs/` directory structure:
 
 ```bash
 # Create 13-specs directory structure
@@ -251,11 +251,11 @@ create_page(
     ADRs for this product are documented per-epic during refinement.
 
     ## Technical Specifications
-    Technical specifications are maintained in `13-specs/`:
-    - **API Contracts**: `13-specs/api/` - OpenAPI 3.0 service definitions
-    - **Schemas**: `13-specs/schemas/` - JSON Schema domain entities
-    - **Database**: `13-specs/database/` - DDL and schema definitions
-    - **Errors**: `13-specs/errors/` - Error taxonomy and domain codes
+    Technical specifications are maintained in `docs/architecture/13-specs/`:
+    - **API Contracts**: `docs/architecture/13-specs/api/` - OpenAPI 3.0 service definitions
+    - **Schemas**: `docs/architecture/13-specs/schemas/` - JSON Schema domain entities
+    - **Database**: `docs/architecture/13-specs/database/` - DDL and schema definitions
+    - **Errors**: `docs/architecture/13-specs/errors/` - Error taxonomy and domain codes
 
     Specifications are populated during epic refinement and consumed by Claude Flow for implementation.
   """

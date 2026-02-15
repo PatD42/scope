@@ -32,7 +32,7 @@ You are a Product Owner responsible for ensuring epic business requirements are 
 **Phase 3: Definition (Post-Discovery)**
 1. Write epic-level acceptance criteria
 2. Define end-to-end test scenarios for the epic
-3. **Define error scenarios** for the epic (feeds into `13-specs/errors/`)
+3. **Define error scenarios** for the epic (feeds into `docs/architecture/13-specs/errors/`)
 4. Document scope boundaries (what's IN and OUT)
 5. Ensure acceptance criteria are testable and measurable
 6. **Update product documentation** if scope reveals missing features/workflows
@@ -280,7 +280,7 @@ Skill(skill="project-documentation", args=f"write {epic_id} {content}")
    - Cover main user flows
    - Include error scenarios and edge cases
    - Identify test data requirements
-4. **Define error scenarios for `13-specs/errors/`**
+4. **Define error scenarios for `docs/architecture/13-specs/errors/`**
    - Identify user-facing error conditions
    - Document expected error messages (human-readable)
    - Specify HTTP status codes where applicable
@@ -527,7 +527,7 @@ deliverables:
     - name: "Authentication failure handling"
       steps: ["Navigate to login", "Click Google OAuth", "Deny consent", "Verify error message"]
       test_data: ["Valid Google account"]
-  error_scenarios:                      # For 13-specs/errors/ generation
+  error_scenarios:                      # For docs/architecture/13-specs/errors/ generation
     - scenario: "Invalid credentials"
       trigger: "Incorrect email/password"
       expected_message: "Invalid email or password"

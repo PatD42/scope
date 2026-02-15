@@ -49,7 +49,7 @@ This command focuses on what humans + single agent do best:
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │ Phase 3: Continue as architect (spec_generation)        │
-│ - Generate specs in 13-specs/ for Auto Claude           │
+│ - Generate specs in docs/architecture/13-specs/ for Auto Claude           │
 │ ──────────────────────────────────────────────────────  │
 │ → USER APPROVAL GATE #3                                 │
 └─────────────────────────────────────────────────────────┘
@@ -119,7 +119,7 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 
 **Key deliverables:**
 - Acceptance criteria in Given/When/Then format
-- Error scenarios (for 13-specs/errors/ generation)
+- Error scenarios (for docs/architecture/13-specs/errors/ generation)
 - E2E test scenarios
 - Written to `docs/epics/{epic-dir}/acceptance-criteria.md`
 
@@ -237,10 +237,10 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 ```
 
 **Key deliverables:**
-- API contracts in `13-specs/api/` (OpenAPI 3.0.3)
-- Domain schemas in `13-specs/schemas/domain/` (JSON Schema)
-- Error codes in `13-specs/errors/by-domain/`
-- Updated error taxonomy in `13-specs/errors/taxonomy.yaml`
+- API contracts in `docs/architecture/13-specs/api/` (OpenAPI 3.0.3)
+- Domain schemas in `docs/architecture/13-specs/schemas/domain/` (JSON Schema)
+- Error codes in `docs/architecture/13-specs/errors/by-domain/`
+- Updated error taxonomy in `docs/architecture/13-specs/errors/taxonomy.yaml`
 
 ### Phase 3 Checklist
 
@@ -249,15 +249,15 @@ Present to user:
 ```
 Phase 3: Architect - Spec Generation
 
-✅ API Contracts (13-specs/api/)
+✅ API Contracts (docs/architecture/13-specs/api/)
    Endpoints defined: [N endpoints]
    Files created: [list]
 
-✅ Domain Schemas (13-specs/schemas/domain/)
+✅ Domain Schemas (docs/architecture/13-specs/schemas/domain/)
    Entities defined: [N entities]
    Files created: [list]
 
-✅ Error Codes (13-specs/errors/)
+✅ Error Codes (docs/architecture/13-specs/errors/)
    Error codes defined: [N codes]
    Taxonomy updated: [Yes / No]
 
@@ -294,6 +294,7 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 **Story breakdown:**
 - User stories with acceptance criteria, test requirements, dependencies
 - Stories sequenced for early testing (unit → integration → e2e)
+- **Story 0 extraction check applied** — every file classified as content/scaffolding (Story 0) vs code (SDET/dev)
 - Written to tracking system + `docs/epics/{epic-dir}/acceptance-criteria.md`
 
 **File plan (one per story):**
@@ -301,6 +302,7 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 - `public_interface` for new files (class/method signatures)
 - `signature_changes` for modified files (before/after with breaking_change flag)
 - Written to `docs/epics/{epic-dir}/file-plan-story-NN.yaml` (pure YAML, one per story)
+- **`file-plan-story-00.yaml` created if Story 0 has deliverables**
 
 ### Phase 4 Checklist
 
@@ -311,13 +313,20 @@ Phase 4: Architect - Stories & File Plan
 
 ✅ Story Breakdown
    Stories created: [N stories]
+   Story 0 (scaffolding): [Yes - N files / No - not needed]
    Dependency order: [Story sequence]
    Test enablement: [When each test type becomes possible]
+
+✅ Story 0 Extraction Check
+   Content/config files → Story 0: [list or "none"]
+   Scaffolding files → Story 0: [list or "none"]
+   Code files → SDET/dev stories: [confirmed]
 
 ✅ File Plan
    New files: [N files with intent + public_interface]
    Modified files: [N files with intent + signature_changes]
    Breaking changes: [N breaking changes flagged]
+   Per-story file plans: file-plan-story-00.yaml through file-plan-story-NN.yaml
 
 ✅ Coverage
    All stories mapped to files: [Yes / No]
@@ -367,7 +376,7 @@ Artifacts created:
 │   ├── file-plan-story-00.yaml
 │   ├── file-plan-story-01.yaml
 │   └── file-plan-story-NN.yaml
-├── 13-specs/
+├── docs/architecture/13-specs/
 │   ├── api/{epic-id}-*.yaml
 │   ├── schemas/domain/{epic-id}-*.json
 │   └── errors/by-domain/{epic-id}.yaml
@@ -392,7 +401,7 @@ If session compacts mid-refinement:
 2. Check which epic docs exist:
    - `acceptance-criteria.md` exists → Phase 1 complete
    - `architecture.md` exists → Phase 2 complete
-   - `13-specs/api/{epic-id}-*` exists → Phase 3 complete
+   - `docs/architecture/13-specs/api/{epic-id}-*` exists → Phase 3 complete
    - `file-plan-story-*.yaml` exists → Phase 4 complete
 3. Resume from appropriate phase
 

@@ -23,7 +23,7 @@ You are a senior architecture reviewer operating within the SCOPE epic refinemen
 1. **Validate epic completeness** - All required artifacts present and coherent
 2. **Check architectural quality** - Design patterns, scalability, security appropriate
 3. **Verify test coverage** - Test boundaries identified, acceptance criteria testable, edge cases covered
-4. **Validate technical specifications** - API contracts, schemas, database specs, error codes in `13-specs/`
+4. **Validate technical specifications** - API contracts, schemas, database specs, error codes in `docs/architecture/13-specs/`
 5. **Identify gaps and concerns** - Missing decisions, inconsistencies, unresolved issues
 6. **Ensure implementation readiness** - Epic documentation ready for Claude Flow consumption
 
@@ -251,11 +251,11 @@ Verify all required artifacts exist and are coherent:
 - [ ] API contracts specified (if applicable)
 - [ ] Data models documented (if applicable)
 
-**Technical specifications (`13-specs/`):**
-- [ ] API contracts exist in `13-specs/api/` (OpenAPI 3.0.3 format)
-- [ ] Domain schemas exist in `13-specs/schemas/domain/` (JSON Schema)
-- [ ] Database specs exist in `13-specs/database/` (appropriate type)
-- [ ] Error codes defined in `13-specs/errors/by-domain/`
+**Technical specifications (`docs/architecture/13-specs/`):**
+- [ ] API contracts exist in `docs/architecture/13-specs/api/` (OpenAPI 3.0.3 format)
+- [ ] Domain schemas exist in `docs/architecture/13-specs/schemas/domain/` (JSON Schema)
+- [ ] Database specs exist in `docs/architecture/13-specs/database/` (appropriate type)
+- [ ] Error codes defined in `docs/architecture/13-specs/errors/by-domain/`
 - [ ] Error taxonomy updated with new codes
 
 **Test artifacts:**
@@ -437,11 +437,11 @@ status: user_input
 - [ ] Security testing strategy defined
 
 ### Technical Specifications (All Epics)
-- [ ] `13-specs/api/*.yaml` - Valid OpenAPI 3.0.3 format
-- [ ] `13-specs/schemas/domain/*.yaml` - Valid JSON Schema Draft 2020-12
-- [ ] `13-specs/database/*` - Schema matches domain entities
-- [ ] `13-specs/errors/by-domain/*.yaml` - Error codes follow taxonomy
-- [ ] `13-specs/errors/taxonomy.yaml` - Updated with new codes
+- [ ] `docs/architecture/13-specs/api/*.yaml` - Valid OpenAPI 3.0.3 format
+- [ ] `docs/architecture/13-specs/schemas/domain/*.yaml` - Valid JSON Schema Draft 2020-12
+- [ ] `docs/architecture/13-specs/database/*` - Schema matches domain entities
+- [ ] `docs/architecture/13-specs/errors/by-domain/*.yaml` - Error codes follow taxonomy
+- [ ] `docs/architecture/13-specs/errors/taxonomy.yaml` - Updated with new codes
 - [ ] Specs reference each other correctly (e.g., API refs schemas)
 - [ ] Error responses in API contracts match error taxonomy
 

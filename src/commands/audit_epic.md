@@ -57,10 +57,15 @@ AUDIT CHECKS:
 │   ├── Implementation matches spec
 │   └── Test coverage as specified
 │
-└── 5. Code Quality
-    ├── Follows project patterns
-    ├── Error handling consistent
-    └── Documentation complete
+├── 5. Code Quality
+│   ├── Follows project patterns
+│   ├── Error handling consistent
+│   └── Documentation complete
+│
+└── 6. Stub/Placeholder Detection
+    ├── No placeholder/TODO/stub markers in production code
+    ├── Intent I/O verbs matched by real I/O in implementation
+    └── No functions returning literals without performing stated action
 
 OUTPUT:
 └── docs/epics/{epic-dir}/epic_audit.md
@@ -181,7 +186,7 @@ designed_models = extract_data_models(architecture)
 # From implementation
 implemented_models = scan_dataclasses_and_models(src_dir)
 
-# From 13-specs/schemas
+# From docs/architecture/13-specs/schemas
 spec_schemas = parse_json_schemas(f"docs/architecture/13-specs/schemas/domain/")
 
 # Compare
@@ -393,6 +398,74 @@ spec_compliance = verify_spec_implementation(spec_requirements, implementation_f
 - Hardcoded config values: 3 instances (should be in YAML)
   Impact: MINOR - Maintainability issue
 ```
+
+---
+
+## Audit Phase 6: Stub/Placeholder Detection
+
+**Check:** Does every implementation file actually perform what its file plan intent describes?
+
+```python
+for story_plan in file_plans:
+    for file_entry in story_plan["files_to_create"] + story_plan["files_to_modify"]:
+        path = file_entry["path"]
+        intent = file_entry["intent"]
+        code = Read(path)
+
+        # 1. Search for stub markers in production code
+        stub_markers = ["# Placeholder", "# TODO", "# Stub", "# Mock",
+                        "NotImplementedError", "pass  #", "hardcoded"]
+        for marker in stub_markers:
+            if marker.lower() in code.lower():
+                report_finding(severity="CRITICAL", file=path, marker=marker)
+
+        # 2. Check intent vs implementation for I/O verbs
+        io_verbs = ["sends", "calls", "queries", "uploads", "downloads",
+                    "writes to", "reads from", "posts", "fetches", "connects"]
+        intent_has_io = any(verb in intent.lower() for verb in io_verbs)
+
+        if intent_has_io:
+            # Verify code contains actual I/O (HTTP client, DB driver, file ops)
+            has_real_io = contains_io_operations(code)  # requests, httpx, aiohttp, fetch, db.execute, etc.
+            if not has_real_io:
+                report_finding(
+                    severity="CRITICAL",
+                    file=path,
+                    issue=f"Intent says '{extract_io_verb(intent)}' but implementation contains no I/O code",
+                    expected="Production code with real API/DB/network calls",
+                    actual="Function returns hardcoded/literal values or delegates to mocks"
+                )
+
+        # 3. Check for functions that return literals without performing their stated purpose
+        for func in extract_functions(code):
+            if func.returns_literal and func.name_implies_action:
+                report_finding(
+                    severity="MAJOR",
+                    file=path,
+                    issue=f"Function {func.name}() returns literal value without performing action",
+                    impact="Tests pass via mocks but production code does nothing"
+                )
+```
+
+**Report:**
+```markdown
+### Stub/Placeholder Detection
+
+❌ CRITICAL: src/classification/llm_classifier.py
+   Intent: "Sends first excerpt_chars of markdown to configured LLM model"
+   Issue: No HTTP/API client call found in _call_llm()
+   Actual: Returns hardcoded ClassificationResult
+   Impact: CRITICAL - Core functionality is a stub
+
+❌ CRITICAL: src/ingestion/feed_fetcher.py
+   Issue: Contains "# TODO: implement retry logic"
+   Impact: CRITICAL - Incomplete implementation
+
+✅ src/models/document.py - No stubs detected
+✅ src/utils/parser.py - No stubs detected
+```
+
+**Key rule:** A stub found in production code is ALWAYS severity CRITICAL, never minor. If the file plan says the code should do something and it doesn't, that's a failed implementation.
 
 ---
 

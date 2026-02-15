@@ -78,14 +78,14 @@ if [ ! -f "docs/epics/${EPIC_DIR}/file-plan-story-01.yaml" ]; then
 fi
 
 # Ensure refinement artifacts are committed before creating worktree
-EPIC_FILES=$(git status --porcelain "docs/epics/${EPIC_DIR}/" "13-specs/" 2>/dev/null)
+EPIC_FILES=$(git status --porcelain "docs/epics/${EPIC_DIR}/" "docs/architecture/13-specs/" 2>/dev/null)
 if [ -n "$EPIC_FILES" ]; then
   echo "Uncommitted refinement artifacts detected:"
   echo "$EPIC_FILES"
   echo ""
   echo "Committing refinement artifacts..."
   git add "docs/epics/${EPIC_DIR}/"
-  git add "13-specs/" 2>/dev/null || true  # May not exist for all epics
+  git add "docs/architecture/13-specs/" 2>/dev/null || true  # May not exist for all epics
   git commit -m "refine(${EPIC_ID}): refinement artifacts for implementation"
 fi
 
@@ -232,11 +232,17 @@ Instructions:
 - Read the file plan at {story['file_plan_path']}
 - Read architecture from docs/epics/{epic_dir}/architecture.md
 - Read ADRs from docs/epics/{epic_dir}/adr.md
-- Implement the code to make all tests pass
-- Follow the intent documentation in the file plan
+- Implement PRODUCTION-READY code that fulfills the file plan intent
+- Follow the intent documentation in the file plan — intent is the source of truth
 - Match the public_interface / signature_changes exactly
 - Run tests after implementation — all must pass
 - Do NOT modify test files (only implementation files)
+- CRITICAL: If the file plan intent describes external I/O (API calls, HTTP
+  requests, database operations, file system writes), the implementation MUST
+  contain real I/O code — not hardcoded return values or placeholder stubs.
+  If a dependency is unavailable for unit testing, implement the real code
+  and let tests mock around it. The implementation itself must be production-ready.
+- A "# Placeholder", "# TODO", or "# Stub" comment in production code is a FAILURE.
 """,
         activeForm=f"Implementing story {num}"
     )
