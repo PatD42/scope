@@ -1,6 +1,6 @@
 ---
 name: epic_refine
-description: Single-session epic refinement from discovery to specs. Simplified alternative to multi-agent orchestration. Output feeds Auto Claude.
+description: Contract-first epic refinement. Produces executable Python contracts alongside file plans. Output feeds /implement or /implement_tdd.
 args: "{epic-id}"
 skills: project-documentation, session-id-finder, agent-summary
 agents: product-owner, architect
@@ -8,23 +8,21 @@ agents: product-owner, architect
 
 # /epic_refine
 
-Single-session epic refinement with 3 approval gates. Simpler alternative to workplan/workflow/multi-agent orchestration.
+Contract-first epic refinement with 4 approval gates. Produces executable Python Protocol contracts that agents verify via mypy — not just prose descriptions.
 
 **Syntax:** `/epic_refine {epic-id}`
 
-## Why This Command
+## Why Contract-First
 
-Auto Claude handles much of what multi-agent refinement was doing:
-- Library verification and research
-- Self-critique and validation
-- Implementation planning
+The previous approach produced file plans with method signatures in YAML prose. Agents implemented against these descriptions, but nothing machine-verified that components could actually call each other. Result: 81 tests pass, 5 critical integration failures hidden by mocks.
 
-This command focuses on what humans + single agent do best:
-- Business discovery and acceptance criteria (PO role)
-- System context and architecture design (Architect role)
-- Technical specs for Auto Claude consumption
+**Contract-first** means:
+- Story 0 creates `contracts.py` with Python Protocol classes
+- Method signatures are executable code, not YAML descriptions
+- `mypy --strict` catches interface mismatches statically after each story
+- File plans reference contracts as source of truth for cross-story calls
 
-**Key approach:** Instead of spawning separate agents, take the role of existing agents (`product-owner`, `architect`) which contain detailed phase-specific instructions. This keeps agent knowledge centralized while simplifying orchestration.
+**Key insight:** Agents need machine-verifiable contracts, not human-readable descriptions. TDD with mocks tests behavior in isolation; contracts + static analysis verifies integration mechanically.
 
 ## Workflow Overview
 
@@ -49,16 +47,17 @@ This command focuses on what humans + single agent do best:
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │ Phase 3: Continue as architect (spec_generation)        │
-│ - Generate specs in docs/architecture/13-specs/ for Auto Claude           │
+│ - Generate specs in 13-specs/ for Auto Claude           │
 │ ──────────────────────────────────────────────────────  │
 │ → USER APPROVAL GATE #3                                 │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │ Phase 4: Continue as architect (story_breakdown +       │
-│          file_plan)                                     │
+│          file_plan + contracts)                         │
 │ - Break epic into implementable user stories            │
-│ - Create file plan with intent + class/method signatures│
+│ - Create contracts.py with Protocol classes             │
+│ - Create file plans with cross-story call references    │
 │ ──────────────────────────────────────────────────────  │
 │ → USER APPROVAL GATE #4                                 │
 │ → Mark epic "ready-for-implementation"                  │
@@ -119,7 +118,7 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 
 **Key deliverables:**
 - Acceptance criteria in Given/When/Then format
-- Error scenarios (for docs/architecture/13-specs/errors/ generation)
+- Error scenarios (for 13-specs/errors/ generation)
 - E2E test scenarios
 - Written to `docs/epics/{epic-dir}/acceptance-criteria.md`
 
@@ -225,6 +224,8 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"architecture_
 
 ## Phase 3: Architect (spec_generation)
 
+**Conditional:** Only run this phase if the project uses Auto Claude or maintains a `13-specs/` directory. If neither applies, skip directly to Phase 4.
+
 **Instruction:** Continue as `architect` agent for the `spec_generation` phase.
 
 **Goal:** Generate technical specifications for Auto Claude consumption.
@@ -237,10 +238,10 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 ```
 
 **Key deliverables:**
-- API contracts in `docs/architecture/13-specs/api/` (OpenAPI 3.0.3)
-- Domain schemas in `docs/architecture/13-specs/schemas/domain/` (JSON Schema)
-- Error codes in `docs/architecture/13-specs/errors/by-domain/`
-- Updated error taxonomy in `docs/architecture/13-specs/errors/taxonomy.yaml`
+- API contracts in `13-specs/api/` (OpenAPI 3.0.3)
+- Domain schemas in `13-specs/schemas/domain/` (JSON Schema)
+- Error codes in `13-specs/errors/by-domain/`
+- Updated error taxonomy in `13-specs/errors/taxonomy.yaml`
 
 ### Phase 3 Checklist
 
@@ -249,15 +250,15 @@ Present to user:
 ```
 Phase 3: Architect - Spec Generation
 
-✅ API Contracts (docs/architecture/13-specs/api/)
+✅ API Contracts (13-specs/api/)
    Endpoints defined: [N endpoints]
    Files created: [list]
 
-✅ Domain Schemas (docs/architecture/13-specs/schemas/domain/)
+✅ Domain Schemas (13-specs/schemas/domain/)
    Entities defined: [N entities]
    Files created: [list]
 
-✅ Error Codes (docs/architecture/13-specs/errors/)
+✅ Error Codes (13-specs/errors/)
    Error codes defined: [N codes]
    Taxonomy updated: [Yes / No]
 
@@ -276,61 +277,178 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"spec_generati
 
 ---
 
-## Phase 4: Architect (story_breakdown + file_plan)
+## Phase 4: Architect (story_breakdown + file_plan + contracts)
 
-**Instruction:** Continue as `architect` agent for the `story_breakdown` and `file_plan` phases.
+**Instruction:** Continue as `architect` agent for the `story_breakdown`, `file_plan`, and `contracts` phases.
 
-**Goal:** Break epic into implementable stories and document file-level intent with class/method signatures.
+**Goal:** Break epic into implementable stories, create executable contracts, and document file-level intent.
+
+**Story sizing constraints:** Each story should have max 7 non-trivial files, ~600 LOC of new/modified code, and the epic should have 5-8 stories. Trivial files (empty `__init__.py`, config with no logic, re-exports) don't count toward the 7-file limit. If a story exceeds these limits, split it.
 
 **Phase context to pass:**
 ```
 epic_id: {epic-id}
-phase: story_breakdown  # then file_plan
+phase: story_breakdown  # then file_plan, then contracts
 agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 ```
 
 **Key deliverables:**
 
-**Story breakdown:**
+### Story breakdown
+
 - User stories with acceptance criteria, test requirements, dependencies
-- Stories sequenced for early testing (unit → integration → e2e)
-- **Story 0 extraction check applied** — every file classified as content/scaffolding (Story 0) vs code (SDET/dev)
+- Stories sequenced for incremental delivery
 - Written to tracking system + `docs/epics/{epic-dir}/acceptance-criteria.md`
 
-**File plan (one per story):**
+### Story 0 extraction (CRITICAL — do this BEFORE writing file plans)
+
+Before assigning deliverables to dev stories, classify each file by work type:
+
+| Work Type | Verifiable via mypy/tests? | Owner | Story |
+|-----------|---------------------------|-------|-------|
+| Config content (YAML values, semantic descriptions, prompt templates) | No — content quality is subjective | Architect | **Story 0** |
+| JSON schemas with example values | No — examples are domain content | Architect | **Story 0** |
+| Scaffolding (empty modules, __init__.py, directory structure) | No — no behavior to test | Architect | **Story 0** |
+| **contracts.py** (Protocol classes with exact method signatures) | Yes — mypy verifies implementations match | Architect | **Story 0** |
+| Pydantic models, adapters, business logic | Yes — unit tests + mypy | Developer | **Story 1+** |
+
+**Rule:** If a file's primary value is its CONTENT (not its structure), it belongs in Story 0. The architect authors it directly.
+
+**Common Story 0 deliverables:**
+- Config files with domain-specific values
+- Prompt templates with carefully authored instructions
+- JSON schemas with realistic example values
+- Directory scaffolding for new modules
+- **`contracts.py` — Python Protocol classes defining ALL cross-story interfaces**
+
+### contracts.py (CRITICAL — new deliverable)
+
+The architect MUST produce a `contracts.py` file in the epic's source package. This file contains Python `Protocol` classes that define every public interface that will be called across story boundaries.
+
+**What goes in contracts.py:**
+- One Protocol class per component that other stories depend on
+- Exact method signatures with full type annotations
+- Return types using the Pydantic models from `models_*.py`
+- Import statements for all referenced types
+
+**What does NOT go in contracts.py:**
+- Internal/private methods (only public interface)
+- Implementation details
+- Components only used within a single story
+
+**Example contracts.py:**
+```python
+"""Executable contracts for Epic 015: Vector-Driven Documentation.
+
+These Protocol classes define the cross-story interfaces. Implementations
+MUST satisfy these protocols. Verified via: mypy --strict
+
+Story 0 creates this file. Stories 1-N implement classes matching these protocols.
+The orchestration story (Story 5) imports and type-hints against these protocols.
+"""
+from typing import Protocol, Dict, List, Optional
+from pathlib import Path
+
+from src.documentation.models_rendering import (
+    AggregatedSignals, SynthesisResult, ReRenderResult, ReRenderMetrics
+)
+from src.config.models import SectionDescriptionConfig
+
+
+class IEmbeddingCache(Protocol):
+    """Story 01: Pre-computes section description embeddings."""
+
+    def warm(self) -> int: ...
+
+    def get_embedding(
+        self, section_id: str, config_path: Path
+    ) -> Optional[List[float]]: ...
+
+
+class IIntelAggregator(Protocol):
+    """Story 02: Queries Qdrant per section using metadata + vector similarity."""
+
+    def aggregate_for_section(
+        self, entity_id: str, section_config: SectionDescriptionConfig
+    ) -> AggregatedSignals: ...
+
+    def aggregate_for_file(
+        self, entity_id: str, file_config: dict
+    ) -> Dict[str, AggregatedSignals]: ...
+
+
+class IKnowledgeSynthesizer(Protocol):
+    """Story 03: Converts aggregated signals to structured JSON via LLM."""
+
+    def synthesize(
+        self, file_name: str,
+        section_signals: Dict[str, AggregatedSignals],
+        entity_id: str
+    ) -> Optional[SynthesisResult]: ...
+```
+
+**Validation rule:** After Story 0, running `python -c "import src.documentation.contracts"` must succeed (all types importable).
+
+### File plan (one per story)
+
 - Intent documentation per file (600-1200 chars, 5-part template)
 - `public_interface` for new files (class/method signatures)
 - `signature_changes` for modified files (before/after with breaking_change flag)
+- **`calls` section for files that invoke other stories' components** ← NEW
 - Written to `docs/epics/{epic-dir}/file-plan-story-NN.yaml` (pure YAML, one per story)
-- **`file-plan-story-00.yaml` created if Story 0 has deliverables**
+
+### File plan `calls` section (CRITICAL — new requirement)
+
+When a file plan entry describes a file that CALLS methods from another story's components, include an explicit `calls` section. This is the machine-readable cross-reference that prevents signature mismatches.
+
+**Example:**
+```yaml
+modified_files:
+  - path: "src/documentation/updater.py"
+    intent: |
+      WHAT: Add re_render_entity() orchestration method.
+      WHY: Coordinates IntelAggregator → KnowledgeSynthesizer → TemplateReRenderer per file.
+      ...
+    calls:
+      - target: "IIntelAggregator.aggregate_for_file"
+        contract: "contracts.py"
+        signature: "aggregate_for_file(entity_id: str, file_config: dict) -> Dict[str, AggregatedSignals]"
+      - target: "IKnowledgeSynthesizer.synthesize"
+        contract: "contracts.py"
+        signature: "synthesize(file_name: str, section_signals: Dict[str, AggregatedSignals], entity_id: str) -> Optional[SynthesisResult]"
+      - target: "ITemplateReRenderer.render_file"
+        contract: "contracts.py"
+        signature: "render_file(template_name: str, context: dict, entity_slug: str, entity_config: EntityConfig) -> ReRenderResult"
+```
+
+**Rule:** If a file has a `calls` section, the developer MUST verify each call matches the exact signature listed. mypy enforces this when the implementation type-hints dependencies using Protocol types from contracts.py.
 
 ### Phase 4 Checklist
 
 Present to user:
 
 ```
-Phase 4: Architect - Stories & File Plan
+Phase 4: Architect - Stories, Contracts & File Plan
 
 ✅ Story Breakdown
    Stories created: [N stories]
-   Story 0 (scaffolding): [Yes - N files / No - not needed]
    Dependency order: [Story sequence]
-   Test enablement: [When each test type becomes possible]
 
-✅ Story 0 Extraction Check
-   Content/config files → Story 0: [list or "none"]
-   Scaffolding files → Story 0: [list or "none"]
-   Code files → SDET/dev stories: [confirmed]
+✅ Contracts (contracts.py)
+   Protocol classes: [N protocols defined]
+   Cross-story interfaces: [List of class names]
+   All types importable: [Yes / No]
 
 ✅ File Plan
    New files: [N files with intent + public_interface]
    Modified files: [N files with intent + signature_changes]
+   Cross-story calls documented: [N call references]
    Breaking changes: [N breaking changes flagged]
-   Per-story file plans: file-plan-story-00.yaml through file-plan-story-NN.yaml
 
 ✅ Coverage
    All stories mapped to files: [Yes / No]
    All acceptance criteria traceable: [Yes / No]
+   All cross-story calls have contracts: [Yes / No]
 
 Ready to mark epic as ready-for-implementation? [yes / refine]
 ```
@@ -357,7 +475,7 @@ if [ -n "$SCRIPT" ]; then
 fi
 ```
 
-**If user wants refinement**: Address concerns, update stories/file plan, re-present checklist
+**If user wants refinement**: Address concerns, update stories/file plan/contracts, re-present checklist
 
 ---
 
@@ -373,20 +491,23 @@ Artifacts created:
 │   ├── architecture.md
 │   ├── adr.md
 │   ├── test-strategy.md
-│   ├── file-plan-story-00.yaml
+│   ├── file-plan-story-00.yaml   (includes contracts.py)
 │   ├── file-plan-story-01.yaml
 │   └── file-plan-story-NN.yaml
-├── docs/architecture/13-specs/
+├── 13-specs/
 │   ├── api/{epic-id}-*.yaml
 │   ├── schemas/domain/{epic-id}-*.json
 │   └── errors/by-domain/{epic-id}.yaml
 └── Tracking system
     └── [N] stories created with AC and dependencies
 
+Contract protocols: [N] interfaces in contracts.py
+Cross-story calls documented: [N] call references in file plans
+
 Status: ready-for-implementation
 Cost: $X.XX
 
-Next: Run Auto Claude with this epic for implementation.
+Next: Run /implement {epic-id} or /implement_tdd {epic-id}
 ```
 
 ---
@@ -401,7 +522,7 @@ If session compacts mid-refinement:
 2. Check which epic docs exist:
    - `acceptance-criteria.md` exists → Phase 1 complete
    - `architecture.md` exists → Phase 2 complete
-   - `docs/architecture/13-specs/api/{epic-id}-*` exists → Phase 3 complete
+   - `13-specs/api/{epic-id}-*` exists → Phase 3 complete
    - `file-plan-story-*.yaml` exists → Phase 4 complete
 3. Resume from appropriate phase
 
@@ -413,7 +534,7 @@ If session compacts mid-refinement:
 - "Phase 1/4: Product Owner - Epic Validation"
 - "Phase 2/4: Architect - System Context & Architecture"
 - "Phase 3/4: Architect - Spec Generation"
-- "Phase 4/4: Architect - Stories & File Plan"
+- "Phase 4/4: Architect - Stories, Contracts & File Plan"
 
 **Approval gates:**
 - Present checklist summary
@@ -422,50 +543,3 @@ If session compacts mid-refinement:
 
 **Discovery updates:**
 - If Phase 2 reveals issues with Phase 1, announce and update
-- "🔄 Discovery: Found missing error scenario, updating acceptance criteria"
-
----
-
-## Example Session
-
-```
-User: /epic_refine EPIC-123
-Assistant: Starting epic refinement for EPIC-123: User Authentication Flow
-
-Phase 1/3: Product Owner - Epic Validation
-
-Loading epic details... I see this epic is about adding OAuth2 authentication.
-
-A few clarifying questions:
-1. Which OAuth providers should we support initially?
-2. Should we support "remember me" functionality?
-3. What happens if OAuth fails - fallback to email/password?
-
-User: Google and GitHub for now. Yes to remember me. No fallback, OAuth only.
-
-Assistant: Got it. Writing acceptance criteria...
-
-[... interactive refinement continues ...]
-
-Phase 1: Product Owner - Epic Validation
-
-✅ Epic Details
-   Business value: Clear - reduce signup friction
-   User stories: 3 stories defined
-   Scope: Well-bounded - OAuth only, no email/password
-
-✅ Acceptance Criteria
-   Happy path scenarios: 4 scenarios
-   Edge cases: 3 cases
-   Error scenarios: 5 scenarios
-
-✅ Test Scenarios
-   E2E scenarios: 6 scenarios defined
-
-Ready to proceed to architecture? [yes / refine]
-
-User: yes
-
-Assistant: Phase 2/4: Architect - System Context & Architecture
-...
-```

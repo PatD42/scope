@@ -239,7 +239,33 @@ Read `.scope/config.yaml` to get project settings. The loaded skills (project-do
      - Explain what you tried and why it's not working
      - Escalate to user for guidance
    - **If all tests pass:**
-     - Proceed to next step
+     - Proceed to linting step
+
+6. **Run Linters and Fix Issues**
+   - Run ruff on all files created/modified in this story:
+     ```bash
+     ruff check --fix <files>
+     ruff format <files>
+     ```
+   - Run vulture on the same files to detect dead code:
+     ```bash
+     vulture <files>
+     ```
+   - **Fix all ruff violations** (auto-fix where possible, manual fix otherwise)
+   - **Fix vulture findings**: remove dead code, unused imports, unreachable code
+   - **Re-run tests** after lint fixes to confirm nothing broke
+   - Report lint findings and fixes in agent summary deliverables
+
+7. **Verify Contracts (if contracts.py exists)**
+   - If the epic has a `contracts.py` file (produced by `/epic_refine`):
+     ```bash
+     mypy --strict <files created/modified in this story>
+     ```
+   - **Fix all mypy errors** — these indicate the implementation doesn't match the Protocol contracts
+   - Common issues: wrong return type, missing method, wrong parameter types
+   - If mypy passes, the implementation is guaranteed to be callable by other stories
+   - **Re-run tests** after mypy fixes to confirm nothing broke
+   - If no `contracts.py` exists, skip this step
 
 **Completion criteria:**
 - All SDET's tests pass
@@ -247,6 +273,8 @@ Read `.scope/config.yaml` to get project settings. The loaded skills (project-do
 - Code follows existing patterns
 - **File plan intent fulfilled** — code actually does what the intent describes (real I/O, real logic)
 - **No stubs or placeholders** in production code
+- **ruff and vulture pass** with no remaining violations on story files
+- **mypy --strict passes** (if contracts.py exists)
 - **Agent summary written to agent_summaries file** (see "On Completion" section)
 - **Task marked complete** (TaskUpdate with status="completed")
 

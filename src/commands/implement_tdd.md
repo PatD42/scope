@@ -1,16 +1,16 @@
 ---
-name: implement
-description: Implement an epic story-by-story. Developer implements and writes tests. Runs audit on completion and apply recommendations.
+name: implement_tdd
+description: Implement an epic story-by-story using TDD. SDET writes tests first, then developer implements. Runs audit on completion nd apply recommendations.
 args: "{epic-id}"
-skills: project-documentation
-agents: architect, developer
+skills: project-documentation, project-tracking, session-id-finder
+agents: architect, sdet, developer
 ---
 
-# /implement
+# /implement_tdd
 
-Implement an epic story-by-story using a single developer agent.
+Implement an epic story-by-story using TDD orchestration.
 
-**Syntax:** `/implement {epic-id}`
+**Syntax:** `/implement_tdd {epic-id}`
 
 ## Prerequisites
 
@@ -29,28 +29,31 @@ Story 0 (if exists):
   architect-story-0
 
 Story 1:
-  dev-story-1 (blocked by architect-story-0 if exists)
+  sdet-story-1 (blocked by architect-story-0 if exists)
+    ↓
+  dev-story-1 (blocked by sdet-story-1)
 
 Story 2 (depends on Story 1):
-  dev-story-2 (blocked by dev-story-1)  ← respects declared dependencies
+  sdet-story-2 (blocked by sdet-story-1)  ← SDET is sequential
+    ↓
+  dev-story-2 (blocked by sdet-story-2 + dev-story-1)  ← dev waits for its SDET + story deps
 
 Story N:
-  dev-story-N (blocked by dev tasks of declared dependencies)
+  sdet-story-N (blocked by sdet-story-(N-1))
+    ↓
+  dev-story-N (blocked by sdet-story-N + dev tasks of declared dependencies)
 
 After all complete:
   /audit_epic {epic-id}
-  Create fix stories from audit recommendations
-  Implement fix stories
-  Run all epic tests
-  Final audit
+  Apply recommendations from epic_audit.md
 ```
 
 **Key rules:**
+- SDET tasks are **sequential** (no concurrent SDET — test design needs prior context)
+- Developer tasks start when their SDET task AND all implementation dependencies complete
 - **ONE developer agent at a time** — concurrent writes to the same worktree cause race conditions and inconsistent state
-- Developer tasks respect inter-story implementation dependencies
 - The developer agent processes tasks sequentially, picking the lowest-ID unblocked dev task
-- Story 0 (scaffolding) is done by the architect before any dev work
-- Developer writes BOTH production code AND tests for each story
+- Story 0 (scaffolding) is done by the architect before any SDET/dev work
 
 ---
 
@@ -99,6 +102,7 @@ fi
 
 # All subsequent work happens in the worktree
 cd "$WORKTREE_DIR"
+```
 
 ### Step 1: Discover Stories
 
@@ -116,7 +120,7 @@ Check if the first story is Story 0 (scaffolding).
 
 ### Step 2: Create Tasks
 
-Create all tasks upfront with dependencies, then launch agent.
+Create all tasks upfront with dependencies, then launch agents.
 
 ```python
 task_ids = {}  # Track task IDs for dependency wiring
@@ -148,16 +152,49 @@ Instructions:
 
 # --- For each implementation story ---
 impl_stories = [s for s in stories if not s["is_scaffolding"]]
+prev_sdet_task_id = None
 
 for story in impl_stories:
     num = story["number"]
 
-    # Developer task: implement + write tests
-    dev_blocked_by = []
-    if has_story_0 and num == impl_stories[0]["number"]:
-        # First dev task depends on scaffolding
-        dev_blocked_by.append(task_ids["architect-story-00"])
+    # SDET task: write tests first
+    sdet_blocked_by = []
+    if prev_sdet_task_id:
+        sdet_blocked_by.append(prev_sdet_task_id)
+    if has_story_0 and not prev_sdet_task_id:
+        # First SDET task depends on scaffolding
+        sdet_blocked_by.append(task_ids["architect-story-00"])
 
+    sdet_task_id = TaskCreate(
+        subject=f"sdet: Write tests for story {num} - {story['story_title']}",
+        description=f"""
+epic_id: {epic_id}
+phase: test_writing
+story_id: {story['story_id']}
+story_title: {story['story_title']}
+file_plan: {story['file_plan_path']}
+terminate_upon_completion: no
+
+Instructions:
+- Read the file plan at {story['file_plan_path']}
+- Read acceptance criteria from docs/epics/{epic_dir}/acceptance-criteria.md
+- Read test strategy from docs/epics/{epic_dir}/test-strategy.md
+- Write tests BEFORE implementation (TDD)
+- Use public_interface from file plan to write tests against expected signatures
+- Use signature_changes to write backward compatibility tests where needed
+- If contracts.py exists in the epic source, write tests that verify
+  implementations satisfy the Protocol interfaces defined there. Import
+  Protocol types and assert that concrete classes are structurally compatible.
+- Include unit tests for all new/modified files
+- Include integration tests if story completes a component integration
+- Include e2e tests if story completes a user flow
+- All tests should FAIL at this point (no implementation yet)
+""",
+        activeForm=f"Writing tests for story {num}"
+    )
+    task_ids[f"sdet-story-{num}"] = sdet_task_id
+
+    # Developer task: implement to pass tests
     dev_task_id = TaskCreate(
         subject=f"developer: Implement story {num} - {story['story_title']}",
         description=f"""
@@ -170,10 +207,8 @@ terminate_upon_completion: no
 
 Instructions:
 - Read the file plan at {story['file_plan_path']}
-- Read acceptance criteria from docs/epics/{epic_dir}/acceptance-criteria.md
 - Read architecture from docs/epics/{epic_dir}/architecture.md
 - Read ADRs from docs/epics/{epic_dir}/adr.md
-- Read test strategy from docs/epics/{epic_dir}/test-strategy.md
 - If contracts.py exists in the epic source, import Protocol types from it and
   use them as type annotations for parameters, return types, and dependency
   injection. The contracts define the agreed interfaces — implementations MUST
@@ -181,10 +216,8 @@ Instructions:
 - Implement PRODUCTION-READY code that fulfills the file plan intent
 - Follow the intent documentation in the file plan — intent is the source of truth
 - Match the public_interface / signature_changes exactly
-- Write tests (unit + integration as appropriate) for the code you implement
-- If contracts.py exists, include tests that verify implementations satisfy the
-  Protocol interfaces. Import Protocol types and assert structural compatibility.
-- Run all tests after implementation — all must pass
+- Run tests after implementation — all must pass
+- Do NOT modify test files (only implementation files)
 - CRITICAL: If the file plan intent describes external I/O (API calls, HTTP
   requests, database operations, file system writes), the implementation MUST
   contain real I/O code — not hardcoded return values or placeholder stubs.
@@ -196,11 +229,15 @@ Instructions:
     )
     task_ids[f"dev-story-{num}"] = dev_task_id
 
-    # Wire dependencies
-    if dev_blocked_by:
-        TaskUpdate(taskId=dev_task_id, addBlockedBy=dev_blocked_by)
+    # Wire dependencies: sdet blocked by prev sdet, dev blocked by its sdet
+    if sdet_blocked_by:
+        TaskUpdate(taskId=sdet_task_id, addBlockedBy=sdet_blocked_by)
+    TaskUpdate(taskId=dev_task_id, addBlockedBy=[sdet_task_id])
+
+    prev_sdet_task_id = sdet_task_id
 
 # --- Second pass: wire inter-story implementation dependencies ---
+# dev-story-N is also blocked by dev tasks of its declared dependencies
 for story in impl_stories:
     num = story["number"]
     dev_task_id = task_ids[f"dev-story-{num}"]
@@ -214,7 +251,7 @@ for story in impl_stories:
 ### Step 3: Launch Agents
 
 ```python
-# Spawn agents using Task tool — all in ONE message
+# Spawn agents using Task tool — all in ONE message for parallel execution
 
 # 1. Architect (if Story 0 exists)
 if has_story_0:
@@ -225,7 +262,15 @@ if has_story_0:
         run_in_background=True
     )
 
-# 2. Developer agent — SINGLE agent, sequential execution
+# 2. SDET agent (sequential — one agent handles all SDET tasks via polling)
+Task(
+    prompt="Take the role of sdet agent. Find and execute your tasks in order. Poll for new tasks after completing each one.",
+    subagent_type="general-purpose",
+    description="SDET: write tests",
+    run_in_background=True
+)
+
+# 3. Developer agent — SINGLE agent, sequential execution
 # 🚨 NEVER spawn more than ONE developer agent. Multiple developers writing to
 #    the same worktree causes race conditions, merge conflicts, and corrupted state.
 #    If you need to re-launch after failure, wait for the current one to finish first.
@@ -234,14 +279,12 @@ Task(
     Process dev tasks ONE AT A TIME in dependency order:
     1. Check TaskList for the lowest-ID dev task that is pending and has NO blockedBy
     2. If none available, STOP — you will be re-launched when tasks unblock
-    3. Implement it AND write tests
-    4. Run all tests — all must pass
-    5. Mark completed
-    6. Check TaskList again for next unblocked dev task
-    7. Repeat until no more dev tasks available
+    3. Implement it, run tests
+    4. Mark completed
+    5. Check TaskList again for next unblocked dev task
+    6. Repeat until no more dev tasks available
 
-    CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
-    You are responsible for BOTH implementation AND tests — there is no SDET.""",
+    CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.""",
     subagent_type="general-purpose",
     description="Developer: implement",
     run_in_background=True
@@ -250,12 +293,13 @@ Task(
 
 **Tell user:**
 ```
-Implementing {epic-id} with {N} stories (no SDET):
+Implementing {epic-id} with {N} stories:
 
 🏗️ Architect: Story 0 scaffolding (if applicable)
-💻 Developer: Implementing + testing sequentially (story 1 → 2 → ... → N)
+🧪 SDET: Writing tests sequentially (story 1 → 2 → ... → N)
+💻 Developer: Implementing as tests become available
 
-Agent is working. I'll run the audit when it completes.
+Agents are working. I'll run the audit when they complete.
 ```
 
 ### Step 4: Wait for Completion
@@ -345,7 +389,7 @@ Instructions:
 
 ### Step 7: Implement Fix Stories
 
-Once the architect creates fix stories, run them through the developer pipeline (no SDET).
+Once the architect creates fix stories, run them through the same SDET → developer pipeline.
 
 ```python
     # Discover new fix stories (file plans created by architect in Step 6)
@@ -374,10 +418,43 @@ Once the architect creates fix stories, run them through the developer pipeline 
         # Architect determined no fix stories needed — skip to Step 8
         pass
     else:
-        # Create tasks for fix stories
+        # Create tasks for fix stories — same pattern as Step 2
+        prev_sdet_task_id = None  # Fix stories form their own SDET chain
+
         for story in fix_stories:
             num = story["number"]
 
+            # SDET task
+            sdet_blocked_by = []
+            if prev_sdet_task_id:
+                sdet_blocked_by.append(prev_sdet_task_id)
+
+            sdet_task_id = TaskCreate(
+                subject=f"sdet: Write tests for fix story {num} - {story['story_title']}",
+                description=f"""
+epic_id: {epic_id}
+phase: test_writing
+story_id: {story['story_id']}
+story_title: {story['story_title']}
+file_plan: {story['file_plan_path']}
+terminate_upon_completion: no
+
+Instructions:
+- This is a FIX story from audit findings
+- Read the file plan at {story['file_plan_path']}
+- Read acceptance criteria from docs/epics/{epic_dir}/acceptance-criteria.md
+- Read test strategy from docs/epics/{epic_dir}/test-strategy.md
+- Write tests that verify the audit finding is fixed
+- Update existing tests if signature changes are needed
+- If contracts.py exists, verify tests assert Protocol compliance for any
+  interfaces affected by the fix
+- All tests should FAIL at this point (fix not implemented yet)
+""",
+                activeForm=f"Writing tests for fix story {num}"
+            )
+            task_ids[f"sdet-story-{num}"] = sdet_task_id
+
+            # Developer task
             dev_task_id = TaskCreate(
                 subject=f"developer: Implement fix story {num} - {story['story_title']}",
                 description=f"""
@@ -398,15 +475,19 @@ Instructions:
   Protocol types for type annotations and run `mypy --strict` to verify.
 - If this is a documentation update story, update files in docs/architecture/ to
   reflect the actual implementation accurately
-- Write tests that verify the audit finding is fixed
-- If contracts.py exists, include tests that assert Protocol compliance for
-  interfaces affected by the fix
-- Run all tests after implementation — all must pass
+- Run tests after implementation — all must pass
 - CRITICAL: No stubs, no placeholders, no TODOs in production code
 """,
                 activeForm=f"Implementing fix story {num}"
             )
             task_ids[f"dev-story-{num}"] = dev_task_id
+
+            # Wire dependencies
+            if sdet_blocked_by:
+                TaskUpdate(taskId=sdet_task_id, addBlockedBy=sdet_blocked_by)
+            TaskUpdate(taskId=dev_task_id, addBlockedBy=[sdet_task_id])
+
+            prev_sdet_task_id = sdet_task_id
 
         # Wire inter-story dependencies for fix stories
         for story in fix_stories:
@@ -417,26 +498,33 @@ Instructions:
                 if dep_key in task_ids:
                     TaskUpdate(taskId=dev_task_id, addBlockedBy=[task_ids[dep_key]])
 
+        # Launch agents for fix stories
+        # Reuse same pattern: one SDET, one developer
+        Task(
+            prompt="Take the role of sdet agent. Find and execute your tasks in order. Poll for new tasks after completing each one.",
+            subagent_type="general-purpose",
+            description="SDET: fix story tests",
+            run_in_background=True
+        )
+
         # 🚨 NEVER spawn more than ONE developer agent.
         Task(
             prompt="""Take the role of developer agent.
             Process dev tasks ONE AT A TIME in dependency order:
             1. Check TaskList for the lowest-ID dev task that is pending and has NO blockedBy
             2. If none available, STOP — you will be re-launched when tasks unblock
-            3. Implement it AND write tests
-            4. Run all tests — all must pass
-            5. Mark completed
-            6. Check TaskList again for next unblocked dev task
-            7. Repeat until no more dev tasks available
+            3. Implement it, run tests
+            4. Mark completed
+            5. Check TaskList again for next unblocked dev task
+            6. Repeat until no more dev tasks available
 
-            CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
-            You are responsible for BOTH implementation AND tests — there is no SDET.""",
+            CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.""",
             subagent_type="general-purpose",
             description="Developer: fix stories",
             run_in_background=True
         )
 
-        # Wait for fix story agent to complete
+        # Wait for fix story agents to complete
 ```
 
 ### Step 8: Run All Epic Tests
@@ -511,26 +599,31 @@ For stories where Story 3 depends on Stories 1 and 2:
 ```
 architect-story-00
        ↓
-dev-story-01 ──────────┐
-                        │
-dev-story-02 ──────────┤
-                        │
-dev-story-03 ←─────────┘  (blocked by dev-01 AND dev-02)
-       ↓
-audit_epic (after all complete)
+sdet-story-01 ──→ dev-story-01 ──────────┐
+       ↓                                  │
+sdet-story-02 ──→ dev-story-02 ──────────┤
+       ↓                                  │
+sdet-story-03 ──→ dev-story-03 ←─────────┘  (blocked by dev-01 AND dev-02)
+                        ↓
+                 audit_epic (after all complete)
 ```
 
-Developer tasks respect declared inter-story dependencies.
+Developer tasks respect BOTH:
+1. Their SDET task (tests must exist first)
+2. Their story's implementation dependencies (imported code must exist)
 
 **Concurrency timeline (single developer agent, sequential):**
 ```
 Time →
-                    ┌─── Implementation Phase ──────────────────┐  ┌── Fix Phase ──────────────┐
-architect:  [==story-0==][                                      ]  [==fix planning==]
-developer:               [==story-1==][==story-2==][==story-3==]                    [==fix-08==][==fix-09==]
-audit:                                                            [==audit==]                    [==final==]
-tests:                                                                                           [==all==]
+                    ┌─── Implementation Phase ───────────────────────────────┐  ┌── Fix Phase ──────────────┐
+architect:  [==story-0==][                                                  ]  [==fix planning==]
+sdet:                     [==story-1==][==story-2==][==story-3==]              [==fix-08==][==fix-09==]
+developer:                             [==story-1==][==story-2==][==story-3==]             [==fix-08==][==fix-09==]
+audit:                                                                        [==audit==]               [==final==]
+tests:                                                                                                  [==all==]
 ```
+
+Note: Developer processes tasks one at a time. A dev task only starts when both its SDET task AND all declared story dependencies (other dev tasks) are complete. This prevents concurrent writes to the same worktree.
 
 **Full flow:**
 ```
@@ -548,10 +641,15 @@ Stories 01-N → Audit → Fix stories (if needed) → All epic tests → Final 
 - Present failure to user with the agent's error message
 - Ask: "Fix and retry? [yes / skip story / abort]"
 
+**If SDET tests can't be written (missing context):**
+- SDET returns `status: user_input` with questions
+- Orchestrator pauses and presents questions to user
+- After user answers, SDET resumes
+
 **If developer can't pass tests:**
 - Developer returns `status: failure` with details
 - Common cause: file plan signatures don't match actual requirements
-- Fix: update file plan, re-run developer for that story
+- Fix: update file plan, re-run SDET + developer for that story
 
 ---
 
@@ -559,6 +657,7 @@ Stories 01-N → Audit → Fix stories (if needed) → All epic tests → Final 
 
 **Progress indicators:**
 - "Implementing {epic-id}: Story 0/N complete"
+- "SDET: Writing tests for story 2/N"
 - "Developer: Implementing story 1/N"
 
 **After completion:**

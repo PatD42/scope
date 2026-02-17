@@ -33,6 +33,7 @@ SOURCES:
 ├── Our architecture: docs/epics/{epic-id}/architecture.md
 ├── Our ADRs: docs/epics/{epic-id}/adr.md
 ├── Acceptance criteria: docs/epics/{epic-id}/acceptance-criteria.md
+├── Lint findings: docs/epics/{epic-id}/lint_findings.yaml (if exists)
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
 └── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
 
@@ -62,10 +63,16 @@ AUDIT CHECKS:
 │   ├── Error handling consistent
 │   └── Documentation complete
 │
-└── 6. Stub/Placeholder Detection
-    ├── No placeholder/TODO/stub markers in production code
-    ├── Intent I/O verbs matched by real I/O in implementation
-    └── No functions returning literals without performing stated action
+├── 6. Stub/Placeholder Detection
+│   ├── No placeholder/TODO/stub markers in production code
+│   ├── Intent I/O verbs matched by real I/O in implementation
+│   └── No functions returning literals without performing stated action
+│
+└── 7. Lint & Contract Compliance
+    ├── Ingest lint_findings.yaml (ruff + vulture + mypy from epic-wide check)
+    ├── Remaining ruff violations → MAJOR severity
+    ├── Dead code (vulture) → MAJOR severity
+    └── mypy --strict errors → CRITICAL severity (contract violations)
 
 OUTPUT:
 └── docs/epics/{epic-dir}/epic_audit.md
@@ -466,6 +473,66 @@ for story_plan in file_plans:
 ```
 
 **Key rule:** A stub found in production code is ALWAYS severity CRITICAL, never minor. If the file plan says the code should do something and it doesn't, that's a failed implementation.
+
+---
+
+## Audit Phase 7: Lint & Contract Compliance
+
+**Check:** Ingest epic-wide lint and contract findings and include them in the audit report.
+
+```python
+lint_findings_path = f"docs/epics/{epic_dir}/lint_findings.yaml"
+if file_exists(lint_findings_path):
+    lint_report = read_yaml(lint_findings_path)
+
+    # Ruff violations that couldn't be auto-fixed
+    for violation in lint_report.get("ruff_violations", []):
+        report_finding(
+            severity="MAJOR",
+            file=violation["file"],
+            issue=f"ruff: {violation['code']} - {violation['message']} (line {violation['line']})",
+            impact="Code quality violation that couldn't be auto-fixed"
+        )
+
+    # Vulture dead code findings
+    for finding in lint_report.get("vulture_dead_code", []):
+        report_finding(
+            severity="MAJOR",
+            file=finding["file"],
+            issue=f"vulture: unused {finding['type']} '{finding['name']}' (line {finding['line']})",
+            impact="Dead code increases maintenance burden and may indicate incomplete refactoring"
+        )
+
+    # mypy contract violations
+    for error in lint_report.get("mypy_errors", []):
+        report_finding(
+            severity="CRITICAL",
+            file=error["file"],
+            issue=f"mypy: {error['message']} (line {error['line']})",
+            impact="Contract violation — implementation does not match Protocol interface. Cross-story calls will fail at runtime."
+        )
+```
+
+**Report:**
+```markdown
+### Lint & Contract Compliance
+
+❌ CRITICAL: src/documentation/intel_aggregator.py:23
+   mypy: Argument 1 to "aggregate_for_section" has incompatible type "int"; expected "str"
+   Impact: Contract violation — cross-story calls will fail at runtime
+
+❌ MAJOR: src/classification/classifier.py:45
+   ruff: F841 - Local variable 'result' is assigned but never used
+   Impact: Code quality violation
+
+❌ MAJOR: src/ingestion/feed_parser.py:12
+   vulture: unused function 'parse_legacy_format' (line 12)
+   Impact: Dead code from incomplete refactoring
+
+✅ No lint/contract findings (lint_findings.yaml not present or empty)
+```
+
+**Note:** If `lint_findings.yaml` does not exist, the epic-wide checks passed cleanly — skip this phase. mypy errors are CRITICAL because they indicate implementations that don't match the Protocol contracts — these will cause runtime failures when stories integrate.
 
 ---
 

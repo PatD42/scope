@@ -37,4 +37,4 @@ project_root/
 - E2E tests: `tests/e2e/`
 
 **Documentation**
-- docs/ is not defined on purpose. Agents must use the `project-documentation` skill to read/write/modify documentation to cather to users documenting on confluence, sharepoint, of file-based.
+- docs/ is not defined on purpose. Agents must use the `project-documentation` skill to read/write/modify documentation in the local `docs/` directory. The skill defines the folder structure and templates.
