@@ -48,7 +48,7 @@ docs/
 │   │   └── apis-integrations.md 
 │   └── decisions.md
 ├── architecture/
-│   ├── 01-intro.md
+│   ├── 01-intro.md              # System-level (arc42)
 │   ├── 02-constraints.md
 │   ├── 03-context.md
 │   ├── 04-strategy.md
@@ -60,10 +60,24 @@ docs/
 │   │   ├── security.md
 │   │   ├── operations.md
 │   │   └── testing.md
-│   ├── 09-adr-summary.md
+│   ├── 09-adr-summary.md        # Roll-up of all ADRs (all scopes)
 │   ├── 10-quality.md
 │   ├── 11-risks.md
-│   └── 12-glossary.md
+│   ├── 12-glossary.md
+│   ├── adr/                      # System-level ADRs
+│   │   └── adr-template.md       # Shared template (all scopes)
+│   ├── backend/                  # Backend component architecture
+│   │   ├── overview.md
+│   │   ├── services.md
+│   │   ├── data.md
+│   │   ├── adr/                  # Backend-specific ADRs
+│   │   └── specs/                # Backend specs (detailed designs)
+│   └── frontend/                 # Frontend component architecture
+│       ├── overview.md
+│       ├── structure.md
+│       ├── patterns.md
+│       ├── adr/                  # Frontend-specific ADRs
+│       └── specs/                # Frontend specs (detailed designs)
 ├── epics/{epic-id-with-filesafe-title}/
 │   ├── details.md
 │   ├── system-context.md
@@ -239,6 +253,106 @@ glob(f"{root}/{path}/**/*.md")
 
 ---
 
+## Architecture Decision Records (ADRs)
+
+ADRs are scoped by component to keep decisions close to the code they affect.
+
+### Scoping Rules
+
+| Scope | Directory | When to Use | Prefix |
+|-------|-----------|-------------|--------|
+| **System** | `architecture/adr/` | Cross-cutting decisions (auth provider, deployment model, inter-service communication) | ADR- |
+| **Backend** | `architecture/backend/adr/` | Backend-specific (database schema, queue strategy, LLM pipeline, Python patterns) | ADR- |
+| **Frontend** | `architecture/frontend/adr/` | Frontend-specific (component library, state management, routing, testing framework) | ADR- |
+
+**If in doubt:** Ask "does this decision affect only one component, or does it cross the boundary?" System-level if it crosses.
+
+### Numbering — Single Global Sequence
+
+**All ADRs share one global sequence** regardless of scope. This guarantees uniqueness and makes chronological ordering clear.
+
+**Before creating a new ADR:**
+1. Scan `09-adr-summary.md` for the highest existing ADR number
+2. Also check epic-level `adr.md` files for inline ADRs (e.g., ADR-024 through ADR-036 exist in epic docs)
+3. Assign the next number in sequence
+
+**File naming:** `ADR-{NNN}-{kebab-title}.md` in the scope's `adr/` directory.
+
+**Example:** If the highest existing ADR is ADR-036, the next ADR is ADR-037 regardless of whether it's system, backend, or frontend scope.
+
+### ADR Template
+**Template:** `templates-technical-arc42-c4/architecture/adr/adr-template.md`
+**Format:** ADR-NNN with date, status, scope, epic, context, decision, alternatives, consequences
+**Owner:** Architect
+**Trigger:** Any significant technical decision during epic work
+
+### 09-adr-summary.md (Roll-Up)
+The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links to the source files. Epic Housekeeping updates this file after each epic.
+
+**Format:**
+```
+## System ADRs
+- [ADR-001: Logging](adr/ADR-001-logging.md) — Accepted, 2026-02-08
+
+## Backend ADRs
+- [ADR-037: Queue Strategy](backend/adr/ADR-037-queue-strategy.md) — Accepted, 2026-02-16
+
+## Frontend ADRs
+- [ADR-038: Component Library](frontend/adr/ADR-038-component-library.md) — Accepted, 2026-02-19
+```
+
+---
+
+## Component Architecture — Backend
+
+### backend/overview.md
+**Template:** `templates-technical-arc42-c4/architecture/backend/overview.md`
+**Content:** Service landscape, communication patterns, shared infrastructure, constraints
+**Owner:** Architect
+**Readers:** Developer, SDET
+**Trigger:** Service added or architectural pattern changes
+
+### backend/services.md
+**Template:** `templates-technical-arc42-c4/architecture/backend/services.md`
+**Content:** Detailed service catalog (responsibilities, interfaces, dependencies, config)
+**Owner:** Architect
+**Readers:** Developer, SDET
+**Trigger:** Service added, interfaces change
+
+### backend/data.md
+**Template:** `templates-technical-arc42-c4/architecture/backend/data.md`
+**Content:** Database schemas, S3 storage layout, data flows, migration strategy
+**Owner:** Architect
+**Readers:** Developer, SDET
+**Trigger:** Schema changes, new storage patterns
+
+---
+
+## Component Architecture — Frontend
+
+### frontend/overview.md
+**Template:** `templates-technical-arc42-c4/architecture/frontend/overview.md`
+**Content:** Tech stack, layout, design principles, auth flow, API communication
+**Owner:** Architect
+**Readers:** Developer (frontend), SDET
+**Trigger:** Tech stack or architectural pattern changes
+
+### frontend/structure.md
+**Template:** `templates-technical-arc42-c4/architecture/frontend/structure.md`
+**Content:** Directory layout, component hierarchy, route map, key components
+**Owner:** Architect
+**Readers:** Developer (frontend), SDET
+**Trigger:** New pages, major component restructuring
+
+### frontend/patterns.md
+**Template:** `templates-technical-arc42-c4/architecture/frontend/patterns.md`
+**Content:** Data fetching, state management, error handling, styling, testing, a11y conventions
+**Owner:** Architect
+**Readers:** Developer (frontend), SDET
+**Trigger:** New patterns established, conventions change
+
+---
+
 ## Epic Documentation
 
 ### details.md
@@ -327,12 +441,13 @@ glob(f"{root}/{path}/**/*.md")
 | Agent | Writes | Reads (Primary) |
 |-------|--------|-----------------|
 | **Product Owner** | product/*, epics/*/{details,acceptance-criteria,pdr}.md | architecture/10-quality.md |
-| **Architect** | architecture/*, epics/*/{details,system-context,test-strategy,architecture,adr,file-plan}.yaml | product/{strategy,definition}.md |
-| **SDET** | - | product/definition.md, architecture/{06,10}*.md, architecture/08-cross-cutting/testing.md, epics/*/{details,acceptance-criteria,test-strategy,architecture}.md |
-| **Developer** | - | architecture/08-cross-cutting/*.md, epics/*/{test-strategy,adr}.md (if unclear) |
-| **Epic Housekeeping** | product/decisions.md (summaries), architecture/09-adr-summary.md (summaries), epics/*/implementation-summary.md | `.scope/*/agents_summaries.jsonl`, epics/*/{adr,pdr}.md |
-| **Security Reviewer** | epics/*/adr.md (security), architecture/08-cross-cutting/security.md | architecture/{03,04,08,10}*.md, epics/*/{details,adr}.md |
-| **DevOps** | architecture/{07,08}/operations.md | architecture/{03,07,08}*.md |
+| **Architect** | architecture/*, architecture/backend/*, architecture/frontend/*, architecture/{adr,backend/adr,frontend/adr}/*.md, epics/*/{details,system-context,test-strategy,architecture,adr,file-plan}.yaml | product/{strategy,definition}.md |
+| **SDET** | - | product/definition.md, architecture/{06,10}*.md, architecture/08-cross-cutting/testing.md, architecture/{backend,frontend}/*.md, epics/*/{details,acceptance-criteria,test-strategy,architecture}.md |
+| **Developer (backend)** | - | architecture/backend/*.md, architecture/backend/adr/*.md, architecture/08-cross-cutting/*.md, epics/*/{test-strategy,adr}.md |
+| **Developer (frontend)** | - | architecture/frontend/*.md, architecture/frontend/adr/*.md, architecture/08-cross-cutting/*.md, epics/*/{test-strategy,adr}.md |
+| **Epic Housekeeping** | product/decisions.md (summaries), architecture/09-adr-summary.md (roll-up from all scopes), epics/*/implementation-summary.md | `.scope/*/agents_summaries.jsonl`, epics/*/{adr,pdr}.md, architecture/{adr,backend/adr,frontend/adr}/*.md |
+| **Security Reviewer** | epics/*/adr.md (security), architecture/08-cross-cutting/security.md | architecture/{03,04,08,10}*.md, architecture/{backend,frontend}/*.md, epics/*/{details,adr}.md |
+| **DevOps** | architecture/{07,08}/operations.md | architecture/{03,07,08}*.md, architecture/backend/overview.md |
 
 ---
 
