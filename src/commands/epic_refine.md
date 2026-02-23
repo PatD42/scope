@@ -47,7 +47,7 @@ The previous approach produced file plans with method signatures in YAML prose. 
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │ Phase 3: Continue as architect (spec_generation)        │
-│ - Generate specs in 13-specs/ for Auto Claude           │
+│ - Generate specs in docs/architecture/13-specs/          │
 │ ──────────────────────────────────────────────────────  │
 │ → USER APPROVAL GATE #3                                 │
 └─────────────────────────────────────────────────────────┘
@@ -118,7 +118,7 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 
 **Key deliverables:**
 - Acceptance criteria in Given/When/Then format
-- Error scenarios (for 13-specs/errors/ generation)
+- Error scenarios (for docs/architecture/13-specs/errors/ generation)
 - E2E test scenarios
 - Written to `docs/epics/{epic-dir}/acceptance-criteria.md`
 
@@ -224,24 +224,23 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"architecture_
 
 ## Phase 3: Architect (spec_generation)
 
-**Conditional:** Only run this phase if the project uses Auto Claude or maintains a `13-specs/` directory. If neither applies, skip directly to Phase 4.
+**Instruction:** Continue as `architect` agent for the `spec_generation` phase. Create the `docs/architecture/13-specs/` subdirectories if they don't exist yet.
 
-**Instruction:** Continue as `architect` agent for the `spec_generation` phase.
-
-**Goal:** Generate technical specifications for Auto Claude consumption.
+**Goal:** Generate technical specifications in `docs/architecture/13-specs/`. This is the canonical location — all specs live under `docs/architecture/13-specs/`, not in the project root.
 
 **Phase context to pass:**
 ```
 epic_id: {epic-id}
 phase: spec_generation
 agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
+specs_dir: docs/architecture/13-specs
 ```
 
 **Key deliverables:**
-- API contracts in `13-specs/api/` (OpenAPI 3.0.3)
-- Domain schemas in `13-specs/schemas/domain/` (JSON Schema)
-- Error codes in `13-specs/errors/by-domain/`
-- Updated error taxonomy in `13-specs/errors/taxonomy.yaml`
+- API contracts in `docs/architecture/13-specs/api/` (OpenAPI 3.0.3)
+- Domain schemas in `docs/architecture/13-specs/schemas/domain/` (JSON Schema)
+- Error codes in `docs/architecture/13-specs/errors/by-domain/`
+- Updated error taxonomy in `docs/architecture/13-specs/errors/taxonomy.yaml`
 
 ### Phase 3 Checklist
 
@@ -250,15 +249,15 @@ Present to user:
 ```
 Phase 3: Architect - Spec Generation
 
-✅ API Contracts (13-specs/api/)
+✅ API Contracts (docs/architecture/13-specs/api/)
    Endpoints defined: [N endpoints]
    Files created: [list]
 
-✅ Domain Schemas (13-specs/schemas/domain/)
+✅ Domain Schemas (docs/architecture/13-specs/schemas/domain/)
    Entities defined: [N entities]
    Files created: [list]
 
-✅ Error Codes (13-specs/errors/)
+✅ Error Codes (docs/architecture/13-specs/errors/)
    Error codes defined: [N codes]
    Taxonomy updated: [Yes / No]
 
@@ -494,7 +493,7 @@ Artifacts created:
 │   ├── file-plan-story-00.yaml   (includes contracts.py)
 │   ├── file-plan-story-01.yaml
 │   └── file-plan-story-NN.yaml
-├── 13-specs/
+├── docs/architecture/13-specs/
 │   ├── api/{epic-id}-*.yaml
 │   ├── schemas/domain/{epic-id}-*.json
 │   └── errors/by-domain/{epic-id}.yaml
@@ -522,7 +521,7 @@ If session compacts mid-refinement:
 2. Check which epic docs exist:
    - `acceptance-criteria.md` exists → Phase 1 complete
    - `architecture.md` exists → Phase 2 complete
-   - `13-specs/api/{epic-id}-*` exists → Phase 3 complete
+   - `docs/architecture/13-specs/api/{epic-id}-*` exists → Phase 3 complete
    - `file-plan-story-*.yaml` exists → Phase 4 complete
 3. Resume from appropriate phase
 

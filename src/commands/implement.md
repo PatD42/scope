@@ -299,14 +299,14 @@ Audit results:
 """
 ```
 
-If audit status is PASS with no critical/major issues → skip to Step 8.
+If audit status is PASS with no findings → skip to Step 8.
 
 ### Step 6: Create Fix Stories from Audit
 
-Convert audit findings (critical + major) into additional stories with file plans. The architect agent handles this.
+Convert ALL audit findings (critical, major, minor) into additional stories with file plans. The architect agent handles this.
 
 ```python
-if not audit.has_critical_or_major:
+if not audit.has_findings:
     # Skip to Step 8
     pass
 else:
@@ -323,7 +323,7 @@ last_story_number: {last_story_num}
 
 Instructions:
 - Read the audit report at docs/epics/{epic_dir}/epic_audit.md
-- For each CRITICAL and MAJOR finding, create a fix story
+- For each finding (critical, major, AND minor), create a fix story
 - Group related findings into the same story when they affect the same files
 - Include documentation update stories for docs/architecture/ changes if the audit
   found architectural divergence (update the relevant architecture docs to match
@@ -489,14 +489,14 @@ if audit.status == "PASS":
 else:
     Output: f"""
     Epic {epic_id} still has open findings after fix stories.
-    Remaining: {audit.critical_count} critical, {audit.major_count} major
+    Remaining: {audit.critical_count} critical, {audit.major_count} major, {audit.minor_count} minor
     Review docs/epics/{epic_dir}/epic_audit.md for details.
     """
     # ⚠️ DO NOT loop back to Step 6. Two audit cycles is the maximum.
     # Escalate to user for manual resolution.
 ```
 
-**Max audit iterations: 2.** The initial audit (Step 5) plus one fix cycle (Steps 6-9) is the limit. If the final audit still has critical/major findings, present them to the user and stop. Do not create a third round of fix stories — diminishing returns and compounding risk of drift.
+**Max audit iterations: 2.** The initial audit (Step 5) plus one fix cycle (Steps 6-9) is the limit. If the final audit still has findings, present them to the user and stop. Do not create a third round of fix stories — diminishing returns and compounding risk of drift.
 
 ### Step 10: Worktree Cleanup
 
