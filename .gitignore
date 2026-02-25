@@ -1,5 +1,6 @@
 .env
 .mcp.json
+.claude
 .DS_Store
 tmp_debug/
 wip/
