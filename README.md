@@ -1,16 +1,18 @@
+<p align="center">
+  <img src="assets/scope-banner.png" alt="SCOPE Banner" />
+</p>
+
 # SCOPE
 
 **Simple Claude Orchestrator for Product Engineering**
 
 SCOPE turns Claude Code into a structured product engineering environment. It gives you slash commands that take a product from PRD to implemented, tested, and audited epics — with approval gates at every step.
 
-```
-PRD draft → /prd_refine → /prd_breakdown → /epic_refine → /implement → /audit_epic → merge
-```
+PRD draft → /prd_refine → /prd_breakdown → /epic_refine → /implement → merge
 
-Already have code but no docs? Start with `/re_documentation` to reverse engineer product and architecture documentation from your existing codebase.
+**Already have code but no docs?** Use `/re_documentation` to reverse engineer the product and architecture documentation from your existing codebase.
 
-No custom tooling. No MCP servers. Just Claude Code slash commands, agent definitions, and documentation templates.
+No custom tooling. No MCP servers. Just Claude Code slash commands, agents, skills, and documentation templates.
 
 ---
 
