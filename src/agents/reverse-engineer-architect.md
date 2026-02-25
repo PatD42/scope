@@ -171,7 +171,7 @@ Extract and document the **Arc42 12-chapter system architecture**:
 
 **Show**:
 - C4 Context diagram (system + external services)
-- C4 Container diagram (all 6 services)
+- C4 Container diagram (all services/components)
 - Data flow through pipeline
 
 **Questions**:
@@ -250,7 +250,7 @@ Extract and document the **Arc42 12-chapter system architecture**:
 #### Section 6: Cross-Cutting Concerns (10 minutes)
 
 **Domain Model**:
-- "What are the core domain entities? (I found: Jurisdiction, Regulation, Agency, Document, Chunk...)"
+- "What are the core domain entities? (I found: [list what you actually discovered]...)"
 - "How do they relate to each other?"
 - "Is there a ubiquitous language the team uses?"
 
@@ -416,78 +416,13 @@ Extract and document the **Arc42 12-chapter system architecture**:
 
 ## Diagramming Guidelines
 
-### C4 Level 1: Context (Mermaid)
-```mermaid
-graph LR
-    User[User/Developer]
-
-    subgraph "AquaForge System"
-        System[AquaForge]
-    end
-
-    Azure[Azure Document Intelligence]
-    OpenAI[OpenAI API]
-    Qdrant[Qdrant Vector DB]
-    Cosmos[Cosmos DB]
-
-    User -->|Uses| System
-    System -->|Queries| Azure
-    System -->|Calls| OpenAI
-    System -->|Stores| Qdrant
-    System -->|Stores| Cosmos
-```
-
-### C4 Level 2: Containers (Mermaid)
-```mermaid
-graph TD
-    User[User]
-
-    subgraph "AquaForge Pipeline"
-        JD[jurisdiction_discovery]
-        DAD[domain_agency_discovery]
-        JC[jurisdiction_crawler]
-        C2M[content_to_markdown]
-        MEV[markdown_enrich_to_vector]
-        RDB[reconstruct_from_db]
-
-        Common[aquaforge library]
-    end
-
-    User -->|CLI| JD
-    JD -->|Feeds| DAD
-    DAD -->|Feeds| JC
-    JC -->|Feeds| C2M
-    C2M -->|Feeds| MEV
-    MEV -->|Feeds| RDB
-
-    JD -.->|Uses| Common
-    C2M -.->|Uses| Common
-    MEV -.->|Uses| Common
-    RDB -.->|Uses| Common
-```
-
-### C4 Level 3: Components (example)
-```mermaid
-graph TD
-    subgraph "content_to_markdown"
-        CLI[CLI Interface]
-        Fetcher[Document Fetcher]
-        Converter[Markdown Converter]
-        Config[Config Loader]
-    end
-
-    CLI -->|Calls| Fetcher
-    Fetcher -->|Converts| Converter
-    CLI -->|Loads| Config
-    Converter -->|Uses| AzureAPI[Azure API]
-```
+Use Mermaid syntax for C4 diagrams. Create diagrams at all 3 levels (Context, Container, Component) based on what you discover in the codebase.
 
 ---
 
 ## Output Format
 
-All documents follow the templates in:
-`/Users/patrick/aquaforge/scope/src/skills/project-documentation/templates-technical-arc42-c4/architecture/`
+All documents follow the templates in the `project-documentation` skill: `templates-technical-arc42-c4/architecture/`
 
 Use YAML frontmatter for metadata:
 ```yaml
@@ -512,46 +447,6 @@ status: "reverse-engineered"
 
 ---
 
-## Codebase Context
-
-**Project**: AquaForge (~/dev/aquaforge-reqs)
-
-**Structure**:
-- 6 pipeline services
-- Shared library: `aquaforge` package
-- Existing docs: `/docs` (schemas, misc)
-
-**Technologies** (to verify):
-- Python, Azure, Qdrant, Cosmos, OpenAI/Anthropic, SentenceTransformers
-
----
-
-## Example Interaction
-
-```
-Architect Agent: I've analyzed the codebase and created preliminary architecture diagrams.
-
-                 C4 Context Diagram:
-                 [Shows Context diagram]
-
-                 C4 Container Diagram:
-                 [Shows all 6 services]
-
-                 Let me ask clarifying questions to complete the architecture documentation...
-
-                 Section 1: Technology Stack Rationale
-
-                 I found you're using Qdrant for vector storage. Why did you choose
-                 Qdrant over alternatives like Pinecone, Weaviate, or pgvector?
-
-User: [Explains rationale]
-
-Architect Agent: [Documents as ADR, continues with next question]
-                 ...
-```
-
----
-
 ## Success Criteria
 
 - [ ] Complete Arc42 architecture documentation (12 chapters)
@@ -566,4 +461,4 @@ Architect Agent: [Documents as ADR, continues with next question]
 
 **Role**: Architect - System Documentation Archaeologist
 **Approach**: Code Analysis + Technical Interview
-**Output**: Complete System Architecture (BMAD Phase 0.5)
+**Output**: Complete System Architecture

@@ -1,16 +1,14 @@
-# BMAD-Aligned Epic Workflow
+# Epic Workflow
 
-This guide describes the complete workflow for creating and executing an epic using BMAD Method principles.
-
-**See also**: [COLLABORATIVE-WORKFLOW.md](COLLABORATIVE-WORKFLOW.md) - Detailed human-AI collaboration model showing exactly when and how users are involved at each phase.
+This guide describes the complete workflow for creating and executing an epic.
 
 ---
 
 ## Overview
 
-The workflow follows BMAD's two-phase approach with **human-in-the-loop collaboration**:
-1. **Phase 1: Agentic Planning** - Product and strategic planning
-2. **Phase 2: Context-Engineered Development** - Architecture, implementation, and QA
+The workflow follows a two-phase approach with **human-in-the-loop collaboration**:
+1. **Phase 1: Planning** - Product and strategic planning
+2. **Phase 2: Development** - Architecture, implementation, and QA
 
 Context preservation and clear agent responsibilities ensure efficient handoffs between phases.
 
@@ -26,9 +24,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 **Agent**: PM Agent (drafts) + Product Owner (reviews/approves)
 
-**Process**: See [COLLABORATIVE-WORKFLOW.md - Phase 0](COLLABORATIVE-WORKFLOW.md#phase-0-product-documentation-prd-creation) for detailed collaboration steps
-
-**High-Level Process**:
+**Process**:
 1. User provides Project Brief (vision, requirements, constraints)
 2. PM Agent drafts PRD (9 documents)
 3. Multiple rounds of scope refinement (user + PM Agent)
@@ -57,9 +53,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 **Agent**: Architect Agent (drafts) + Technical Lead (reviews/approves) + Specialized Agents (QA, Security, DevOps review)
 
-**Process**: See [COLLABORATIVE-WORKFLOW.md - Phase 0.5](COLLABORATIVE-WORKFLOW.md#phase-05-system-architecture-creation) for detailed collaboration steps
-
-**High-Level Process**:
+**Process**:
 1. Architect Agent drafts system architecture (Arc42 12 chapters)
 2. Multiple rounds of review (tech stack, patterns, structure, standards)
 3. Specialized agent reviews (QA, Security, DevOps agents)
@@ -69,7 +63,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 ⚠️ **YOU CANNOT DESIGN EPIC ARCHITECTURE WITHOUT SYSTEM ARCHITECTURE**
 
-**Why This Phase Exists**: BMAD v4's public documentation does not explicitly distinguish between system-level and feature/epic-level architecture. However, **you cannot design epics without a system foundation**.
+**Why This Phase Exists**: You cannot design epics without a system architecture foundation.
 
 **What is System Architecture**: The Arc42 12-chapter documentation of the **overall technical system**:
 - Technology stack (Node.js, React, PostgreSQL, etc.)
@@ -78,8 +72,6 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 - External interfaces and integrations
 - Cross-cutting standards (security, operations, testing, domain)
 - System-wide constraints and decisions
-
-**See**: [SYSTEM-ARCHITECTURE-PHASE.md](SYSTEM-ARCHITECTURE-PHASE.md) for complete guide
 
 **Two Approaches**:
 
@@ -142,7 +134,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 ---
 
-## Phase 1: Agentic Planning
+## Phase 1: Planning
 
 **Collaboration Model**: PM Agent drafts, Product Owner reviews and approves
 
@@ -150,9 +142,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 **Agent**: PM Agent (drafts) + Product Owner (reviews/approves)
 
-**Process**: See [COLLABORATIVE-WORKFLOW.md - Phase 1](COLLABORATIVE-WORKFLOW.md#phase-1-epic-planning) for detailed collaboration steps
-
-**High-Level Process**:
+**Process**:
 1. User identifies feature/epic to implement
 2. PM Agent drafts Epic Details and Acceptance Criteria
 3. Review and refinement
@@ -213,7 +203,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 ---
 
-## Phase 2: Context-Engineered Development
+## Phase 2: Development
 
 **Goal**: Design HOW to build it, IMPLEMENT, and VALIDATE
 
@@ -627,16 +617,43 @@ Development + QA → Implementation Summary
 Implementation Summary → System Architecture (update ADR Summary, Risks, Glossary)
 ```
 
-### Context Dependencies in Each Document
+### Context Dependency Matrix
 
-Every document now has:
-- **Meta: Phase & Agent Information** - When created, by whom, prerequisites
-- **Context Dependencies** - What must exist before, what this provides
+| Document | Requires Context From | Provides Context To |
+|----------|----------------------|---------------------|
+| **Product/Strategy** | None (foundation) | System Architecture, Epic Details (strategic alignment) |
+| **Product/Definition** | None (foundation) | System Architecture, Epic Details (user stories), System Context |
+| **Product/Reference** | None (foundation) | System Architecture, All epic documents |
+| **System Architecture** | Product docs (all) | **ALL epic documents** (tech stack, patterns, standards, components) |
+| **Epic Details** | Product Strategy, Definition, System Architecture | All other epic documents |
+| **Acceptance Criteria** | Epic Details, Product Definition | Test Strategy, Development, QA, Implementation Summary |
+| **System Context** | Epic Details, Product Definition, Product Reference, **System Architecture** | Epic Architecture, ADR, Test Strategy, File Plan |
+| **Epic Architecture** | System Context, Epic Details, Product Reference, **System Architecture** | ADR, File Plan, Test Strategy, Development |
+| **ADR** | System Context, Epic Architecture, Product Reference, System Architecture | File Plan, Development, Implementation Summary, System Architecture (ADR Summary) |
+| **Test Strategy** | Epic Architecture, Epic Details, Acceptance Criteria, System Context, **System Architecture (testing standards)** | Development, QA, Implementation Summary |
+| **File Plan** | Epic Architecture, ADR, System Context, Product Reference, **System Architecture (conventions)** | Development, Implementation Summary |
+| **PDR** | Epic Details, Product Strategy, Product Decisions | Epic Architecture, Acceptance Criteria, Development |
+| **Implementation Summary** | All epic documents, Development results | Future epics, **System Architecture updates (Ch 9, 11, 12)** |
 
-Use these sections to ensure:
-- Documents created in correct order
-- Required context available before starting
-- Clear understanding of dependencies
+### Document Creation Order
+
+**Strict Order** (must follow):
+1. Product documentation (Phase 0) - 9 files
+2. **System Architecture (Phase 0.5) - Arc42 12 chapters**
+3. Epic Details (Phase 1, step 1)
+4. Acceptance Criteria (Phase 1, step 2)
+5. System Context (Phase 2A, step 1)
+6. Epic Architecture (Phase 2A, step 2)
+7. ADR (Phase 2A, step 3)
+8. Test Strategy (Phase 2A, step 4)
+9. File Plan (Phase 2A, step 5)
+10. PDR (Phase 2A, step 6 - if needed)
+11. Development (Phase 2B)
+12. QA (Phase 2C)
+13. Implementation Summary (Phase 3)
+14. **Update System Architecture** (Phase 3 - Ch 9, 11, 12)
+
+Each document depends on context from previous documents. Creating out of order results in missing or invalid context.
 
 ---
 
@@ -652,38 +669,26 @@ Use these sections to ensure:
 
 ---
 
-## CLI Commands (Future Enhancement)
+## SCOPE Commands
 
-These commands could be implemented to orchestrate the workflow:
+These slash commands orchestrate the workflow:
 
 ```bash
-# Phase 0: Product Documentation
-bmad-product init               # Initialize product documentation structure
+# Product Documentation
+/prd_refine                     # Refine product requirements document
+/prd_breakdown                  # Break PRD into implementable epics
 
-# Phase 0.5: System Architecture
-bmad-system-arch init           # Initialize system architecture (Arc42 12 chapters)
-bmad-system-arch update {chapters}  # Update specific Arc42 chapters
-bmad-system-arch validate       # Validate system architecture completeness
+# Reverse Engineering (existing codebases)
+/re_documentation               # Reverse engineer product + architecture docs
 
 # Epic Workflow
-bmad-epic init {EPIC-ID} "{Epic Title}"  # Initialize epic with all required pages
+/epic_refine {EPIC-ID}          # Refine epic (planning + architecture + specs + stories)
+/implement {EPIC-ID}            # Implement stories in a git worktree
+/implement_tdd {EPIC-ID}        # Implement with test-driven development
+/audit_epic {EPIC-ID}           # Audit implementation against specs
 
-# Phase transitions
-bmad-epic plan {EPIC-ID}        # Enter Phase 1 (PO creates Epic Details + AC)
-bmad-epic architect {EPIC-ID}   # Enter Phase 2A (Architect creates discovery → file plan)
-bmad-epic develop {EPIC-ID}     # Enter Phase 2B (Developer implements stories)
-bmad-epic qa {EPIC-ID}          # Enter Phase 2C (QA validates)
-bmad-epic complete {EPIC-ID}    # Enter Phase 3 (Create Implementation Summary)
-
-# Context operations
-bmad-epic context {EPIC-ID}     # Show all context dependencies (including system architecture)
-bmad-epic validate {EPIC-ID}    # Validate all required context exists
-bmad-epic flatten {EPIC-ID}     # Generate flattened context for AI
-bmad-system-arch flatten        # Flatten system architecture for AI context
-
-# Status
-bmad-epic status {EPIC-ID}      # Show current phase and completion status
-bmad-system-arch status         # Show system architecture completeness
+# Sync
+/sync_product                   # Update product docs after implementation changes
 ```
 
 ---
@@ -698,9 +703,9 @@ bmad-system-arch status         # Show system architecture completeness
 - Architect creates system architecture (Arc42 12 chapters)
 - OR first epic establishes system architecture
 - **Output**: Technical view of overall system
-- **See**: [SYSTEM-ARCHITECTURE-PHASE.md](SYSTEM-ARCHITECTURE-PHASE.md)
+- **See**: Phase 0.5 section above
 
-**Phase 1: Agentic Planning** (Product Owner)
+**Phase 1: Planning** (Product Owner)
 1. Create Epic Details with strategic alignment to product strategy
 2. Create Acceptance Criteria for all stories
 

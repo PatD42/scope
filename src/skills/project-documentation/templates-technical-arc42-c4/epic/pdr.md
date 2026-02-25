@@ -4,7 +4,7 @@
 
 ## Meta: Phase & Agent Information
 
-**BMAD Phase**: Phase 1/2 - Can occur during Planning or Development
+**Phase**: Phase 1/2 - Can occur during Planning or Development
 **Agent Role**: Product Owner
 **Created During**: When product decisions arise (any phase)
 **Prerequisites**: Epic Details (for epic-specific PDRs)

@@ -1,16 +1,6 @@
-# SCOPE - Simple Claude Orchestrator & Persistence Engine
+# SCOPE - Simple Claude Orchestrator for Product Engineering
 
-**Version:** 3.0
-**Date:** February 2026
 **Status:** Implementation
-
-## Version History
-
-- **3.0** (February 2026) - Major simplification: removed orchestrator, planners, plan schemas, state management, install scripts. Claude Code 2.1.16+ is the orchestrator via slash commands and built-in task management. Contract-first development with executable Python Protocol contracts. Two implementation modes: TDD (SDET + developer) and non-TDD (developer only). Documentation always local files. Max 2 audit cycles with escalation.
-- **2.6** (January 2026) - TDD workflow refinement, developer autonomous test execution, file plan intent documentation
-- **2.5** (December 2025) - Wrapper skill pattern, minimal agent prompts, Atlassian MCP backends
-- **2.4** (December 2025) - Removed test-engineer agent, architect-led story breakdown
-- **2.0-2.3** - Initial SCOPE architecture through Rovo MCP integration
 
 ---
 
@@ -33,6 +23,8 @@
 
 SCOPE is a Claude Code skill-based framework for epic lifecycle management. It provides slash commands, agent definitions, and documentation skills that turn Claude Code into a structured product engineering environment.
 
+Claude Code is the orchestrator. Commands contain the workflow logic (phases, approval gates, agent sequencing). Tasks are managed via Claude Code's built-in TaskCreate/TaskUpdate/TaskList.
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                         User Commands                             │
@@ -43,7 +35,6 @@ SCOPE is a Claude Code skill-based framework for epic lifecycle management. It p
 │   /implement {epic-id}     Implement (developer writes tests)    │
 │   /implement_tdd {epic-id} Implement (SDET writes tests first)   │
 │   /audit_epic {epic-id}    Audit implementation                  │
-│   /create {type} {desc}    Create epic/story/task/bug            │
 │   /sync_product [epic-id]  Sync product documentation            │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │
@@ -56,12 +47,6 @@ SCOPE is a Claude Code skill-based framework for epic lifecycle management. It p
 │   - Spawns agents via Task tool (subagent_type)                  │
 │   - Manages git worktrees for implementation                     │
 │   - Handles user approval gates                                  │
-│                                                                   │
-│   Does NOT require:                                               │
-│   - Custom orchestrator agent                                    │
-│   - Plan schemas or state files                                  │
-│   - Install scripts                                              │
-│   - External MCP servers for documentation                       │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │
               ┌──────────────────┼──────────────────┐
@@ -77,8 +62,6 @@ SCOPE is a Claude Code skill-based framework for epic lifecycle management. It p
 └──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
 
-**Key design change from v2.x:** Claude Code itself is the orchestrator. Commands contain the workflow logic (phases, approval gates, agent sequencing). No separate orchestrator agent, planner routing, or plan execution engine exists.
-
 ---
 
 ## 2. File Structure
@@ -86,7 +69,7 @@ SCOPE is a Claude Code skill-based framework for epic lifecycle management. It p
 ### 2.1 This Project (SCOPE Repository)
 
 ```
-scope/                                      # This repo
+scope/
 ├── src/
 │   ├── agents/                             # Agent definitions (7 files)
 │   │   ├── architect.md
@@ -97,15 +80,17 @@ scope/                                      # This repo
 │   │   ├── reverse-engineer-pm.md
 │   │   └── REVERSE-ENGINEERING-GUIDE.md
 │   │
-│   ├── commands/                           # Slash commands (8 files)
+│   ├── commands/                           # Slash commands
 │   │   ├── prd_refine.md
+│   │   ├── prd_refine/                    # Supporting resources
 │   │   ├── prd_breakdown.md
+│   │   ├── prd_breakdown/                 # Supporting resources
 │   │   ├── epic_refine.md
 │   │   ├── implement.md
 │   │   ├── implement_tdd.md
 │   │   ├── audit_epic.md
-│   │   ├── create.md
-│   │   └── sync_product.md
+│   │   ├── sync_product.md
+│   │   └── config_example.yaml
 │   │
 │   └── skills/                             # Skills
 │       ├── project-documentation/
@@ -116,10 +101,10 @@ scope/                                      # This repo
 │           ├── SKILL.md                    # Wrapper (dispatches to backend)
 │           └── {backend}.md                # Backend implementations
 │
-└── design/                                 # This directory
+└── docs/                                   # Documentation
     ├── scope-architecture.md               # This document
-    ├── scope-product-atlassian.md          # Product documentation standard
-    ├── scope-technical-arc42-c4.md         # Technical documentation standard
+    ├── epic-workflow.md                    # Epic phase-by-phase workflow
+    ├── reverse-engineering-guide.md        # Guide for /re_documentation
     └── artifact-structure.md               # Project file structure guidelines
 ```
 
@@ -137,7 +122,6 @@ user-project/
 │   │   ├── implement.md
 │   │   ├── implement_tdd.md
 │   │   ├── audit_epic.md
-│   │   ├── create.md
 │   │   └── sync_product.md
 │   │
 │   ├── agents/                             # Agent definitions (copied from src/agents/)
@@ -212,7 +196,6 @@ User merges worktree           Manual merge when satisfied
 ```
 
 **Supporting commands:**
-- `/create {type} {desc}` - Create epic/story/task/bug via product-owner agent
 - `/sync_product [epic-id]` - Sync product docs when implementation changes product scope
 
 ---
@@ -229,7 +212,6 @@ Each command is a self-contained workflow definition in markdown with YAML front
 | `/implement` | Developer implements + writes tests | architect, developer | project-documentation |
 | `/implement_tdd` | TDD: SDET tests first, developer implements | architect, sdet, developer | project-documentation |
 | `/audit_epic` | Audit implementation against design | (inline) | project-documentation |
-| `/create` | Create epic/story/task/bug interactively | product-owner | project-documentation, project-tracking |
 | `/sync_product` | Sync product docs after implementation | (inline) | project-documentation |
 
 ### Command Frontmatter
@@ -332,9 +314,7 @@ tracking:
 
 ### 7.1 Contract-First Development
 
-Introduced in v3.0 via `/epic_refine`.
-
-**Problem:** File plans with method signatures in YAML prose led to integration failures hidden by mocks. 81 tests pass, 5 critical integration failures.
+**Problem:** File plans with method signatures in YAML prose lead to integration failures hidden by mocks.
 
 **Solution:**
 - Story 0 creates `contracts.py` with Python Protocol classes
@@ -364,7 +344,7 @@ Implementation happens in git worktrees, not on the main branch.
 
 ### 7.3 Built-In Task Management
 
-Claude Code 2.1.16+ provides TaskCreate, TaskUpdate, TaskList tools that replace the need for custom plan schemas and state management.
+Claude Code provides TaskCreate, TaskUpdate, TaskList tools that replace the need for custom plan schemas and state management.
 
 **Implementation commands use tasks like:**
 ```
@@ -372,12 +352,6 @@ TaskCreate(subject: "architect-story-0", description: "Scaffold shared modules..
 TaskCreate(subject: "dev-story-1", description: "Implement authentication...")
 TaskUpdate(taskId: "1", addBlockedBy: ["0"])  # story-1 blocked by story-0
 ```
-
-This eliminates:
-- Plan JSON schemas (`refine-plan.json`, `impl-plan.json`)
-- State files (`current_state.json`)
-- Custom execution loops
-- Agent summary JSONL files
 
 ### 7.4 Story Sizing
 
@@ -421,14 +395,14 @@ Tests organized by user journey, not by epic.
 
 ### 7.9 Audit Loop Guard
 
-`/audit_epic` runs at most 2 cycles (initial audit + one fix cycle). If issues remain after 2 cycles, the command escalates to the user rather than looping.
+`/audit_epic` runs at most 2 cycles (initial audit + one fix cycle). If issues remain after 2 cycles, the command escalates to the user rather than looping. Fix stories are created for ALL findings (critical, major, and minor).
 
 ### 7.10 Context Window Optimization
 
 - Agent files loaded at session start are in high-attention area
 - Commands keep agent prompts minimal (epic_id + phase + task description)
 - Agents fetch documentation on demand via direct file paths
-- Progressive disclosure: parent pages link to details, agents load only what's needed
+- Progressive disclosure: parent files link to details, agents load only what's needed
 
 ---
 
@@ -447,8 +421,8 @@ Phase 2: Architect analyzes system context
   → Technical risks, affected components, ADRs
   → USER APPROVAL GATE #2
 
-Phase 3: Technical specifications (conditional)
-  → API contracts, schemas in docs/architecture/13-specs/ (if used)
+Phase 3: Architect generates technical specifications
+  → API contracts, schemas in docs/architecture/13-specs/
   → USER APPROVAL GATE #3
 
 Phase 4: Story breakdown
@@ -496,14 +470,13 @@ After all stories: Epic-wide lint (ruff + vulture + mypy)
 **Output:** `docs/epics/{epic-dir}/epic_audit.md`
 
 **Post-audit loop:**
-1. Architect creates fix stories from audit findings
+1. Architect creates fix stories from ALL audit findings (critical, major, minor)
 2. Developer implements fixes
 3. Final audit (max 2 cycles total, then escalate)
 
 ### 8.4 Supporting Operations
 
 - **`/sync_product`** - When implementation reveals product-level changes (new capabilities, terminology changes, scope shifts), updates `docs/product/` accordingly
-- **`/create`** - Product-owner agent interactively creates work items with appropriate questions per type
 
 ---
 
@@ -512,8 +485,6 @@ After all stories: Epic-wide lint (ruff + vulture + mypy)
 Documentation uses two complementary standards:
 
 ### Product Documentation (Atlassian Blueprint Pattern)
-
-See `design/scope-product-atlassian.md` for full specification.
 
 ```
 docs/product/
@@ -529,8 +500,6 @@ docs/product/
 ```
 
 ### Technical Documentation (Arc42 + C4)
-
-See `design/scope-technical-arc42-c4.md` for full specification.
 
 ```
 docs/architecture/
@@ -577,86 +546,42 @@ docs/epics/{epic-id}/
 
 ## 10. Architectural Decisions
 
-### 10.1 Claude Code as Orchestrator (v3.0)
+### 10.1 Claude Code as Orchestrator
 
-**Decision:** Remove custom orchestrator agent. Use Claude Code's built-in capabilities.
+Commands are self-contained workflows. Claude Code executes them step-by-step, manages tasks via TaskCreate/TaskUpdate/TaskList, and spawns agents via the Task tool. No separate orchestrator agent, planner, or execution engine.
 
-**Rationale:**
-- Claude Code 2.1.16 introduced TaskCreate/TaskUpdate/TaskList, eliminating need for plan schemas
-- Slash commands already contain workflow logic; separate orchestrator was redundant
-- Removes plan execution engine, state files, agent-summary protocol
-- Simpler system with fewer moving parts
+### 10.2 Contract-First over Prose Descriptions
 
-**Impact:** Commands are self-contained workflows. No orchestrator.md, no planners, no plan JSON.
+Epic refinement produces executable `contracts.py` with Python Protocol classes. `mypy --strict` catches interface mismatches statically. Agents implement against machine-verifiable contracts, not YAML prose.
 
-### 10.2 Contract-First over Prose Descriptions (v3.0)
+### 10.3 Local Files for Documentation
 
-**Decision:** Epic refinement produces executable `contracts.py` with Python Protocol classes.
+Documentation is always local markdown files in `docs/`. Files are in git alongside code. Agents read/write directly. Follows Arc42+C4 and Atlassian Blueprint patterns for structure.
 
-**Rationale:**
-- YAML prose descriptions led to hidden integration failures
-- `mypy --strict` catches interface mismatches statically
-- Agents implement against machine-verifiable contracts
+### 10.4 Two Implementation Modes
 
-**Impact:** Story 0 in every epic creates contracts.py. All subsequent stories must pass `mypy --strict`.
+`/implement` (developer writes code + tests) for straightforward features. `/implement_tdd` (SDET writes tests first, developer implements) for complex integration scenarios. User chooses per epic.
 
-### 10.3 Local Files for Documentation (v3.0)
+### 10.5 One Agent Per Story
 
-**Decision:** Documentation is always local markdown files. Removed multi-backend support.
+A single agent implements the complete story. Splitting across agents creates context coordination complexity. Story boundaries align with technical component boundaries.
 
-**Rationale:**
-- Simplifies the system (no MCP dependencies, no backend dispatch)
-- Files are in git alongside code
-- Agents read/write files directly (fast, no API calls)
-- Still follows Arc42+C4 and Atlassian Blueprint patterns for structure
+### 10.6 Test-as-Soon-as-Possible
 
-**Impact:** project-documentation skill always writes to `docs/`. Template-based, no backend selection.
+Tests are written at the earliest possible point, not deferred to epic end. Fixing issues in closed stories is expensive (context lost). Early testing catches issues while context is fresh.
 
-### 10.4 Two Implementation Modes (v3.0)
+### 10.7 Architect-Led Story Breakdown
 
-**Decision:** Provide both TDD (`/implement_tdd`) and non-TDD (`/implement`) modes.
+Architect leads story breakdown; Product Owner validates business alignment. Technical boundaries drive story structure (component alignment, dependencies).
 
-**Rationale:**
-- TDD (SDET writes tests first) is ideal for complex integration scenarios
-- Non-TDD (developer writes code + tests) is faster for straightforward features
-- User chooses per epic; one mode will eventually be deprecated
+### 10.8 File Plan Intent Documentation
 
-### 10.5 One Agent Per Story (v2.5)
+Each file in the plan has a 600-1200 character intent with 5-part structure:
 
-**Decision:** A single agent must implement the complete story.
-
-**Rationale:**
-- Splitting across agents creates context coordination complexity
-- Agent loads technology skills dynamically as needed
-- Story boundaries align with technical component boundaries
-
-### 10.6 Test-as-Soon-as-Possible (v2.4)
-
-**Decision:** Write tests at the earliest possible point, not deferred to epic end.
-
-**Rationale:**
-- Fixing issues in closed stories is expensive (context lost)
-- Early testing catches issues while context is fresh
-- Prevents "big bang" integration risk at epic end
-
-### 10.7 Architect-Led Story Breakdown (v2.4)
-
-**Decision:** Architect leads story breakdown; Product Owner validates business alignment.
-
-**Rationale:**
-- Technical boundaries drive story structure (component alignment, dependencies)
-- Architect has full context of architecture decisions for story sequencing
-- PO ensures stories deliver coherent user value
-
-### 10.8 File Plan Intent Documentation (v2.6)
-
-**Decision:** Each file in the plan has a 600-1200 character intent with 5-part structure.
-
-**Parts:**
 1. **WHAT** (~100 chars): Core functionality
 2. **WHY** (~150-250 chars): Architectural purpose
 3. **RESPONSIBILITIES** (~150-250 chars): Key functions (3-5)
 4. **DEPENDENCIES** (~100-150 chars): Module dependencies
 5. **RELATED MODULES** (~100-150 chars): Positive delegation
 
-**Key insight:** Use positive delegation ("session encryption via SessionStore") instead of negation ("Does NOT handle encryption") to avoid confusing semantic search routing.
+Use positive delegation ("session encryption via SessionStore") instead of negation ("Does NOT handle encryption") to avoid confusing semantic search routing.

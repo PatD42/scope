@@ -170,7 +170,7 @@ After user approval, create the `docs/architecture/13-specs/` directory structur
 
 ```bash
 # Create 13-specs directory structure
-ARCH_DIR="./doc/architecture"
+ARCH_DIR="./docs/architecture"
 SPECS_DIR="$ARCH_DIR/13-specs"
 
 mkdir -p "$SPECS_DIR/api"
@@ -550,23 +550,47 @@ Does this dependency analysis look correct? Any adjustments needed?
 
 Use `project-documentation` skill to create Epic Details parent page following Arc42-C4 pattern.
 
-### Documentation Page Creation Process
+### Step 6.1: Determine Epic ID Prefix
+
+Before creating epics, recommend a project-specific prefix for epic IDs. Derive it from the project name, product name, or domain:
+
+```
+I recommend using the epic-id prefix: [PREFIX]
+(derived from [project name / product name / domain])
+
+Examples of how epic IDs will look:
+  [PREFIX]-001: Authentication System
+  [PREFIX]-002: Profile Management
+  [PREFIX]-003: Dashboard
+
+Would you like to use this prefix, or choose a different one?
+```
+
+**Derivation rules:**
+- Use the project name from `.scope/config.yaml` (`project.name`) if available
+- Otherwise derive from the PRD product name
+- Uppercase, 2-6 characters, alphanumeric only
+- Examples: "Acme Invoicing" → `ACME`, "CodeReview Pro" → `CRP`, "Supply Chain Manager" → `SCM`
+
+Store the approved prefix for use in all subsequent epic IDs.
+
+### Step 6.2: Create Epic Documentation
 
 For each approved epic (in dependency order):
 
 1. **Load project-documentation skill**
    - Read `.claude/skills/project-documentation/SKILL.md`
 
-2. **Determine epic ID** (will be assigned by tracking system in Phase 7, use placeholder for now):
-   - Format: `SCOPE-###` (e.g., SCOPE-001, SCOPE-002)
+2. **Assign epic ID** using the approved prefix:
+   - Format: `{PREFIX}-###` (e.g., `{PREFIX}-001`, `{PREFIX}-002`)
    - Number based on priority order from Phase 5
 
 3. **Create Epic Details parent page** (using template: `templates-technical-arc42-c4/epic/details.md`):
    ```
    create_epic_page(
-     epic_id: "SCOPE-001",
-     title: "SCOPE-001: [Epic Title]",
-     tags: ["epic", "epic-details", "SCOPE-001"],
+     epic_id: "{PREFIX}-001",
+     title: "{PREFIX}-001: [Epic Title]",
+     tags: ["epic", "epic-details", "{PREFIX}-001"],
      content: """
        ## Overview
        [Vision statement from PRD]
@@ -599,7 +623,7 @@ For each approved epic (in dependency order):
        ## Next Steps
        After this epic is created in tracking system, run:
        ```
-       /workplan epic-backend SCOPE-001
+       /epic_refine {PREFIX}-001
        ```
        to refine into stories and architecture.
      """
@@ -615,12 +639,12 @@ For each approved epic (in dependency order):
 **Created in Phase 6:**
 - Epic Details (parent page) with tags: `epic`, `epic-details`, `{epic-id}`
 
-**Created during epic refinement (`/workplan`):**
+**Created during epic refinement (`/epic_refine`):**
 - Architecture (child) - tags: `epic`, `architecture`, `{epic-id}`
 - ADR (child) - tags: `epic`, `adr`, `{epic-id}`
 - PDR (child) - tags: `epic`, `pdr`, `{epic-id}`
 - File Plan (child) - tags: `epic`, `file-plan`, `{epic-id}`
-- Implementation Summary (child) - tags: `epic`, `summary`, `{epic-id}` (created by Epic Housekeeping)
+- Implementation Summary (child) - tags: `epic`, `summary`, `{epic-id}`
 
 ### What Goes in Epic Details (Source of Truth)
 
@@ -680,7 +704,7 @@ For each epic (with documentation page already created in Phase 6):
    ```
 
 4. **Store epic key**:
-   - Project-tracking skill returns epic key (e.g., "SCOPE-001")
+   - Project-tracking skill returns epic key (e.g., "{PREFIX}-001")
    - This becomes the canonical epic ID
 
 5. **Verify tracking → documentation link**:
@@ -732,9 +756,9 @@ After this phase, each epic has:
 
 **Flow:**
 ```
-Documentation: SCOPE-001 Epic Details (complete details)
+Documentation: {PREFIX}-001 Epic Details (complete details)
   ↑ linked from ↑
-Tracking: SCOPE-001 Epic (summary + tracking + link)
+Tracking: {PREFIX}-001 Epic (summary + tracking + link)
 ```
 
 ---
@@ -763,9 +787,9 @@ After all epics created and documented:
 Epic Breakdown Complete!
 
 Created Epic Documentation Pages (source of truth):
-✓ SCOPE-001: [Epic Title] - Epic Details (parent page)
-✓ SCOPE-002: [Epic Title] - Epic Details (parent page)
-✓ SCOPE-003: [Epic Title] - Epic Details (parent page)
+✓ {PREFIX}-001: [Epic Title] - Epic Details (parent page)
+✓ {PREFIX}-002: [Epic Title] - Epic Details (parent page)
+✓ {PREFIX}-003: [Epic Title] - Epic Details (parent page)
 ... all [N] epic documentation pages
 
 Note: Child pages (Architecture, ADR, PDR, File Plan) will be created during epic refinement.
@@ -773,16 +797,16 @@ Note: Child pages (Architecture, ADR, PDR, File Plan) will be created during epi
 Created Tracking System Epics (tracking with links to documentation):
 
 ⭐ MVP Epics ([X] epics for v1.0):
-✓ SCOPE-001: Authentication → [Documentation link]
-✓ SCOPE-002: Profile Management → [Documentation link]
-✓ SCOPE-003: Dashboard → [Documentation link]
+✓ {PREFIX}-001: Authentication → [Documentation link]
+✓ {PREFIX}-002: Profile Management → [Documentation link]
+✓ {PREFIX}-003: Dashboard → [Documentation link]
 
 📦 Phase 2 Epics ([Y] epics post-MVP):
-✓ SCOPE-004: Notifications → [Documentation link]
-✓ SCOPE-005: Advanced Analytics → [Documentation link]
+✓ {PREFIX}-004: Notifications → [Documentation link]
+✓ {PREFIX}-005: Advanced Analytics → [Documentation link]
 
 🔮 Future Epics ([Z] epics long-term):
-✓ SCOPE-010: Mobile App → [Documentation link]
+✓ {PREFIX}-010: Mobile App → [Documentation link]
 
 Updated Product Definition:
 ✓ Epic map grouped by release phase
@@ -792,7 +816,7 @@ Updated Product Definition:
 
 Documentation Architecture:
   Documentation Backend (source of truth) ← Tracking System (tracking + link)
-  SCOPE-001 Epic Details (parent) ← SCOPE-001 Epic Issue
+  {PREFIX}-001 Epic Details (parent) ← {PREFIX}-001 Epic Issue
   └─ Child pages created during refinement
 
 ⚠️ REMINDER: Focus on MVP epics first! Post-MVP features will wait until after v1.0 launch.
@@ -800,7 +824,7 @@ Documentation Architecture:
 Next Steps:
 1. Review epic documentation (source of truth): [Documentation backend URL]
 2. Review epic tracking: [Tracking system filter URL showing all epics]
-3. Refine first MVP epic: /workplan SCOPE-001
+3. Refine first MVP epic: /epic_refine {PREFIX}-001
 4. Complete all [X] MVP epics before starting Phase 2
 ```
 

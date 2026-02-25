@@ -4,7 +4,7 @@
 
 ## Meta: Phase & Agent Information
 
-**BMAD Phase**: Phase 1 - Agentic Planning
+**Phase**: Phase 1 - Planning
 **Agent Role**: Product Owner
 **Created During**: Epic Planning
 **Prerequisites**: Product Strategy, Product Definition completed
