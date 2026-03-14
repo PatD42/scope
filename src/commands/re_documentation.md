@@ -11,6 +11,7 @@ Reverse engineer complete product and architecture documentation from an existin
 **Output:**
 - Product documentation (9 files) — business view
 - System architecture (15 files, Arc42 + C4) — technical view
+- Component architecture (up to 6 files) — backend and/or frontend detail
 
 ---
 
@@ -46,22 +47,40 @@ if not templates_product or not templates_arch:
     print("Run install.sh to install SCOPE to this project.")
     exit(1)
 
-# Check for existing docs
+# Check for existing docs — detect gaps
 existing_product = Glob("docs/product/**/*.md")
-existing_arch = Glob("docs/architecture/**/*.md")
+existing_arch_system = Glob("docs/architecture/*.md")
+existing_arch_crosscut = Glob("docs/architecture/08-cross-cutting/*.md")
+existing_backend = Glob("docs/architecture/backend/*.md")
+existing_frontend = Glob("docs/architecture/frontend/*.md")
 
-if existing_product or existing_arch:
-    print("WARNING: Existing documentation found:")
-    if existing_product:
-        print(f"  - docs/product/ ({len(existing_product)} files)")
-    if existing_arch:
-        print(f"  - docs/architecture/ ({len(existing_arch)} files)")
-    print("")
+has_product = len(existing_product) >= 5
+has_system_arch = len(existing_arch_system) >= 10
+has_crosscut = len(existing_arch_crosscut) >= 3
+has_backend = len(existing_backend) >= 3
+has_frontend = len(existing_frontend) >= 3
+
+# Determine what needs to be done
+if has_product and has_system_arch and has_crosscut and has_backend and has_frontend:
+    print("All documentation already exists. Nothing to do.")
+    print("Use the architect/PO agents during epic work to update docs.")
+    exit(0)
+
+# Report what exists and what's missing
+print("Documentation gap analysis:")
+print(f"  Product docs:        {'COMPLETE' if has_product else 'MISSING'} ({len(existing_product)} files)")
+print(f"  System architecture: {'COMPLETE' if has_system_arch else 'MISSING'} ({len(existing_arch_system)} files)")
+print(f"  Cross-cutting:       {'COMPLETE' if has_crosscut else 'MISSING'} ({len(existing_arch_crosscut)} files)")
+print(f"  Backend component:   {'COMPLETE' if has_backend else 'MISSING'} ({len(existing_backend)} files)")
+print(f"  Frontend component:  {'COMPLETE' if has_frontend else 'MISSING'} ({len(existing_frontend)} files)")
+print("")
+
+if existing_product or existing_arch_system:
     print("Options:")
-    print("  1. Overwrite existing documentation")
-    print("  2. Merge (agent will read existing docs and update)")
+    print("  1. Create only missing documentation (recommended)")
+    print("  2. Overwrite all documentation")
     print("  3. Cancel")
-    # Wait for user choice
+    # Wait for user choice — default is option 1
 ```
 
 ### Step 1: Create Output Directories
@@ -69,11 +88,15 @@ if existing_product or existing_arch:
 ```bash
 mkdir -p docs/product/reference
 mkdir -p docs/architecture/08-cross-cutting
+mkdir -p docs/architecture/backend/adr
+mkdir -p docs/architecture/frontend/adr
 ```
 
 ---
 
 ## Phase 1: Product Documentation
+
+**Skip if**: Gap analysis shows product docs are complete and user chose option 1 (create only missing).
 
 **Agent**: `reverse-engineer-po`
 **Duration**: ~1 hour (30-45 min interview)
@@ -142,8 +165,11 @@ Please review the documents above.
 
 ## Phase 2: Architecture Documentation
 
+**Skip if**: Gap analysis shows all architecture docs are complete (system + component).
+**Partial run**: If system docs exist but backend/frontend component docs are missing, the architect agent will focus only on the missing component documentation (shorter interview, fewer documents).
+
 **Agent**: `reverse-engineer-architect`
-**Duration**: ~1-1.5 hours (45-60 min interview)
+**Duration**: ~1-1.5 hours full, ~30 min if only component docs needed
 
 ### 2.1 Launch Architect Agent
 
@@ -165,9 +191,9 @@ Starting code analysis now...
 
 Follow the full process defined in the `reverse-engineer-architect` agent:
 
-1. **Phase 1 (Autonomous)**: Tech stack, system structure, components, integration points, cross-cutting concerns, deployment, quality attributes
-2. **Phase 2 (Interview)**: 9 sections — Tech Rationale, Architecture, Components, Runtime, Deployment, Cross-cutting, Quality, Constraints, Decisions
-3. **Phase 3 (Generate)**: Create Arc42 12-chapter documentation with C4 diagrams
+1. **Phase 1 (Autonomous)**: Tech stack, system structure, components, integration points, backend services & data, frontend structure, cross-cutting concerns, deployment, quality attributes
+2. **Phase 2 (Interview)**: Up to 11 sections — Tech Rationale, Architecture, Components, Backend Services & Data, Frontend Architecture, Runtime, Deployment, Cross-cutting, Quality, Constraints, Decisions (sections skipped if docs already exist)
+3. **Phase 3 (Generate)**: Create Arc42 12-chapter documentation + backend/frontend component docs with C4 diagrams
 4. **Phase 4 (Review)**: Present to user, iterate until approved
 
 **Important**: The Architect agent should read the product documentation from Phase 1 as input — it provides context about the product's purpose, use cases, and domain model.
@@ -191,7 +217,17 @@ docs/architecture/
 ├── 09-adr-summary.md
 ├── 10-quality.md
 ├── 11-risks.md
-└── 12-glossary.md
+├── 12-glossary.md
+├── backend/              ← if project has backend
+│   ├── overview.md
+│   ├── services.md
+│   ├── data.md
+│   └── adr/
+└── frontend/             ← if project has frontend
+    ├── overview.md
+    ├── structure.md
+    ├── patterns.md
+    └── adr/
 ```
 
 ### 2.4 Approval Gate
@@ -199,7 +235,10 @@ docs/architecture/
 ```
 Phase 2 Complete: Architecture Documentation
 
-Created 15 files in docs/architecture/
+Created files in docs/architecture/:
+  - System (arc42):  15 files (or skipped if already existed)
+  - Backend:          3 files (if applicable)
+  - Frontend:         3 files (if applicable)
 
 Please review the documents and C4 diagrams.
   - Are the diagrams accurate?
@@ -217,9 +256,11 @@ Please review the documents and C4 diagrams.
 Reverse Engineering Complete
 
 Product Documentation:  9 files in docs/product/
-Architecture Docs:     15 files in docs/architecture/
+System Architecture:   15 files in docs/architecture/
+Backend Component:      3 files in docs/architecture/backend/  (if applicable)
+Frontend Component:     3 files in docs/architecture/frontend/ (if applicable)
 
-Total: 24 documentation files generated from code analysis + interview.
+Total: up to 30 documentation files generated from code analysis + interview.
 
 Next steps:
   - Review docs periodically as the codebase evolves
@@ -251,6 +292,10 @@ You can run just product or just architecture documentation by telling the agent
 
 - "Only run Phase 1 (Product Documentation)" — stops after product docs
 - "Only run Phase 2 (Architecture Documentation)" — skips product docs, goes straight to architecture
+- "Only create backend docs" — creates only `docs/architecture/backend/` component docs
+- "Only create frontend docs" — creates only `docs/architecture/frontend/` component docs
+
+**Gap-aware execution**: The command automatically detects existing documentation and recommends creating only what's missing. If system-level arc42 docs already exist but `backend/` or `frontend/` docs don't, it will focus the architect agent on the missing component documentation only.
 
 ---
 

@@ -304,6 +304,11 @@ You will be invoked at different phases during epic refinement. Recognize the ph
    - Cross-epic test evolution plan
 7. Identify technical risks and gaps
 8. **Create/update product-level Architecture pages** (see Deliverables Checklist below)
+9. **Create/update component architecture docs** (see Component Architecture Docs below):
+   - **Backend** (`docs/architecture/backend/`): overview.md, services.md, data.md
+   - **Frontend** (`docs/architecture/frontend/`): overview.md, structure.md, patterns.md
+   - Use templates from `templates-technical-arc42-c4/architecture/backend/` and `frontend/`
+   - Create on first epic; update on subsequent epics as components change
 
 **CRITICAL: Default to asking questions when unclear**
 - If technical requirements are vague or ambiguous → Ask user questions IMMEDIATELY
@@ -328,6 +333,14 @@ Product-level pages (root Architecture pages):
 - [ ] Update "Architecture - Building Block View" with link to epic architecture + summary
 - [ ] Update "Architecture - Introduction & Goals" if epic adds new system goals
 - [ ] Update "Architecture - Context & Scope" if epic adds external dependencies
+
+Component architecture docs (if epic adds/changes backend or frontend components):
+- [ ] `docs/architecture/backend/overview.md` — Create or update with service landscape, communication patterns
+- [ ] `docs/architecture/backend/services.md` — Create or update with service catalog, interfaces, dependencies
+- [ ] `docs/architecture/backend/data.md` — Create or update with database schemas, storage layout, data flows
+- [ ] `docs/architecture/frontend/overview.md` — Create or update with tech stack, design principles, auth flow
+- [ ] `docs/architecture/frontend/structure.md` — Create or update with directory layout, component hierarchy, routes
+- [ ] `docs/architecture/frontend/patterns.md` — Create or update with data fetching, state mgmt, error handling conventions
 
 **Completion signal**: Return `status: success` with `phase: architecture_design`
 
@@ -372,6 +385,8 @@ Product-level pages (root Architecture pages):
 - [ ] ADRs include technology selection rationale
 - [ ] Component interfaces defined
 - [ ] Test strategy complete
+- [ ] Component architecture docs exist (backend/ and/or frontend/ as applicable)
+- [ ] Database schemas documented in backend/data.md (if applicable)
 
 ### Risks Identified
 1. [Risk 1]: [Mitigation]
@@ -920,6 +935,15 @@ Product-level pages (root Architecture pages):
 - [ ] **Product "Architecture - Context & Scope" page** updated if epic adds external dependencies
 - [ ] **Product "Architecture ADR Summary" page** NOT updated yet (wait for epic complete per ADR protocol)
 
+Component architecture docs (`docs/architecture/backend/` and `docs/architecture/frontend/`):
+- [ ] **`backend/overview.md`** — Created (first epic) or updated with service landscape, communication patterns, shared infra, constraints. Template: `templates-technical-arc42-c4/architecture/backend/overview.md`
+- [ ] **`backend/services.md`** — Created or updated with detailed service catalog (responsibilities, interfaces, dependencies, config). Template: `templates-technical-arc42-c4/architecture/backend/services.md`
+- [ ] **`backend/data.md`** — Created or updated with database schemas, object storage layout, data flows, migration strategy. Template: `templates-technical-arc42-c4/architecture/backend/data.md`
+- [ ] **`frontend/overview.md`** — Created or updated with tech stack, layout, design principles, auth flow, API communication. Template: `templates-technical-arc42-c4/architecture/frontend/overview.md`
+- [ ] **`frontend/structure.md`** — Created or updated with directory layout, component hierarchy, route map, key components. Template: `templates-technical-arc42-c4/architecture/frontend/structure.md`
+- [ ] **`frontend/patterns.md`** — Created or updated with data fetching, state management, error handling, styling, testing, a11y conventions. Template: `templates-technical-arc42-c4/architecture/frontend/patterns.md`
+- [ ] **Skip** any component layer that doesn't apply to the project (e.g., no frontend → skip frontend docs)
+
 **Root "Architecture" Page Creation:**
 
 If product-level Architecture pages don't exist yet (first epic):
@@ -937,7 +961,11 @@ If product-level Architecture pages don't exist yet (first epic):
    - Architecture - Quality Requirements
    - Architecture - Risks & Tech Debt
    - Architecture - Glossary
-3. Use templates from `.claude/skills/project-documentation/templates-technical-arc42-c4/architecture/`
+3. Create component architecture directories and initial docs:
+   - `backend/overview.md`, `backend/services.md`, `backend/data.md` (if project has backend)
+   - `frontend/overview.md`, `frontend/structure.md`, `frontend/patterns.md` (if project has frontend)
+   - `backend/adr/`, `frontend/adr/` directories for component-scoped ADRs
+4. Use templates from `.claude/skills/project-documentation/templates-technical-arc42-c4/architecture/`
 
 **Expected Documentation Hierarchy** (after architecture_design phase):
 
@@ -953,7 +981,17 @@ Product Space
 │   ├── ADR Summary                       ← DO NOT update (wait for epic complete)
 │   ├── Quality Requirements
 │   ├── Risks & Tech Debt
-│   └── Glossary
+│   ├── Glossary
+│   ├── backend/                          ← Create/update component architecture
+│   │   ├── overview.md                   ← Service landscape, communication, constraints
+│   │   ├── services.md                   ← Detailed service catalog
+│   │   ├── data.md                       ← DB schemas, storage, data flows
+│   │   └── adr/                          ← Backend-specific ADRs
+│   └── frontend/                         ← Create/update component architecture
+│       ├── overview.md                   ← Tech stack, design principles, auth
+│       ├── structure.md                  ← Directory layout, component hierarchy
+│       ├── patterns.md                   ← Conventions (fetching, state, errors)
+│       └── adr/                          ← Frontend-specific ADRs
 ├── Epics
 │   └── {epic-id}: [Epic Title]
 │       ├── {epic-id}: Architecture       ← Full epic architecture HERE
@@ -1322,6 +1360,21 @@ deliverables:
         url: "https://..."
         action: "Created root Architecture page + 12 children" # if first epic
         created: true                 # true only if this was first epic
+    component_docs:                   # Component architecture docs created/updated
+      backend:
+        - file: "docs/architecture/backend/overview.md"
+          action: "Created" | "Updated" | "Skipped (no backend)"
+        - file: "docs/architecture/backend/services.md"
+          action: "Created" | "Updated" | "Skipped (no backend)"
+        - file: "docs/architecture/backend/data.md"
+          action: "Created" | "Updated" | "Skipped (no backend)"
+      frontend:
+        - file: "docs/architecture/frontend/overview.md"
+          action: "Created" | "Updated" | "Skipped (no frontend)"
+        - file: "docs/architecture/frontend/structure.md"
+          action: "Created" | "Updated" | "Skipped (no frontend)"
+        - file: "docs/architecture/frontend/patterns.md"
+          action: "Created" | "Updated" | "Skipped (no frontend)"
 
   # For spec_generation phase:
 
@@ -1453,6 +1506,7 @@ handoff:
     # For architecture_design phase:
     epic_pages: "Created 3 child pages: Architecture, ADR, Test Strategy"
     product_pages: "Updated Building Block View with link to epic architecture"
+    component_docs: "Created/Updated backend/{overview,services,data}.md, frontend/{overview,structure,patterns}.md"
     first_epic: true | false          # true if created root Architecture pages
 
     # For architecture_review phase:

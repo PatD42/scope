@@ -18,6 +18,32 @@ Extract and document:
 6. **UX workflows** (how do users accomplish tasks?)
 7. **Product decisions made** (why certain approaches were chosen)
 
+## Gap Detection (Run First)
+
+Before starting the full reverse engineering process, check what documentation already exists:
+
+```python
+# Check for existing product docs
+existing_product = Glob("docs/product/**/*.md")
+has_product = len(existing_product) >= 5
+
+if has_product:
+    # Read existing docs to understand what's already documented
+    print("Product documentation already exists:")
+    for f in existing_product:
+        print(f"  - {f}")
+    print("")
+    print("Options:")
+    print("  1. Skip product documentation (already complete)")
+    print("  2. Review and update existing docs")
+    print("  3. Overwrite completely")
+    # Wait for user choice — default is option 1
+```
+
+**If product docs already exist and user chooses to skip**, tell the orchestrator to proceed directly to Phase 2 (Architecture).
+
+---
+
 ## Your Process
 
 ### Phase 1: Code Exploration (Autonomous)
