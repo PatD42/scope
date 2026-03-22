@@ -26,6 +26,7 @@ documentation:
 Templates are located in skills/project-documentation/ (try in ./.claude, and use ~/.claude as fallback):
 - **Product:** `templates-product-atlassian/`
 - **Technical:** `templates-technical-arc42-c4/`
+- **Operations:** `templates-operations/`
 
 Template names match the documentation structure below.
 
@@ -88,6 +89,24 @@ docs/
 │   ├── pdr.md
 │   ├── file-plan.yaml
 │   └── implementation-summary.md
+├── operations/
+│   ├── overview.md                # System inventory, access points, contacts
+│   ├── environments.md            # Environment matrix, infra details, access
+│   ├── runbooks/
+│   │   ├── deployment.md          # Build, deploy, rollback procedures
+│   │   ├── secrets-management.md  # Key rotation, vault access, provisioning
+│   │   ├── identity-access.md     # User provisioning, roles, SSO, auditing
+│   │   ├── networking-security.md # WAF, firewall, TLS certs, DNS
+│   │   ├── database.md            # Backup, restore, migration, scaling
+│   │   ├── monitoring-alerting.md # Dashboards, alerts, on-call response
+│   │   ├── scaling.md             # Horizontal/vertical scaling, auto-scaling
+│   │   └── disaster-recovery.md   # DR plan, RTO/RPO, failover
+│   ├── troubleshooting/
+│   │   ├── common-issues.md       # Known issues and resolutions
+│   │   └── escalation.md          # Escalation matrix, contacts, SLAs
+│   └── maintenance/
+│       ├── scheduled.md           # Regular maintenance tasks and schedules
+│       └── upgrade-procedures.md  # OS, runtime, platform upgrade playbooks
 └── releases/{VERSION}/
     ├── record.md
     ├── notes.md
@@ -436,6 +455,110 @@ The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links 
 
 ---
 
+## Operations Documentation
+
+Practical runbook documentation for sysadmins and on-call engineers. Complements architecture docs (which describe **what** and **why**) with operational docs (which describe **how to**).
+
+### overview.md
+**Template:** `templates-operations/overview.md`
+**Content:** System inventory, component map, access points, service dependencies, on-call contacts
+**Owner:** Operations / DevOps
+**Readers:** All ops staff, on-call engineers
+**Trigger:** New components added, infrastructure changes
+
+### environments.md
+**Template:** `templates-operations/environments.md`
+**Content:** Environment matrix (dev/staging/prod), infrastructure details, network config, access methods, cloud project mapping
+**Owner:** Operations / DevOps
+**Readers:** All ops staff, developers
+**Trigger:** Environment added/changed, infrastructure migration
+
+### runbooks/deployment.md
+**Template:** `templates-operations/runbooks/deployment.md`
+**Content:** Build, deploy, rollback procedures with actual commands. CI/CD pipeline description. Hotfix process.
+**Owner:** Operations / DevOps
+**Readers:** On-call engineers, developers
+**Trigger:** Deployment process changes
+
+### runbooks/secrets-management.md
+**Template:** `templates-operations/runbooks/secrets-management.md`
+**Content:** Secrets inventory, rotation schedule, create/rotate/revoke procedures, compromised secret response
+**Owner:** Operations / Security
+**Readers:** On-call engineers, security team
+**Trigger:** New secrets added, rotation policy changes
+
+### runbooks/identity-access.md
+**Template:** `templates-operations/runbooks/identity-access.md`
+**Content:** User provisioning, approval, deprovisioning, role matrix, SSO config, access audit
+**Owner:** Operations / Security
+**Readers:** On-call engineers, team leads
+**Trigger:** IdP changes, role model changes
+
+### runbooks/networking-security.md
+**Template:** `templates-operations/runbooks/networking-security.md`
+**Content:** WAF rules, firewall config, TLS certificate management, DNS procedures, security incident response
+**Owner:** Operations / Security
+**Readers:** On-call engineers, security team
+**Trigger:** Network topology changes, security policy updates
+
+### runbooks/database.md
+**Template:** `templates-operations/runbooks/database.md`
+**Content:** Database inventory, connection procedures, backup/restore, schema migration, scaling, performance investigation
+**Owner:** Operations / DBA
+**Readers:** On-call engineers, developers
+**Trigger:** Database changes, migration process updates
+
+### runbooks/monitoring-alerting.md
+**Template:** `templates-operations/runbooks/monitoring-alerting.md`
+**Content:** Monitoring stack, dashboards, alert definitions and response procedures, on-call procedures
+**Owner:** Operations / SRE
+**Readers:** On-call engineers
+**Trigger:** New alerts, monitoring stack changes
+
+### runbooks/scaling.md
+**Template:** `templates-operations/runbooks/scaling.md`
+**Content:** Current scaling config, horizontal/vertical scaling procedures, auto-scaling configuration
+**Owner:** Operations / DevOps
+**Readers:** On-call engineers
+**Trigger:** Scaling policy changes, capacity planning
+
+### runbooks/disaster-recovery.md
+**Template:** `templates-operations/runbooks/disaster-recovery.md`
+**Content:** RTO/RPO targets, backup strategy, disaster scenarios, failover procedures, DR testing plan
+**Owner:** Operations / DevOps
+**Readers:** All ops staff, management
+**Trigger:** DR test results, infrastructure changes
+
+### troubleshooting/common-issues.md
+**Template:** `templates-operations/troubleshooting/common-issues.md`
+**Content:** Known operational issues with symptoms, root causes, and step-by-step resolutions
+**Owner:** Operations (updated by all who resolve issues)
+**Readers:** On-call engineers
+**Trigger:** After resolving any recurring issue
+
+### troubleshooting/escalation.md
+**Template:** `templates-operations/troubleshooting/escalation.md`
+**Content:** Severity levels, escalation path, contact list, vendor support, communication plan
+**Owner:** Operations / Engineering Manager
+**Readers:** On-call engineers
+**Trigger:** Team changes, vendor contract changes
+
+### maintenance/scheduled.md
+**Template:** `templates-operations/maintenance/scheduled.md`
+**Content:** Maintenance calendar, regular task procedures, maintenance window process
+**Owner:** Operations / DevOps
+**Readers:** All ops staff
+**Trigger:** Maintenance schedule changes
+
+### maintenance/upgrade-procedures.md
+**Template:** `templates-operations/maintenance/upgrade-procedures.md`
+**Content:** Component upgrade inventory, per-component upgrade playbooks, dependency update policy
+**Owner:** Operations / DevOps
+**Readers:** All ops staff
+**Trigger:** Major version upgrades planned
+
+---
+
 ## Agent Responsibilities
 
 | Agent | Writes | Reads (Primary) |
@@ -448,12 +571,13 @@ The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links 
 | **Epic Housekeeping** | product/decisions.md (summaries), architecture/09-adr-summary.md (roll-up from all scopes), epics/*/implementation-summary.md | `.scope/*/agents_summaries.jsonl`, epics/*/{adr,pdr}.md, architecture/{adr,backend/adr,frontend/adr}/*.md |
 | **Security Reviewer** | epics/*/adr.md (security), architecture/08-cross-cutting/security.md | architecture/{03,04,08,10}*.md, architecture/{backend,frontend}/*.md, epics/*/{details,adr}.md |
 | **DevOps** | architecture/{07,08}/operations.md | architecture/{03,07,08}*.md, architecture/backend/overview.md |
+| **Operations (RE)** | operations/* | architecture/{07,08-cross-cutting}*.md, architecture/backend/*.md |
 
 ---
 
 ## Guidelines
 
-**Templates:** Use templates from `templates-product-atlassian/` and `templates-technical-arc42-c4/` matching structure above
+**Templates:** Use templates from `templates-product-atlassian/`, `templates-technical-arc42-c4/`, and `templates-operations/` matching structure above
 
 **File naming:**
 - Lowercase with hyphens: `building-blocks.md`
