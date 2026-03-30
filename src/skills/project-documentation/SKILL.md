@@ -107,6 +107,9 @@ docs/
 │   └── maintenance/
 │       ├── scheduled.md           # Regular maintenance tasks and schedules
 │       └── upgrade-procedures.md  # OS, runtime, platform upgrade playbooks
+├── lessons-learned/
+│   ├── INDEX.md                   # One-liner per lesson, loaded on startup
+│   └── {date}-{slug}.md           # Individual lessons (pattern/anti-pattern + RCA)
 └── releases/{VERSION}/
     ├── record.md
     ├── notes.md
@@ -556,6 +559,42 @@ Practical runbook documentation for sysadmins and on-call engineers. Complements
 **Owner:** Operations / DevOps
 **Readers:** All ops staff
 **Trigger:** Major version upgrades planned
+
+---
+
+## Lessons Learned
+
+Actionable patterns and anti-patterns captured from real work. Each lesson has a detection rule so Claude can recognize when it applies.
+
+### INDEX.md
+**Template:** `templates-operations/lessons-learned/INDEX.md`
+**Content:** One-liner per lesson with detection rule summary and severity. Loaded on conversation start for context.
+**Owner:** All (appended by `/lesson` and `/wrap_epic` commands)
+**Readers:** All agents — read on startup
+**Trigger:** After `/lesson` or `/wrap_epic`
+
+### {date}-{slug}.md
+**Template:** `templates-operations/lessons-learned/lesson-template.md`
+**Content:** Pattern or anti-pattern with detection rule, root cause analysis, and resolution
+**Owner:** Whoever captures the lesson
+**Readers:** All agents
+**Trigger:** Created by `/lesson` command (interview or auto-detect mode) or by `/wrap_epic`
+
+### Lesson Structure
+
+Each lesson contains:
+- **Type**: Pattern (do this) or Anti-Pattern (avoid this)
+- **Detection**: How Claude recognizes when this applies (code pattern, config state, error message, or situation)
+- **Rule**: One actionable sentence
+- **Root Cause**: Why it matters (2-4 sentences)
+- **Resolution**: How to fix or implement correctly
+
+### Context Loading
+
+Projects should add to CLAUDE.md:
+```
+On conversation start, read docs/lessons-learned/INDEX.md for project-specific lessons.
+```
 
 ---
 
