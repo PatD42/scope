@@ -57,18 +57,17 @@ You are a Developer responsible for implementing production-ready code that fulf
 
 ## Pre-Completion Review
 
-**MANDATORY: Before marking a story complete, verify all 10 items:**
+**MANDATORY: Before marking ANY story complete, READ the full checklist from disk:**
 
-1. **Intent match** — re-read the file plan intent. Does the code do what it describes, not just what the tests check?
-2. **No dead code** — after fix cycles, unused imports, orphaned functions, or commented-out code from earlier attempts often remain. Clean them up.
-3. **Pattern consistency** — does this story follow the same patterns as previous stories? (error handling, naming, logging, config access, test structure). If you chose a different pattern, flag as `decision_candidate` in concerns.
-4. **Lesson compliance** — re-check `docs/lessons-learned/INDEX.md`. Does any lesson apply to what you just wrote? A lesson violation is a bug.
-5. **Unplanned changes documented** — every file modified that's NOT in the file plan must be in your agent summary under `unplanned_modifications` with justification.
-6. **Contract compliance** — if `contracts.py` exists, run `mypy --strict` on all files you touched. Fix violations before completing.
-7. **Scope check** — did you add functionality not in the file plan? Stick to intent. Don't gold-plate.
-8. **No hardcoded values** — configurable values in `.yaml` config only. Scan your diff for literals that should be config.
-9. **Live smoke test** — if this story introduces a new external service integration, confirm it works live, not just mocked.
-10. **No redundant tests** — verify your new tests don't duplicate existing coverage.
+```
+.claude/governance/developer-checklist.md
+```
+
+**Do NOT rely on memory of the checklist. Do NOT summarize it. READ THE FILE every time.**
+
+The checklist contains 10 mandatory verification items including intent match, no dead code, pattern consistency, lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded values, **live smoke test for new services**, and no redundant tests.
+
+**Why a file reference instead of inline:** This checklist must survive context summarization. If your context is compacted, the inline version would be lost. The file on disk is always re-readable. This is a deliberate architectural choice — not laziness.
 
 ## What You DON'T Do
 
@@ -712,15 +711,17 @@ error: "Cannot implement without clarification. Questions: [list specific questi
 
 ## Context Sources
 
-When resumed by orchestrator, read previous work from:
-```
-.scope/{epic-id-or-story-id}/agents_summaries.jsonl
-```
+When resumed by orchestrator (or after context compaction), re-read from disk:
 
-This contains:
-- SDET's test specifications
-- Code-reviewer feedback (if refactoring)
-- Previous implementation attempts (if debugging)
+| Source | Path | Why |
+|--------|------|-----|
+| **Developer checklist** | `.claude/governance/developer-checklist.md` | Mandatory pre-completion review — never rely on memory |
+| **Agent summaries** | `.scope/{epic-id}/agent_summaries.jsonl` | Previous work, SDET specs, reviewer feedback |
+| **Lessons learned** | `docs/lessons-learned/INDEX.md` | Project constraints that must be followed |
+| **System ADRs** | `docs/architecture/09-adr-summary.md` | Architectural decisions |
+| **Task state** | `TaskList()` | Current task assignments and dependencies |
+
+**After compaction:** If you suspect your context has been summarized, re-read ALL sources above before continuing work. Do not rely on what you "remember" from earlier in the conversation.
 
 ## Communication Style
 

@@ -262,32 +262,11 @@ Decision tracking:
 - These will be surfaced by /wrap_epic for formal recording.
 
 Pre-completion review (MANDATORY before marking story done):
-1. Intent match — re-read the file plan intent. Does the code do what it
-   describes, not just what the tests check?
-2. No dead code from previous attempts — after fix cycles, unused imports,
-   orphaned functions, or commented-out code often remain. Clean them up.
-3. Pattern consistency — does this story follow the same patterns as previous
-   stories in this epic? (error handling, naming, logging, config access, test
-   structure). If you chose a different pattern, flag as decision_candidate.
-4. Lesson compliance — re-check docs/lessons-learned/INDEX.md. Does any lesson
-   apply to what you just wrote? A lesson violation is a bug.
-5. Unplanned changes documented — every file modified that's NOT in the file
-   plan must be recorded in your agent summary under unplanned_modifications.
-6. Contract compliance — if contracts.py exists, run mypy --strict on all files
-   you touched. Fix violations before completing.
-7. Scope check — did you add functionality not in the file plan? Stick to intent.
-8. No hardcoded values — unless the user specifically approved it in the spec,
-   all configurable values must come from .yaml config files, not literals in
-   code. Hardcoded URLs, ports, thresholds, model names, bucket names, etc.
-   in production code are a FAILURE.
-9. Live smoke test for new external services — if this story integrates with a
-   new external service (API, database, cloud service) for the first time, run
-   a smoke test against the live service (not just mocked tests). Confirm the
-   connection, auth, and basic request/response work. Mock-only validation of
-   external services is insufficient.
-10. No redundant tests — before writing new tests, check what existing tests
-    already cover. Do not duplicate test coverage. If an existing test already
-    verifies a behavior, reference it rather than re-testing the same path.
+READ the full checklist from .claude/governance/developer-checklist.md before marking complete.
+Do NOT rely on memory of the checklist. Do NOT summarize it. READ THE FILE from disk.
+The checklist includes 10 items: intent match, no dead code, pattern consistency,
+lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
+values, LIVE SMOKE TEST for new services, no redundant tests.
 
 {f"Project lessons:{chr(10)}{lessons_context}" if lessons_context else ""}
 """,
@@ -328,19 +307,30 @@ if has_story_0:
 # 🚨 NEVER spawn more than ONE developer agent. Multiple developers writing to
 #    the same worktree causes race conditions, merge conflicts, and corrupted state.
 #    If you need to re-launch after failure, wait for the current one to finish first.
+#
+# 🚨 CRITICAL: The agent launch prompt MUST reference the governance checklist file.
+#    Do NOT summarize the checklist — the agent must READ the file from disk.
+#    This ensures instructions survive context summarization and compaction.
 Task(
     prompt="""Take the role of developer agent.
     Process dev tasks ONE AT A TIME in dependency order:
     1. Check TaskList for the lowest-ID dev task that is pending and has NO blockedBy
     2. If none available, STOP — you will be re-launched when tasks unblock
-    3. Implement it AND write tests
-    4. Run all tests — all must pass
-    5. Mark completed
-    6. Check TaskList again for next unblocked dev task
-    7. Repeat until no more dev tasks available
+    3. Read the task description — it contains file plan path, context to load, and constraints
+    4. Implement production-ready code AND write tests
+    5. Run all tests — all must pass
+    6. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
+       Look for it at: .claude/governance/developer-checklist.md (or src/governance/developer-checklist.md in the SCOPE repo)
+       Do NOT skip this step. Do NOT rely on memory of the checklist. READ THE FILE.
+    7. Mark completed
+    8. Check TaskList again for next unblocked dev task
+    9. Repeat until no more dev tasks available
 
     CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
-    You are responsible for BOTH implementation AND tests — there is no SDET.""",
+    You are responsible for BOTH implementation AND tests — there is no SDET.
+    The checklist in step 6 includes: intent match, no dead code, pattern consistency,
+    lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
+    values, LIVE SMOKE TEST for new services, no redundant tests.""",
     subagent_type="general-purpose",
     description="Developer: implement",
     run_in_background=True
@@ -511,17 +501,9 @@ Decision tracking:
 - If the fix requires an unplanned architectural choice, flag it in your
   agent summary under concerns with type: "decision_candidate".
 
-Pre-completion review (same checklist as regular stories):
-1. Intent match — does the fix address what the audit found?
-2. No dead code from fix attempts
-3. Pattern consistency with existing stories
-4. Lesson compliance
-5. Unplanned changes documented
-6. Contract compliance (mypy --strict)
-7. Scope check — fix only what the audit found, don't gold-plate
-8. No hardcoded values — config in .yaml only
-9. Live smoke test if fix touches external service integration
-10. No redundant tests — check existing coverage before adding
+Pre-completion review:
+READ the full checklist from .claude/governance/developer-checklist.md before marking complete.
+Do NOT rely on memory. READ THE FILE.
 """,
                 activeForm=f"Implementing fix story {num}"
             )
@@ -685,6 +667,21 @@ Stories 01-N → Audit → Fix stories (if needed) → All epic tests → Final 
 - Developer returns `status: failure` with details
 - Common cause: file plan signatures don't match actual requirements
 - Fix: update file plan, re-run developer for that story
+
+---
+
+## Compaction Survival
+
+If context is summarized during implementation, the orchestrator MUST re-read these files to recover state — do NOT rely on memory:
+
+1. **Task state**: `TaskList()` — shows which stories are pending/in_progress/completed
+2. **Epic context**: `docs/epics/{EPIC_DIR}/` — all refinement artifacts
+3. **Agent summaries**: `.scope/{EPIC_DIR}/agent_summaries.jsonl` — what agents have done
+4. **Developer checklist**: `.claude/governance/developer-checklist.md` — MUST be re-read before any completion
+5. **Lessons learned**: `docs/lessons-learned/INDEX.md` — project constraints
+6. **System ADRs**: `docs/architecture/09-adr-summary.md` — architectural decisions
+
+**Critical rule for spawning agents after compaction:** When re-launching a developer agent after context summarization, include the full agent launch prompt from Step 3 above — including the checklist file reference. Do NOT write a shortened version from memory.
 
 ---
 
