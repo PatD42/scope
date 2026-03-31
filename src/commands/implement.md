@@ -99,6 +99,60 @@ fi
 
 # All subsequent work happens in the worktree
 cd "$WORKTREE_DIR"
+```
+
+### Step 0b: Check for Unwrapped Epic
+
+```python
+# If another epic has a worktree but hasn't been wrapped, warn the user
+existing_worktrees = Glob("wip/*/")
+for wt in existing_worktrees:
+    other_epic = wt.split("/")[1]
+    if other_epic != EPIC_ID:
+        wrap_markers = Glob(f".scope/tracking/commands/wrap_epic-*{other_epic}*.jsonl")
+        if not wrap_markers:
+            print(f"WARNING: Epic {other_epic} has an active worktree at wip/{other_epic}/ but hasn't been wrapped.")
+            print(f"Run /wrap_epic {other_epic} first to capture decisions and lessons?")
+            print("[yes — wrap first / no — proceed with {EPIC_ID}]")
+            # If user says yes, run /wrap_epic for the other epic first
+```
+
+### Step 0c: Load Context Enrichment
+
+```python
+# 1. Load project lessons learned
+lessons_index = Read("docs/lessons-learned/INDEX.md")
+if lessons_index:
+    lessons_context = lessons_index
+    print(f"Loaded {lessons_index.count('- [')} lessons learned for developer context.")
+else:
+    lessons_context = ""
+
+# 2. Load system-level ADRs (not just epic ADRs)
+system_adrs = Read("docs/architecture/09-adr-summary.md")
+system_adr_context = system_adrs if system_adrs else ""
+
+# 3. MCP context enrichment (optional)
+mcp_context = ""
+
+# If codegraph MCP is available, query for module dependencies
+# relevant to files in the epic's file plans
+if mcp_available("codegraph"):
+    file_plans = Glob(f"docs/epics/{EPIC_DIR}/file-plan-story-*.yaml")
+    planned_files = extract_file_paths(file_plans)
+    for f in planned_files:
+        deps = codegraph.query_dependencies(f)
+        mcp_context += f"\n# Dependencies for {f}: {deps}"
+    print(f"Loaded codegraph context for {len(planned_files)} planned files.")
+
+# If Obsidian MCP is available, query for relevant lessons and decisions
+if mcp_available("obsidian"):
+    epic_title = Read(f"docs/epics/{EPIC_DIR}/details.md").split("\n")[0]
+    obsidian_notes = obsidian.search(epic_title)
+    if obsidian_notes:
+        mcp_context += f"\n# Obsidian context: {obsidian_notes}"
+        print(f"Loaded {len(obsidian_notes)} relevant notes from Obsidian vault.")
+```
 
 ### Step 1: Discover Stories
 
@@ -168,12 +222,20 @@ story_title: {story['story_title']}
 file_plan: {story['file_plan_path']}
 terminate_upon_completion: no
 
-Instructions:
+Context to load:
 - Read the file plan at {story['file_plan_path']}
 - Read acceptance criteria from docs/epics/{epic_dir}/acceptance-criteria.md
 - Read architecture from docs/epics/{epic_dir}/architecture.md
-- Read ADRs from docs/epics/{epic_dir}/adr.md
+- Read ADRs from docs/epics/{epic_dir}/adr.md (epic-level decisions)
+- Read system ADRs from docs/architecture/09-adr-summary.md (project-wide decisions)
 - Read test strategy from docs/epics/{epic_dir}/test-strategy.md
+- Read lessons learned from docs/lessons-learned/INDEX.md (if exists) — these are
+  hard-won patterns and anti-patterns from previous work. Apply any relevant lessons
+  as constraints during implementation. Violating a documented lesson is a bug.
+
+{f"MCP context:{chr(10)}{mcp_context}" if mcp_context else ""}
+
+Instructions:
 - If contracts.py exists in the epic source, import Protocol types from it and
   use them as type annotations for parameters, return types, and dependency
   injection. The contracts define the agreed interfaces — implementations MUST
@@ -191,6 +253,43 @@ Instructions:
   If a dependency is unavailable for unit testing, implement the real code
   and let tests mock around it. The implementation itself must be production-ready.
 - A "# Placeholder", "# TODO", or "# Stub" comment in production code is a FAILURE.
+
+Decision tracking:
+- If you make an unplanned architectural choice (different pattern, different
+  library, different approach than the file plan), flag it in your agent summary
+  under concerns with type: "decision_candidate" and explain why.
+- If you deviate from a system ADR, flag it as type: "adr_deviation".
+- These will be surfaced by /wrap_epic for formal recording.
+
+Pre-completion review (MANDATORY before marking story done):
+1. Intent match — re-read the file plan intent. Does the code do what it
+   describes, not just what the tests check?
+2. No dead code from previous attempts — after fix cycles, unused imports,
+   orphaned functions, or commented-out code often remain. Clean them up.
+3. Pattern consistency — does this story follow the same patterns as previous
+   stories in this epic? (error handling, naming, logging, config access, test
+   structure). If you chose a different pattern, flag as decision_candidate.
+4. Lesson compliance — re-check docs/lessons-learned/INDEX.md. Does any lesson
+   apply to what you just wrote? A lesson violation is a bug.
+5. Unplanned changes documented — every file modified that's NOT in the file
+   plan must be recorded in your agent summary under unplanned_modifications.
+6. Contract compliance — if contracts.py exists, run mypy --strict on all files
+   you touched. Fix violations before completing.
+7. Scope check — did you add functionality not in the file plan? Stick to intent.
+8. No hardcoded values — unless the user specifically approved it in the spec,
+   all configurable values must come from .yaml config files, not literals in
+   code. Hardcoded URLs, ports, thresholds, model names, bucket names, etc.
+   in production code are a FAILURE.
+9. Live smoke test for new external services — if this story integrates with a
+   new external service (API, database, cloud service) for the first time, run
+   a smoke test against the live service (not just mocked tests). Confirm the
+   connection, auth, and basic request/response work. Mock-only validation of
+   external services is insufficient.
+10. No redundant tests — before writing new tests, check what existing tests
+    already cover. Do not duplicate test coverage. If an existing test already
+    verifies a behavior, reference it rather than re-testing the same path.
+
+{f"Project lessons:{chr(10)}{lessons_context}" if lessons_context else ""}
 """,
         activeForm=f"Implementing story {num}"
     )
@@ -388,10 +487,14 @@ story_title: {story['story_title']}
 file_plan: {story['file_plan_path']}
 terminate_upon_completion: no
 
-Instructions:
-- This is a FIX story from audit findings
+Context to load:
 - Read the file plan at {story['file_plan_path']}
 - Read the audit report at docs/epics/{epic_dir}/epic_audit.md for context
+- Read system ADRs from docs/architecture/09-adr-summary.md
+- Read lessons learned from docs/lessons-learned/INDEX.md (if exists)
+
+Instructions:
+- This is a FIX story from audit findings
 - Implement PRODUCTION-READY code that fixes the audit finding
 - Follow the intent documentation in the file plan — intent is the source of truth
 - If contracts.py exists, ensure fixes maintain Protocol compliance. Import
@@ -403,6 +506,22 @@ Instructions:
   interfaces affected by the fix
 - Run all tests after implementation — all must pass
 - CRITICAL: No stubs, no placeholders, no TODOs in production code
+
+Decision tracking:
+- If the fix requires an unplanned architectural choice, flag it in your
+  agent summary under concerns with type: "decision_candidate".
+
+Pre-completion review (same checklist as regular stories):
+1. Intent match — does the fix address what the audit found?
+2. No dead code from fix attempts
+3. Pattern consistency with existing stories
+4. Lesson compliance
+5. Unplanned changes documented
+6. Contract compliance (mypy --strict)
+7. Scope check — fix only what the audit found, don't gold-plate
+8. No hardcoded values — config in .yaml only
+9. Live smoke test if fix touches external service integration
+10. No redundant tests — check existing coverage before adding
 """,
                 activeForm=f"Implementing fix story {num}"
             )
@@ -501,6 +620,20 @@ else:
 ### Step 10: Worktree Cleanup
 
 After the final audit passes (or after presenting unresolved findings to the user), do not clean up the worktree. The user will instruct you to merge and remove the worktree when he is satisfied with the quality.
+
+### Wrap Epic Guidance
+
+**When the user asks to commit or merge this epic's work:**
+- Ask: "Would you like to run `/wrap_epic {epic-id}` first? It captures undocumented decisions and lessons learned, generates an implementation summary, and updates architecture docs before committing."
+
+**When the user runs `/implement` for a different epic while this one has an active worktree:**
+- Step 0b checks for unwrapped epics and prompts the user (see above).
+
+**Write tracking marker** so `/decision` and `/lesson` know when implementation completed:
+```bash
+mkdir -p .scope/tracking/commands
+echo '{"command":"implement","epic_id":"'"$EPIC_ID"'","completed_at":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","stories_completed":{N},"audit_status":"'"$AUDIT_STATUS"'"}' >> ".scope/tracking/commands/implement-$(date +%Y%m%d-%H%M%S).jsonl"
+```
 
 ---
 
