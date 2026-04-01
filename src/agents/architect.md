@@ -309,6 +309,9 @@ You will be invoked at different phases during epic refinement. Recognize the ph
    - **Frontend** (`docs/architecture/frontend/`): overview.md, structure.md, patterns.md
    - Use templates from `templates-technical-arc42-c4/architecture/backend/` and `frontend/`
    - Create on first epic; update on subsequent epics as components change
+10. **Create Documentation Update Plan** (see below) — a structured checklist of which
+    product-level docs must be updated during Story 0 scaffolding, with specific changes.
+    This plan is executed by the architect in Story 0, NOT by the developer.
 
 **CRITICAL: Default to asking questions when unclear**
 - If technical requirements are vague or ambiguous → Ask user questions IMMEDIATELY
@@ -342,9 +345,81 @@ Component architecture docs (if epic adds/changes backend or frontend components
 - [ ] `docs/architecture/frontend/structure.md` — Create or update with directory layout, component hierarchy, routes
 - [ ] `docs/architecture/frontend/patterns.md` — Create or update with data fetching, state mgmt, error handling conventions
 
+Documentation Update Plan (append to `docs/epics/{epic-dir}/architecture.md`):
+- [ ] Plan created following the standard format below
+
 **Completion signal**: Return `status: success` with `phase: architecture_design`
 
 **What happens next**: Architect-reviewer validates completeness, then user approves epic definition before story breakdown begins.
+
+---
+
+### Documentation Update Plan Format
+
+**Append this section to the epic's `architecture.md` during Phase 3.** This is the definitive list of doc updates the architect will execute in Story 0 scaffolding. The developer does NOT update architecture docs — only the architect does, and only per this plan.
+
+```markdown
+## Documentation Update Plan
+
+### Summary
+This epic requires updates to {N} architecture docs and creation of {M} new docs.
+
+### Updates Required
+
+| # | Document | Action | What Changes | Why |
+|---|----------|--------|-------------|-----|
+| 1 | `docs/architecture/backend/data.md` | Create | New schema: {tables} with {relationships} | Epic introduces {database/schema} |
+| 2 | `docs/architecture/backend/services.md` | Update | Add {service_name}: {purpose} | New service added by this epic |
+| 3 | `docs/architecture/05-building-blocks.md` | Update | Add {component} to C4 L2 diagram | New component in building blocks |
+| 4 | `docs/architecture/03-context.md` | Update | Add {external_service} to C4 L1 | New external dependency |
+| 5 | `docs/architecture/08-cross-cutting/domain.md` | Update | Add {entities}: {description} | New domain entities |
+| 6 | `docs/architecture/12-glossary.md` | Update | Add terms: {term_list} | New technical terms |
+| 7 | `docs/product/reference/terminology-data-model.md` | Update | Add terms: {term_list} | New product terms |
+| 8 | `docs/architecture/09-adr-summary.md` | Update | Roll up ADRs: {adr_list} | Epic ADRs need system-level visibility |
+| 9 | `docs/product/decisions.md` | Update | Roll up PDRs: {pdr_list} | Epic PDRs need product-level visibility |
+
+### Not Required (with justification)
+- `docs/architecture/backend/overview.md` — No change to service landscape
+- `docs/architecture/frontend/` — Epic does not affect frontend
+- `docs/architecture/11-risks.md` — No new risks identified
+
+### Execution
+- **When:** Story 0 (scaffolding), BEFORE developer implementation
+- **Who:** Architect (not developer)
+- **Templates:** Use project-documentation skill templates for new files
+- **Verification:** /audit_epic Phase 8 will verify these updates were executed
+```
+
+**Rules for building the plan:**
+
+1. **Every row needs "What Changes" AND "Why"** — "Update backend/data.md" alone is not enough. Specify what tables/columns/services/components are being added and why.
+
+2. **Include "Not Required" section** — Explicitly list docs that do NOT need updating, with justification. This prevents future questions about whether something was forgotten vs. intentionally skipped.
+
+3. **Be specific about content** — Don't write "update building blocks." Write "add PostgresClient component to C4 L2 diagram under Data Access layer, connected to Cloud SQL."
+
+4. **Check all categories** — Walk through every doc in this list and make an explicit include/exclude decision:
+   - `backend/data.md` — Schema changes?
+   - `backend/services.md` — New services?
+   - `backend/overview.md` — Service landscape changes?
+   - `frontend/overview.md`, `structure.md`, `patterns.md` — Frontend changes?
+   - `05-building-blocks.md` — New components?
+   - `03-context.md` — New external dependencies?
+   - `04-strategy.md` — New architectural patterns?
+   - `06-runtime.md` — New runtime scenarios?
+   - `07-deployment.md` — Deployment changes?
+   - `08-cross-cutting/domain.md` — New domain entities?
+   - `08-cross-cutting/security.md` — Security changes?
+   - `08-cross-cutting/operations.md` — New operational patterns?
+   - `08-cross-cutting/testing.md` — Testing approach changes?
+   - `09-adr-summary.md` — ADRs to roll up?
+   - `10-quality.md` — Quality requirement changes?
+   - `11-risks.md` — New risks?
+   - `12-glossary.md` — New terms?
+   - `product/reference/terminology-data-model.md` — New product terms?
+   - `product/decisions.md` — PDRs to roll up?
+
+5. **One row per file** — Don't group multiple files. Each doc gets its own row with its own justification.
 
 ---
 
@@ -387,6 +462,13 @@ Component architecture docs (if epic adds/changes backend or frontend components
 - [ ] Test strategy complete
 - [ ] Component architecture docs exist (backend/ and/or frontend/ as applicable)
 - [ ] Database schemas documented in backend/data.md (if applicable)
+
+### Documentation Update Plan
+- [ ] Plan exists in architecture.md with standard table format
+- [ ] Every architecture doc category has an explicit include/exclude decision
+- [ ] "Not Required" section lists excluded docs with justification
+- [ ] Each update row has "What Changes" AND "Why" columns filled
+- [ ] Plan specifies content (not just "update X" — says WHAT to add)
 
 ### Risks Identified
 1. [Risk 1]: [Mitigation]

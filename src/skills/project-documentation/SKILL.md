@@ -423,12 +423,12 @@ The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links 
 **Owner:** Product Owner
 **Readers:** Architect, Epic Housekeeping
 
-### file-plan.yaml
-**Template:** `templates-technical-arc42-c4/epic/file-plan.yaml`
-**Format:** YAML with epic_id, stories, files_to_create/modify, intent (5-part: WHAT, WHY, RESPONSIBILITIES, DEPENDENCIES, RELATED MODULES)
+### file-plan-story-NN.yaml
+**Template:** None (format defined inline in architect agent, Phase 7)
+**Format:** YAML with epic_id, story_id, story_title, files_to_create/modify, intent, public_interface, signature_changes
 **Intent:** 600-1200 chars total, optimized for semantic RAG
 **Owner:** Architect
-**Usage:** Cached locally in `.scope/{epic-id}/file_plan.json`
+**Usage:** One file per story in `docs/epics/{epic-dir}/`
 
 ### implementation-summary.md
 **Template:** `templates-technical-arc42-c4/epic/implementation-summary.md`

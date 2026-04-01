@@ -196,6 +196,22 @@ Instructions:
   `python -c "from <module>.contracts import *"` and `mypy --strict contracts.py`
 - Do NOT implement business logic — only scaffolding
 - Verify the skeleton compiles/imports correctly
+- DOCUMENTATION UPDATES: Read the epic's architecture.md for the documentation
+  update plan. Update product-level architecture docs as specified by the architect
+  during refinement. This includes:
+  - backend/data.md (if schema changes are planned)
+  - backend/services.md (if new services are planned)
+  - backend/overview.md (if service landscape changes)
+  - 05-building-blocks.md (if new components are planned)
+  - 03-context.md (if new external dependencies)
+  - 08-cross-cutting/domain.md (if new domain entities)
+  - 12-glossary.md (if new technical terms)
+  - 09-adr-summary.md (roll up epic ADRs)
+  - product/decisions.md (roll up epic PDRs)
+  Use the project-documentation skill templates for any new files.
+  These updates reflect the DESIGNED architecture — before implementation.
+  The developer must NOT update these docs during implementation to avoid
+  laundering divergence.
 """,
         activeForm="Implementing scaffolding"
     )
@@ -412,11 +428,15 @@ last_story_number: {last_story_num}
 
 Instructions:
 - Read the audit report at docs/epics/{epic_dir}/epic_audit.md
-- For each finding (critical, major, AND minor), create a fix story
+- Create fix stories ONLY for Phase 1-7 findings (code issues).
+  Do NOT create fix stories for Phase 8 (Documentation Sync) findings —
+  those are recommendations that require user approval before any doc changes.
+  Phase 8 findings will be handled by the user via /wrap_epic or manually.
+- For each Phase 1-7 finding (critical, major, AND minor), create a fix story
 - Group related findings into the same story when they affect the same files
-- Include documentation update stories for docs/architecture/ changes if the audit
-  found architectural divergence (update the relevant architecture docs to match
-  what was actually implemented, or fix the code to match the architecture)
+- If audit found code divergence from architecture, fix the CODE to match
+  the design — do NOT update docs to match divergent code (that launders
+  the divergence and makes drift invisible)
 - Number fix stories continuing from {last_story_num} (e.g., story-{next_num}, story-{next_num+1}...)
 - For each fix story, create a file-plan-story-NN.yaml with:
   - files_to_modify (with intent + signature_changes if applicable)

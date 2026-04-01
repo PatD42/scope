@@ -68,11 +68,23 @@ AUDIT CHECKS:
 │   ├── Intent I/O verbs matched by real I/O in implementation
 │   └── No functions returning literals without performing stated action
 │
-└── 7. Lint & Contract Compliance
-    ├── Ingest lint_findings.yaml (ruff + vulture + mypy from epic-wide check)
-    ├── Remaining ruff violations → MAJOR severity
-    ├── Dead code (vulture) → MAJOR severity
-    └── mypy --strict errors → CRITICAL severity (contract violations)
+├── 7. Lint & Contract Compliance
+│   ├── Ingest lint_findings.yaml (ruff + vulture + mypy from epic-wide check)
+│   ├── Remaining ruff violations → MAJOR severity
+│   ├── Dead code (vulture) → MAJOR severity
+│   └── mypy --strict errors → CRITICAL severity (contract violations)
+│
+└── 8. Documentation Sync (Reverse Audit)
+    ├── Do architecture docs reflect what was actually built?
+    ├── Check: backend/data.md matches implemented schema
+    ├── Check: backend/services.md matches implemented services
+    ├── Check: 05-building-blocks.md includes new components
+    ├── Check: 03-context.md reflects new external dependencies
+    ├── Check: 08-cross-cutting/domain.md includes new domain entities
+    ├── Check: 12-glossary.md includes new technical terms
+    ├── Check: product/reference/terminology-data-model.md includes new terms
+    ├── Check: product/decisions.md includes epic PDRs
+    └── Check: 09-adr-summary.md includes epic ADRs
 
 OUTPUT:
 └── docs/epics/{epic-dir}/epic_audit.md
@@ -536,15 +548,111 @@ if file_exists(lint_findings_path):
 
 ---
 
+## Audit Phase 8: Documentation Sync (Reverse Audit)
+
+**Purpose:** Phases 1-7 check "does code match docs?" (code ← docs). Phase 8 checks the reverse: **"do docs match code?"** (docs ← code). This catches stale documentation — docs that were accurate before implementation but are now outdated because implementation changed things.
+
+**CRITICAL GOVERNANCE RULE:** Phase 8 produces **recommendations only**. It does NOT auto-fix documentation and does NOT create fix stories for doc updates. The user must review each recommendation and approve before any documentation is changed.
+
+**Why human-in-the-loop:** If implementation diverged from the design, auto-updating docs to match the code would launder the divergence — the docs would now say "we planned this" when actually the implementation drifted. Only the user can decide whether:
+- The code is correct and docs should be updated to reflect reality
+- The code drifted and should be fixed to match the original design
+- The divergence is intentional and should be recorded as a new ADR
+
+### 8.1 What to Check
+
+For each category, compare what the code actually does against what the docs say:
+
+| Category | Document | Compare Against |
+|----------|----------|----------------|
+| Database schema | `backend/data.md` | Migration files, CREATE TABLE, schema.sql, Pydantic DB models |
+| Services | `backend/services.md` | FastAPI apps, CLI entry points, new routers, workers |
+| Building blocks | `05-building-blocks.md` | New components from file plans vs. what's documented |
+| External dependencies | `03-context.md` | New cloud SDKs, API clients, DB drivers, Docker services |
+| Domain entities | `08-cross-cutting/domain.md` | New Pydantic models, dataclasses, named domain concepts |
+| Terminology | `12-glossary.md`, `terminology-data-model.md` | New terms in code not in glossary |
+| ADR roll-up | `09-adr-summary.md` | Epic ADRs not yet in system summary |
+| PDR roll-up | `product/decisions.md` | Epic PDRs not yet in product decisions |
+
+### 8.2 Classify Each Finding
+
+For each divergence found, classify:
+
+```python
+for finding in doc_sync_findings:
+    finding.category = classify_divergence(finding)
+    # Categories:
+    # "planned_not_documented" — architect designed it, Story 0 should have updated docs but didn't
+    # "implementation_drift"  — code diverged from design, unclear if intentional
+    # "missing_doc"           — doc file doesn't exist at all (e.g., backend/data.md never created)
+    # "rollup_pending"        — epic ADRs/PDRs not yet rolled up to system level
+```
+
+### 8.3 Present Recommendations to User
+
+**Do NOT auto-fix. Present each finding as a recommendation for user approval.**
+
+```markdown
+### Documentation Sync — Recommendations for User Approval
+
+Phase 8 found {N} documentation gaps. Each requires your decision.
+
+┌────┬──────────┬──────────────────────────────────────────────────────────┐
+│ #  │ Severity │ Finding                                                  │
+├────┼──────────┼──────────────────────────────────────────────────────────┤
+│ 1  │ MAJOR    │ backend/data.md does not exist                           │
+│    │          │ Code has 5 new tables (organizations, persons, etc.)     │
+│    │          │ Was this planned? Should docs be created to match code?  │
+│    │          │ Action: [create docs / code should be fixed / defer]     │
+├────┼──────────┼──────────────────────────────────────────────────────────┤
+│ 2  │ MAJOR    │ 05-building-blocks.md missing PostgresClient             │
+│    │          │ Component exists in code but not in architecture diagram │
+│    │          │ Was this an intentional addition?                        │
+│    │          │ Action: [update docs / code should be fixed / defer]     │
+├────┼──────────┼──────────────────────────────────────────────────────────┤
+│ 3  │ MEDIUM   │ 03-context.md still shows SQLite only                    │
+│    │          │ Code now uses PostgreSQL as primary database              │
+│    │          │ This appears intentional (per epic architecture.md)      │
+│    │          │ Action: [update docs / defer]                            │
+├────┼──────────┼──────────────────────────────────────────────────────────┤
+│ 4  │ MEDIUM   │ 09-adr-summary.md missing 4 epic ADRs                   │
+│    │          │ Epic adr.md has ADRs not yet in system summary           │
+│    │          │ Action: [roll up now / defer to /wrap_epic]              │
+├────┼──────────┼──────────────────────────────────────────────────────────┤
+│ 5  │ MINOR    │ 12-glossary.md missing 11 new terms                     │
+│    │          │ New terms: RLS, sagara, heartbeat, ...                   │
+│    │          │ Action: [update glossary / defer]                        │
+└────┴──────────┴──────────────────────────────────────────────────────────┘
+
+For each finding, choose:
+  [update docs]      — Docs should reflect the code (implementation is correct)
+  [code should fix]  — Code diverged and should be fixed to match design
+  [new ADR needed]   — Divergence is intentional, record as a new decision
+  [defer]            — Handle later (in /wrap_epic or next epic)
+```
+
+### 8.4 Record User Decisions
+
+For each finding the user approves:
+- **"update docs"** → Record in audit report as approved doc update. The user (or `/wrap_epic`) will execute it. Do NOT have the developer agent update docs — that bypasses the architect's design authority.
+- **"code should fix"** → Create a fix story (same as Phases 1-7 findings). This IS a code problem, not a doc problem.
+- **"new ADR needed"** → Flag for `/decision` or `/wrap_epic` to record formally.
+- **"defer"** → Record as deferred in audit report. Will be caught again by next audit or `/wrap_epic`.
+
+**Key rule:** Documentation sync findings are MAJOR severity (not CRITICAL) because they don't break functionality, but they degrade the project's ability to make informed decisions in future epics. Stale docs are a compounding problem — each unfixed gap makes the next epic's architecture design less accurate.
+
+---
+
 ## Issue Classification
 
 All findings are classified by severity:
 
 | Severity | Definition | Examples |
 |----------|------------|----------|
-| **CRITICAL** | Breaks core functionality or violates key ADR | Missing acceptance criteria, ADR violations causing data loss |
-| **MAJOR** | Significant deviation from design | Partial ADR implementation, missing edge case handling, test coverage gaps |
-| **MINOR** | Cosmetic or consistency issues | Naming inconsistencies, missing docstrings, pattern deviations |
+| **CRITICAL** | Breaks core functionality or violates key ADR | Missing acceptance criteria, ADR violations causing data loss, stubs in production code |
+| **MAJOR** | Significant deviation from design, or stale documentation | Partial ADR implementation, missing edge case handling, test coverage gaps, backend/data.md missing or stale, backend/services.md missing or stale, building-blocks.md not updated |
+| **MEDIUM** | Documentation or tracking gaps | ADRs/PDRs not rolled up, context diagram outdated, missing external dependencies in docs |
+| **MINOR** | Cosmetic or consistency issues | Naming inconsistencies, missing glossary terms, pattern deviations |
 | **ENHANCEMENT** | Improvements not in original design | Performance optimizations, additional features |
 
 ---

@@ -175,6 +175,9 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 - Architecture design (components, data model, API contracts)
 - ADRs for key technology decisions
 - Test strategy (boundaries, test data, mocking)
+- **Documentation update plan** — list of product-level architecture docs that must be
+  updated when this epic is implemented, with specific changes needed. This plan is
+  executed in Story 0 (scaffolding) by the architect, NOT by the developer.
 - Written to:
   - `docs/epics/{epic-dir}/system-context.md`
   - `docs/epics/{epic-dir}/architecture.md`
@@ -206,6 +209,11 @@ Phase 2: Architect - System Context & Architecture
 ✅ Test Strategy
    Test boundaries: [Defined / Needs work]
    Test data approach: [Defined / Needs work]
+
+✅ Documentation Update Plan (for Story 0)
+   Docs to update: [list files that need changes]
+   Docs to create: [list new files, e.g., backend/data.md]
+   ADR roll-up needed: [Yes / No]
 
 Ready to proceed to spec generation? [yes / refine]
 ```
