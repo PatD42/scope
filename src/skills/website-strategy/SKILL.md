@@ -502,11 +502,66 @@ For each page defined in Phase 5, create a content brief:
 | **Persona targeting** | Which persona(s) this content addresses and how |
 | **Language** | If bilingual: flag content that differs between EN/FR vs content that is a direct translation |
 
-**Deliverable:** `{output_dir}/phase-6-content-briefs.md`
+**Deliverables:**
+- `{output_dir}/phase-6-content-briefs.md` — One section per page. Content should be specific enough that a copywriter or the user can write final copy directly from the brief.
+- `{output_dir}/website_prd.md` — PRD wrapper document (see below)
 
-One section per page. Content should be specific enough that a copywriter or the user can write final copy directly from the brief.
+**Approval gate:** User validates content direction. After approval, generate the PRD wrapper.
 
-**Approval gate:** User validates content direction. This is the final deliverable — approved briefs feed into design and development.
+### PRD Wrapper Document
+
+After Phase 6 approval, produce a single `website_prd.md` file at `{output_dir}/website_prd.md` that serves as the entry point for `/prd_breakdown`. This file:
+
+- Provides project context (purpose, business context, personas, philosophy)
+- References all 6 phase deliverables with their paths and purpose
+- Defines the technical stack (CMS, plugins, hosting, auth integration)
+- Summarizes key functional requirements (e-commerce, bilingual, case studies, blog, etc.)
+- Lists positioning constraints as immutable rules
+- Defines success criteria
+- Defines out-of-scope items
+
+The PRD wrapper does NOT duplicate the phase deliverables — it references them. `/prd_breakdown` reads the PRD, then loads referenced documents as needed.
+
+```markdown
+# Website PRD
+
+## Purpose
+[Why this website exists]
+
+## Business Context
+[Company stage, what the product is, what it is NOT]
+
+## Target Personas
+[Summary table with link to Phase 1 for details]
+
+## Product Philosophy
+[Core philosophy that must be reflected in all messaging]
+
+## Strategy Documents (Reference)
+| Document | Path | Purpose |
+|----------|------|---------|
+| Understanding Brief | phase-1... | ... |
+| Competitive Matrix | phase-2... | ... |
+| Pattern Library | phase-3... | ... |
+| Mood Board | phase-4... | ... |
+| Information Architecture | phase-5... | ... |
+| Content Briefs | phase-6... | ... |
+
+## Technical Stack
+[CMS, plugins, hosting, auth, maintenance model]
+
+## Key Functional Requirements
+[E-commerce, bilingual, case studies, blog, knowledge base, forms, navigation]
+
+## Positioning Constraints (Immutable)
+[Rules that apply to ALL content during implementation]
+
+## Success Criteria
+[Measurable targets]
+
+## Out of Scope
+[What this PRD does NOT cover]
+```
 
 ---
 
