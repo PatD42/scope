@@ -147,9 +147,22 @@ Format: `{output_dir}/corrections-log.md`
 ┌──────────────────────────────────────────────────────────────┐
 │ Phase 6: Content Strategy                                    │
 │ - Per-page content with persona targeting                    │
-│ - Deliverable: Content Brief per Page                        │
+│ - Deliverable: Content Brief per Page + PRD wrapper          │
 │ ──────────────────────────────────────────────────────────── │
 │ → USER APPROVAL GATE #6                                      │
+└──────────────────────────────────────────────────────────────┘
+                          ↓
+┌──────────────────────────────────────────────────────────────┐
+│ Phase 7: Theme Selection                                     │
+│ - Build evaluation criteria from Phases 4+5                  │
+│ - Research candidate themes                                  │
+│ - Evaluate shortlist against criteria                        │
+│ - User purchases and installs on staging                     │
+│ - Document theme capabilities and constraints                │
+│ - Deliverable: Theme Selection Report + updated PRD          │
+│ ──────────────────────────────────────────────────────────── │
+│ → USER APPROVAL GATE #7                                      │
+│ → PRD ready for /prd_breakdown                               │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -439,6 +452,46 @@ Entry point → Page sequence → Conversion action
 ### [Persona 2] Flow
 ...
 
+## CTA Strategy
+
+A consolidated matrix of ALL conversion actions across the site. Defined here (not scattered per-page) because CTAs are structural decisions that affect navigation, layout, and user flows.
+
+### CTA Inventory
+
+For each CTA:
+
+| Field | Description |
+|-------|-------------|
+| **CTA name** | Short label (e.g., "Start Free Trial") |
+| **Target persona** | Which persona this is designed for |
+| **Funnel stage** | Awareness → Consideration → Decision → Retention |
+| **Action type** | Self-service purchase, sales-assisted, email capture, contact form, external redirect |
+| **Button copy** | Exact text (EN + FR) |
+| **Destination** | Where the click goes (URL or form) |
+| **Visual treatment** | Primary (filled), secondary (outline), tertiary (text link) |
+| **Appears on** | List of pages where this CTA is used |
+
+### CTA Hierarchy
+
+When multiple CTAs compete for the same page or section, define the priority:
+- **Header persistent CTAs** — which 1-2 CTAs are always visible in the nav bar
+- **Hero CTAs** — primary + secondary per page
+- **Section CTAs** — contextual CTAs within content blocks
+- **Exit CTAs** — bottom-of-page final conversion prompts
+
+### CTA-to-Persona Mapping
+
+Matrix showing which CTAs serve which persona at which funnel stage:
+
+```
+                    Engineer    CFO/COO    OEM
+Awareness           [CTA]       [CTA]     [CTA]
+Consideration       [CTA]       [CTA]     [CTA]
+Decision            [CTA]       [CTA]     [CTA]
+```
+
+This ensures every persona has a clear conversion path and no persona hits a dead end.
+
 ## Purchase Flow (if applicable)
 - Pricing page layout
 - Tier comparison structure
@@ -506,21 +559,42 @@ For each page defined in Phase 5, create a content brief:
 - `{output_dir}/phase-6-content-briefs.md` — One section per page. Content should be specific enough that a copywriter or the user can write final copy directly from the brief.
 - `{output_dir}/website_prd.md` — PRD wrapper document (see below)
 
-**Approval gate:** User validates content direction. After approval, generate the PRD wrapper.
+**Before producing the PRD wrapper, the agent MUST gather the following from the user.** These are required for `/prd_breakdown` to scope epics correctly — do not defer them to PRD refinement:
+
+1. **MVP phasing.** Ask: "Which pages/features MUST ship for launch vs can come later?" Propose a v1.0/v1.1/v1.2+ split based on the page list from Phase 5, then confirm. Rule of thumb: v1.0 is the minimum set that enables the primary business goal (e.g., selling, lead capture). Defer anything that requires custom post types, external integrations beyond payment, or content that doesn't exist yet.
+
+2. **Non-functional requirements.** Ask the user about each category explicitly:
+   - **Performance:** LCP target, PageSpeed minimum
+   - **Accessibility:** WCAG compliance level (AA, AAA)
+   - **Browser support:** Which browsers/versions, any to exclude
+   - **Mobile:** Responsive tested on which devices
+   - **SEO:** Indexing rules, structured data needs, hreflang
+   - **Security:** HTTPS, update cadence, security plugin
+
+3. **External dependencies & risks.** For each plugin, external service, theme, or integration in the tech stack, identify: what breaks if it fails/expires/changes pricing, and what's the mitigation/fallback?
+
+4. **Success criteria sanity-check.** Review success metrics against current tech stack — if a technology was removed during planning (e.g., WooCommerce), update metrics that reference it.
+
+**Approval gate:** User validates content direction AND approves MVP phasing, NFRs, and dependency risks. After approval, generate the PRD wrapper.
 
 ### PRD Wrapper Document
 
 After Phase 6 approval, produce a single `website_prd.md` file at `{output_dir}/website_prd.md` that serves as the entry point for `/prd_breakdown`. This file:
 
 - Provides project context (purpose, business context, personas, philosophy)
-- References all 6 phase deliverables with their paths and purpose
+- References all phase deliverables with their paths and purpose
 - Defines the technical stack (CMS, plugins, hosting, auth integration)
-- Summarizes key functional requirements (e-commerce, bilingual, case studies, blog, etc.)
+- Summarizes key functional requirements
 - Lists positioning constraints as immutable rules
+- **Defines MVP phasing** (v1.0, v1.1, v1.2+)
+- **Defines non-functional requirements** (performance, accessibility, browser support, security)
+- **Documents external dependencies with risks and mitigations**
 - Defines success criteria
 - Defines out-of-scope items
 
 The PRD wrapper does NOT duplicate the phase deliverables — it references them. `/prd_breakdown` reads the PRD, then loads referenced documents as needed.
+
+**The PRD must be directly assessable for readiness** (ready for epic breakdown) without requiring refinement. Do not skip the sections below — they are required for `/prd_breakdown` to scope epics correctly.
 
 ```markdown
 # Website PRD
@@ -546,22 +620,182 @@ The PRD wrapper does NOT duplicate the phase deliverables — it references them
 | Mood Board | phase-4... | ... |
 | Information Architecture | phase-5... | ... |
 | Content Briefs | phase-6... | ... |
+| Theme Selection | phase-7... | ... |
 
 ## Technical Stack
 [CMS, plugins, hosting, auth, maintenance model]
 
 ## Key Functional Requirements
-[E-commerce, bilingual, case studies, blog, knowledge base, forms, navigation]
+[Payment flow, bilingual, case studies, blog, knowledge base, forms, navigation]
 
 ## Positioning Constraints (Immutable)
 [Rules that apply to ALL content during implementation]
 
+## MVP Phasing
+
+### v1.0 (Launch Minimum)
+[Which pages, global elements, and integrations must ship for launch — the minimum set that enables the primary business goal]
+
+### v1.1 (Post-Launch)
+[Pages and features planned for ~4-8 weeks after v1.0]
+
+### v1.2+ (Later)
+[Deferred pages and features]
+
+**This section is REQUIRED.** Epic sequencing depends on it. Ask the user explicitly:
+- "Which pages MUST ship for launch vs can come later?"
+- "What's the minimum set that enables selling?"
+- Propose a default split and confirm with user.
+
+## Non-Functional Requirements
+
+| Category | Requirement |
+|----------|-------------|
+| Performance | [LCP targets, PageSpeed minimums] |
+| Accessibility | [WCAG compliance level] |
+| Browser support | [Specific versions, no IE, etc.] |
+| Mobile | [Responsive requirements, tested devices] |
+| SEO | [Indexing, structured data, hreflang] |
+| Security | [HTTPS, update cadence, security plugin] |
+
+**This section is REQUIRED.** Ask the user about each category — do not leave NFRs implicit.
+
+## External Dependencies & Risks
+
+| Dependency | Risk | Mitigation |
+|-----------|------|-----------|
+| [Plugin/service with license or vendor risk] | [What breaks if it fails] | [Fallback or renewal plan] |
+
+**This section is REQUIRED.** Every external dependency from the tech stack should have an entry. Ask the user about license lifecycles and vendor lock-in.
+
 ## Success Criteria
-[Measurable targets]
+[Measurable targets — do NOT reference tech that was removed from scope]
 
 ## Out of Scope
 [What this PRD does NOT cover]
 ```
+
+### PRD Readiness Self-Check (before handoff)
+
+After generating the PRD wrapper, the agent MUST run a readiness self-check before declaring Phase 6 complete. Present this checklist to the user:
+
+```
+PRD Readiness Check:
+
+□ Purpose / Vision is clear (1-3 sentences)
+□ Business context describes what the product IS and IS NOT
+□ Target Personas documented with priority and desired action
+□ Product Philosophy captured (if applicable)
+□ All phase deliverables referenced with correct paths
+□ Technical Stack complete (CMS, plugins, hosting, integrations)
+□ Key Functional Requirements documented
+□ Positioning Constraints listed as immutable rules
+□ MVP Phasing defined (v1.0, v1.1, v1.2+)
+□ Non-Functional Requirements documented (Performance, A11y, Browser, Mobile, SEO, Security)
+□ External Dependencies & Risks documented (every tech stack item that could fail/lapse)
+□ Success Criteria are measurable AND reference only current tech (no references to removed components)
+□ Out of Scope items listed
+```
+
+If ANY item is unchecked:
+1. Return to the user with the gap
+2. Gather the missing information
+3. Update the PRD
+4. Re-run the check
+
+Only when ALL items are checked is the PRD ready. The PRD must be directly assessable for epic breakdown WITHOUT requiring `/prd_refine` to catch gaps.
+
+---
+
+### Phase 7: Theme Selection
+
+**Goal:** Select and evaluate a WordPress theme that supports the IA, visual direction, and plugin requirements — before `/prd_breakdown` scopes the epics.
+
+**Why this is a separate phase:** Theme choice constrains every implementation epic. "Customize existing mega-menu" is a fundamentally different task than "build mega-menu from scratch." `/prd_breakdown` needs to know what the theme provides out of the box.
+
+**Inputs:**
+- Mood board and visual direction (Phase 4) — color compatibility, typography, density, emotional tone
+- Information architecture (Phase 5) — navigation model, page types, content blocks, purchase flow
+- Tech stack requirements (Phase 5) — WPML, WooCommerce, WooCommerce Subscriptions compatibility
+- Content briefs (Phase 6) — specific content blocks that need theme support (tabbed sections, comparison tables, testimonial carousels, counter animations)
+
+**Process:**
+
+**Step 7.1 — Build Evaluation Criteria**
+
+Generate a weighted checklist from the phase deliverables:
+
+| Category | Criteria | Weight | Source |
+|----------|----------|--------|--------|
+| **Plugin compatibility** | WPML compatible | Must-have | Phase 5 tech stack |
+| | WooCommerce + Subscriptions compatible | Must-have | Phase 5 e-commerce |
+| | Contact Form 7 or WPForms compatible | Must-have | Phase 5 forms |
+| **Navigation** | Mega-menu or advanced dropdown support | Must-have | Phase 5 nav model |
+| | Mobile hamburger with accordion dropdowns | Must-have | Phase 5 mobile nav |
+| | Sticky header support | Should-have | Phase 5 mobile nav |
+| **Layout components** | Tabbed content sections | Must-have | Phase 3 Pattern 1.3 (lifecycle tabs) |
+| | Comparison/pricing table | Must-have | Phase 5 pricing page |
+| | Testimonial carousel/slider | Should-have | Phase 6 social proof |
+| | Animated counter/metrics | Should-have | Phase 3 Pattern 3.1 |
+| | Side-by-side content (image + text) | Must-have | Phase 6 multiple pages |
+| | Full-width hero with overlay text | Must-have | Phase 6 homepage |
+| **Visual fit** | Clean, minimal design (not over-decorated) | Must-have | Phase 4 "Engineered Clarity" |
+| | Customizable color scheme | Must-have | Phase 4 palette |
+| | Google Fonts support (IBM Plex Sans) | Must-have | Phase 4 typography |
+| | Light/white backgrounds as default | Should-have | Phase 4 density |
+| **Performance** | PageSpeed score 85+ on demo | Should-have | General |
+| | Lightweight CSS/JS (not bloated) | Should-have | General |
+| **Maintenance** | Well-documented child theme support | Must-have | Claude Code maintenance |
+| | Regular updates (last update < 6 months) | Must-have | Security |
+| | Good support/documentation | Should-have | General |
+| **Page builder** | Elementor, WPBakery, or Gutenberg-native | Preference | Note trade-offs |
+
+**Step 7.2 — Research Candidates**
+
+Search theme marketplaces (ThemeForest, ThemeIsle, Flavor Theme, or others) for themes matching "must-have" criteria. Use WebSearch and WebFetch to:
+- Find WordPress themes for SaaS / technology / corporate sites
+- Check demo sites for visual fit
+- Read reviews and changelogs
+- Verify plugin compatibility claims
+
+**Shortlist 3-5 candidate themes.** For each candidate:
+- Theme name, author, marketplace, price
+- Link to live demo
+- Score against evaluation criteria (pass/fail for must-haves, score for should-haves)
+- Screenshots of relevant demo pages (homepage, pricing, blog)
+- Known limitations or risks
+
+**Step 7.3 — Evaluate Shortlist with User**
+
+Present the shortlist as a comparison table. Include:
+- Scores per category
+- Visual screenshots from demos
+- Price and licensing terms
+- Recommendation with rationale
+
+User selects a theme (may want to browse demos independently before deciding).
+
+**Step 7.4 — Document Theme Capabilities**
+
+After user purchases and installs the theme on 10web staging:
+- Install and activate the theme on staging
+- Document what the theme provides out of the box vs what needs custom development:
+
+| Need (from IA/content briefs) | Theme provides? | Custom work required? |
+|-------------------------------|----------------|----------------------|
+| Mega-menu dropdown | Yes — built-in | Configure only |
+| Lifecycle tabs (homepage hero) | Partial — has tabs component but needs custom styling | Child theme CSS |
+| Pricing comparison table | No | Custom template or plugin |
+| AI conversation mockup | No | Custom HTML/CSS block |
+| ... | ... | ... |
+
+This capability-vs-gap table becomes a critical input to `/prd_breakdown` — it determines epic scope.
+
+**Deliverables:**
+- `{output_dir}/phase-7-theme-selection.md` — Evaluation criteria, candidate shortlist, comparison, recommendation, and post-install capability mapping
+- Updated `{output_dir}/website_prd.md` — Add theme selection to the tech stack section and reference the capability mapping
+
+**Approval gate:** User confirms theme choice. Capability mapping reviewed. PRD is now complete and ready for `/prd_breakdown`.
 
 ---
 
