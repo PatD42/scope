@@ -32,6 +32,9 @@ Do not report the epic complete when code merely exists. The epic is complete on
   (examples: migrations, backfills, seed/bootstrap scripts, reindex jobs, onboarding runs)
 - The intended environment is verified ready (`.env`, schema/migrations, required services)
 - `audit_epic` has been run, fix stories implemented, and the final audit is acceptable
+- After implementation verification is green, the agent must automatically run `audit_epic`,
+  fix all findings from critical through minor unless the user explicitly approves a defer,
+  and rerun `audit_epic` until it passes or a maximum of 3 audit runs has been reached
 - `docs/epics/{epic-dir}/implementation-summary.md` is updated
 - Documentation follow-up decisions are surfaced explicitly instead of silently deferred
 - The user-facing value promised by the epic is demonstrated with concrete system-state checks
@@ -61,6 +64,7 @@ After all complete:
   Implement fix stories
   Run all epic tests
   Final audit
+  Repeat audit/remediation until audit passes, up to 3 total audit runs
 ```
 
 **Key rules:**
@@ -722,11 +726,11 @@ else:
     Remaining: {audit.critical_count} critical, {audit.major_count} major, {audit.minor_count} minor
     Review docs/epics/{epic_dir}/epic_audit.md for details.
     """
-    # ⚠️ DO NOT loop back to Step 6. Two audit cycles is the maximum.
-    # Escalate to user for manual resolution.
+    # If fewer than 3 total audit runs have happened, loop back through
+    # fix planning and remediation. Otherwise escalate to the user.
 ```
 
-**Max audit iterations: 2.** The initial audit (Step 5) plus one fix cycle (Steps 6-9) is the limit. If the final audit still has findings, present them to the user and stop. Do not create a third round of fix stories — diminishing returns and compounding risk of drift.
+**Max audit iterations: 3 total audit runs.** The initial audit (Step 5) plus up to two remediation cycles (Steps 6-9) is the limit. If the third audit still has findings, present them to the user and stop. Do not create a fourth round of fix stories without explicit user approval.
 
 ### Step 10: Completion Artifacts and Documentation Closure
 
