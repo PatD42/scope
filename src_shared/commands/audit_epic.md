@@ -51,7 +51,8 @@ AUDIT CHECKS:
 ├── 3. Acceptance Criteria
 │   ├── All scenarios implemented
 │   ├── Edge cases handled
-│   └── Error scenarios covered
+│   ├── Error scenarios covered
+│   └── Each story meets the 90%+ automated coverage floor (or has an approved exception)
 │
 ├── 4. Auto Claude Spec Alignment
 │   ├── Spec matches our architecture
@@ -334,7 +335,30 @@ for scenario in acceptance_scenarios:
    Impact: MINOR - Missing E2E test coverage
 ```
 
-### 3.2 Edge Case Handling
+### 3.2 Story Coverage Threshold
+
+**Check:** Does each story reach the required 90%+ automated coverage for the code it created or modified?
+
+Use the epic test strategy, coverage reports, and changed-file ownership to verify per-story coverage. If a story is below 90%, it fails the quality gate unless the test strategy explicitly documents an approved exception and compensating controls.
+
+**Report:**
+```markdown
+### Story Coverage Threshold
+
+✅ Story 01: 93% automated coverage on story-owned code
+
+❌ Story 03: 82% automated coverage on story-owned code
+   Expected: 90%+
+   Exception: None documented
+   Impact: MAJOR - Story does not meet minimum coverage floor
+
+⚠️  Story 04: 87% automated coverage on story-owned code
+   Exception: Approved in test strategy due to uninstrumentable vendor callback path
+   Compensating controls: Integration test + live smoke test
+   Impact: MINOR - Below threshold but exception documented
+```
+
+### 3.3 Edge Case Handling
 
 **Report:**
 ```markdown
@@ -650,7 +674,7 @@ All findings are classified by severity:
 | Severity | Definition | Examples |
 |----------|------------|----------|
 | **CRITICAL** | Breaks core functionality or violates key ADR | Missing acceptance criteria, ADR violations causing data loss, stubs in production code |
-| **MAJOR** | Significant deviation from design, or stale documentation | Partial ADR implementation, missing edge case handling, test coverage gaps, backend/data.md missing or stale, backend/services.md missing or stale, building-blocks.md not updated |
+| **MAJOR** | Significant deviation from design, or stale documentation | Partial ADR implementation, missing edge case handling, any story below 90% coverage without an approved exception, backend/data.md missing or stale, backend/services.md missing or stale, building-blocks.md not updated |
 | **MEDIUM** | Documentation or tracking gaps | ADRs/PDRs not rolled up, context diagram outdated, missing external dependencies in docs |
 | **MINOR** | Cosmetic or consistency issues | Naming inconsistencies, missing glossary terms, pattern deviations |
 | **ENHANCEMENT** | Improvements not in original design | Performance optimizations, additional features |

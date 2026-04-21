@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMMAND_DIR="${PLUGIN_DIR}/commands"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scope-command list
+  scope-command show <command>
+
+Examples:
+  scope-command list
+  scope-command show epic_refine
+EOF
+}
+
+case "${1:-}" in
+  list)
+    find "$COMMAND_DIR" -maxdepth 1 -type f -name '*.md' -exec basename {} .md \; | sort
+    ;;
+  show)
+    if [[ -z "${2:-}" ]]; then
+      usage
+      exit 2
+    fi
+    command_file="${COMMAND_DIR}/${2}.md"
+    if [[ ! -f "$command_file" ]]; then
+      echo "Unknown Scope command: $2" >&2
+      exit 1
+    fi
+    sed -n '1,220p' "$command_file"
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
+

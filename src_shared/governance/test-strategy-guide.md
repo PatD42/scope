@@ -10,6 +10,15 @@ READ this file during architecture_design phase.
 Write tests at the EARLIEST point where the test becomes possible, not a moment later.
 Fixing issues in closed stories is expensive (context lost after completion).
 
+## Coverage Floor: Every Story Reaches 90%+
+
+Every story must reach 90%+ automated test coverage for the code it creates or modifies.
+
+Use this as a planning and sequencing constraint:
+- break stories so their code can be tested to 90%+ within the story
+- do not defer essential testability to later stories without an explicit, documented exception
+- if a story cannot realistically reach 90%+, the architect must document why and what compensating tests or controls replace the missing coverage
+
 ## Test Types by Story Scope
 
 ### Unit Tests: Always in Each Story
@@ -136,6 +145,7 @@ For each story, specify:
 
 ```yaml
 Test Requirements:
+  coverage_target: "90%+ automated coverage for story-owned code"
   unit:
     - Profile validation logic
     - Database update operations

@@ -4,18 +4,15 @@
 
 # SCOPE
 
-**Simple Claude/Codex Orchestrator for Product Engineering**
+**Simple Claude Orchestrator for Product Engineering**
 
-SCOPE turns Claude Code or OpenAI Codex into a structured product engineering environment. It gives you slash commands that take a product from PRD to implemented, tested, and audited epics — with approval gates at every step.
+SCOPE turns Claude Code into a structured product engineering environment. It gives you slash commands that take a product from PRD to implemented, tested, and audited epics — with approval gates at every step.
 
-Claude: PRD draft → /prd_refine → /prd_breakdown → /epic_refine → /implement → /wrap_epic
-Codex: PRD draft → scope:prd_refine → scope:prd_breakdown → scope:epic_refine → scope:implement → scope:wrap_epic
+PRD draft → /prd_refine → /prd_breakdown → /epic_refine → /implement → merge
 
-**Already have code but no docs?** Use `/re_documentation` or `run scope:re_documentation` to reverse engineer the product and architecture documentation from your existing codebase.
+**Already have code but no docs?** Use `/re_documentation` to reverse engineer the product and architecture documentation from your existing codebase.
 
-No custom tooling. No MCP servers. Just commands, agents, skills, and documentation templates.
-
-**NOTE:** for Codex, replace "/" with "run scope:"
+No custom tooling. No MCP servers. Just Claude Code slash commands, agents, skills, and documentation templates.
 
 ---
 
@@ -39,9 +36,7 @@ Every command has user approval gates. Nothing is merged without your sign-off.
 
 ## How It Works
 
-SCOPE uses Claude Code or codex built-in features:
-
-### Claude
+SCOPE uses Claude Code's built-in features:
 
 - **Slash commands** (`.claude/commands/`) define multi-phase workflows with approval gates
 - **Agent definitions** (`.claude/agents/`) give Claude specialized personas (architect, developer, SDET, product owner, reverse-engineer-po, reverse-engineer-architect)
@@ -49,13 +44,7 @@ SCOPE uses Claude Code or codex built-in features:
 - **TaskCreate/TaskUpdate** manage story dependencies and sequencing
 - **Git worktrees** isolate implementation from the main branch
 
-### Codex
-
-- **commands** (`plugins/scope/commands/`) define multi-phase workflows with approval gates
-- **Agent definitions** (`plugins/scope/agents/`) give Claude specialized personas (architect, developer, SDET, product owner, reverse-engineer-po, reverse-engineer-architect)
-- **Skills** (`plugins/scope/skills/`) provide documentation templates (Arc42+C4 for technical, Atlassian Blueprint for product)
-- **TaskCreate/TaskUpdate** manage story dependencies and sequencing
-- **Git worktrees** isolate implementation from the main branch
+When running inside `./wip/{epic-id}`, use the `plugins/scope/` directory from that worktree checkout. Do not fall back to the main checkout.
 
 No external dependencies. No install scripts. No state files.
 
@@ -84,7 +73,7 @@ cd scope
 ./install.sh
 ```
 
-The script copies commands, agents, skills, and a config template into `.claude/` and a AGENTS.md for Codex. For project installs, it also creates `.scope/config.yaml` — edit it to set your project name and tracking preferences.
+The script copies commands, agents, skills, and a config template into `.claude/`. For project installs, it also creates `.scope/config.yaml` — edit it to set your project name and tracking preferences.
 
 ## Quick Start
 
@@ -117,18 +106,7 @@ your-project/
 ├── .claude/
 │   ├── commands/           # Slash commands
 │   ├── agents/             # Agent definitions
-│   ├── skills/             # Documentation templates
-│   └── governance/         # Quality and lifecycle rules
-├── plugins/
-│   └── scope/
-│       ├── commands/       # Codex command playbooks
-│       ├── agents/         # Codex role instructions
-│       ├── skills/         # Shared templates + Codex workflow skill
-│       ├── governance/     # Quality and lifecycle rules
-│       ├── docs/           # Scope reference docs for Codex
-│       ├── scripts/        # Helper scripts such as scope-command
-│       ├── .codex-plugin/  # Codex plugin metadata
-│       └── .mcp.json       # MCP server configuration
+│   └── skills/             # Documentation templates
 ├── .scope/
 │   └── config.yaml         # Project configuration
 ├── docs/
@@ -136,7 +114,7 @@ your-project/
 │   ├── architecture/       # Technical docs (Arc42 sections 01-13)
 │   ├── epics/{epic-id}/    # Per-epic docs (acceptance criteria, file plans, ADRs)
 │   └── releases/           # Release documentation
-├── wip/
+├── ./wip/
 │   └── {epic-id}/          # Git worktree per epic (implementation happens here)
 └── src/                    # Your application code
 ```
@@ -149,7 +127,7 @@ your-project/
 
 **Audit loop** — After implementation, `/audit_epic` checks architecture compliance, acceptance criteria coverage, code quality, and stub detection. Fix stories are generated for all findings. Max 2 audit cycles, then escalate.
 
-**Git worktrees** — Implementation happens in `wip/{epic-id}` on branch `epic/{epic-id}`. Main branch stays clean. You merge when satisfied.
+**Git worktrees** — Implementation happens in `./wip/{epic-id}` on branch `epic/{epic-id}`. Main branch stays clean. You merge when satisfied.
 
 ## Requirements
 

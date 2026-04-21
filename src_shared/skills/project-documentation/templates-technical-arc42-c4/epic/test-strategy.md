@@ -34,6 +34,8 @@ This page documents the testing strategy for this epic, including test types, bo
 
 **Testing Principle**: Test as soon as possible - write tests at the EARLIEST point where they become possible.
 
+**Coverage Policy**: Every story must achieve 90%+ automated test coverage for the code it creates or modifies, unless an explicit exception is documented in this strategy with rationale and approval.
+
 ---
 
 ## Test Scope by Story
@@ -43,6 +45,8 @@ This page documents the testing strategy for this epic, including test types, bo
 ### Story: {story-id} - [Story Title]
 
 **Test Types Required**:
+
+**Coverage Target**: 90%+ automated coverage for story-owned code
 
 #### Unit Tests
 - [ ] [Component/function to test]
@@ -72,6 +76,8 @@ This page documents the testing strategy for this epic, including test types, bo
 ### Story: {story-id} - [Story Title]
 
 **Test Types Required**:
+
+**Coverage Target**: 90%+ automated coverage for story-owned code
 
 #### Unit Tests
 - [ ] [Component/function to test]
@@ -343,6 +349,7 @@ class UserJourneyTest {
 ### Coverage Metrics
 
 **Targets**:
+- Story-level automated coverage: 90%+ for the code each story creates or modifies
 - Unit test coverage: 90%+
 - Integration test coverage: Critical paths
 - E2E test coverage: All user journeys

@@ -1,24 +1,27 @@
 #!/bin/bash
 #
 # SCOPE Installation Script
-# Installs SCOPE commands, skills, and agents to user or project directory
+# Installs Claude and Codex variants from shared + platform-specific source roots.
 #
 # Usage:
-#   ./install.sh              # Install to ./.claude (default)
-#   ./install.sh --user       # Install to ~/.claude
-#   ./install.sh /path/to/dir # Install to /path/to/dir/.claude
+#   ./install.sh              # Install to current project
+#   ./install.sh --user       # Install to home directory
+#   ./install.sh /path/to/dir # Install to a custom target directory
 #
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.0.0"
+VERSION="1.1.0"
 
-# Colors
+SHARED_SRC="${SCRIPT_DIR}/src_shared"
+CLAUDE_SRC="${SCRIPT_DIR}/src_claude"
+CODEX_SRC="${SCRIPT_DIR}/src_codex"
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}"
 echo "╔═══════════════════════════════════════╗"
@@ -26,110 +29,152 @@ echo "║          SCOPE Installer v${VERSION}        ║"
 echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Parse Arguments and Determine Installation Target
-# ─────────────────────────────────────────────────────────────────────────────
-
 INSTALL_TYPE="project"
 INSTALL_DIR="."
 CLAUDE_DIR="./.claude"
+CODEX_DIR="./plugins/scope"
 
-if [ "$1" == "--user" ]; then
+if [[ "${1:-}" == "--user" ]]; then
     INSTALL_TYPE="user"
-    CLAUDE_DIR="$HOME/.claude"
     INSTALL_DIR="$HOME"
-    echo -e "${GREEN}Installing to user directory: ${CLAUDE_DIR}${NC}"
-elif [ -n "$1" ]; then
+    CLAUDE_DIR="$HOME/.claude"
+    CODEX_DIR="$HOME/plugins/scope"
+    echo -e "${GREEN}Installing to user directory:${NC}"
+elif [[ -n "${1:-}" ]]; then
     INSTALL_DIR="$1"
     CLAUDE_DIR="${INSTALL_DIR}/.claude"
-    echo -e "${GREEN}Installing to custom directory: ${CLAUDE_DIR}${NC}"
+    CODEX_DIR="${INSTALL_DIR}/plugins/scope"
+    echo -e "${GREEN}Installing to custom directory:${NC}"
 else
-    echo -e "${GREEN}Installing to project directory: ${CLAUDE_DIR}${NC}"
+    echo -e "${GREEN}Installing to project directory:${NC}"
 fi
 
+echo "  Claude: ${CLAUDE_DIR}"
+echo "  Codex:  ${CODEX_DIR}"
 echo ""
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Discover Available Commands
-# ─────────────────────────────────────────────────────────────────────────────
+copy_overlay() {
+    local src="$1"
+    local dest="$2"
 
-COMMANDS=()
-for cmd_file in "${SCRIPT_DIR}/src/commands/"*.md; do
-    if [ -f "$cmd_file" ]; then
-        filename=$(basename "$cmd_file" .md)
-        COMMANDS+=("$filename")
+    if [[ -d "$src" ]]; then
+        mkdir -p "$dest"
+        cp -R "$src/." "$dest/"
     fi
-done
+}
 
-IFS=$'\n' COMMANDS=($(sort <<<"${COMMANDS[*]}")); unset IFS
+copy_file_if_exists() {
+    local src="$1"
+    local dest="$2"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Create Directory Structure
-# ─────────────────────────────────────────────────────────────────────────────
+    if [[ -f "$src" ]]; then
+        mkdir -p "$(dirname "$dest")"
+        cp "$src" "$dest"
+    fi
+}
+
+list_markdown_commands() {
+    local dir="$1"
+    if [[ -d "$dir" ]]; then
+        find "$dir" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort
+    fi
+}
 
 echo -e "${YELLOW}Creating Directory Structure${NC}"
 echo ""
 
-mkdir -p "${CLAUDE_DIR}/commands"
-mkdir -p "${CLAUDE_DIR}/skills"
-mkdir -p "${CLAUDE_DIR}/agents"
+mkdir -p "${CLAUDE_DIR}/commands" "${CLAUDE_DIR}/skills" "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/governance"
+mkdir -p "${CODEX_DIR}/commands" "${CODEX_DIR}/skills" "${CODEX_DIR}/agents" "${CODEX_DIR}/governance" "${CODEX_DIR}/docs" "${CODEX_DIR}/scripts" "${CODEX_DIR}/.codex-plugin"
 
-echo "  Created ${CLAUDE_DIR}/commands/"
-echo "  Created ${CLAUDE_DIR}/skills/"
-echo "  Created ${CLAUDE_DIR}/agents/"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Copy Files
-# ─────────────────────────────────────────────────────────────────────────────
+echo "  Created ${CLAUDE_DIR}/"
+echo "  Created ${CODEX_DIR}/"
 
 echo ""
-echo -e "${YELLOW}Copying Files${NC}"
+echo -e "${YELLOW}Installing Claude Files${NC}"
 echo ""
 
-# Copy config template
-cp "${SCRIPT_DIR}/src/commands/config_example.yaml" "${CLAUDE_DIR}/commands/"
-echo "  ✓ config_example.yaml (template)"
+copy_overlay "${SHARED_SRC}/commands" "${CLAUDE_DIR}/commands"
+copy_overlay "${CLAUDE_SRC}/commands" "${CLAUDE_DIR}/commands"
+copy_overlay "${SHARED_SRC}/skills" "${CLAUDE_DIR}/skills"
+copy_overlay "${CLAUDE_SRC}/skills" "${CLAUDE_DIR}/skills"
+copy_overlay "${SHARED_SRC}/agents" "${CLAUDE_DIR}/agents"
+copy_overlay "${CLAUDE_SRC}/agents" "${CLAUDE_DIR}/agents"
+copy_overlay "${SHARED_SRC}/governance" "${CLAUDE_DIR}/governance"
+copy_overlay "${CLAUDE_SRC}/governance" "${CLAUDE_DIR}/governance"
 
-# Copy commands
-for cmd in "${COMMANDS[@]}"; do
-    if [ -f "${SCRIPT_DIR}/src/commands/${cmd}.md" ]; then
-        cp "${SCRIPT_DIR}/src/commands/${cmd}.md" "${CLAUDE_DIR}/commands/"
-        echo "  ✓ /$cmd"
-    fi
-done
+echo "  Commands:"
+while IFS= read -r cmd; do
+    [[ -n "$cmd" ]] && echo "    ✓ /$cmd"
+done < <(list_markdown_commands "${CLAUDE_DIR}/commands")
 
-# Copy command resource directories (e.g., prd_refine/, prd_breakdown/)
-for cmd_dir in "${SCRIPT_DIR}/src/commands/"*/; do
-    if [ -d "$cmd_dir" ]; then
-        dir_name=$(basename "$cmd_dir")
-        cp -r "$cmd_dir" "${CLAUDE_DIR}/commands/"
-        echo "  ✓ /$dir_name/ (resources)"
-    fi
-done
+echo "  Command resources:"
+while IFS= read -r resource_dir; do
+    [[ -n "$resource_dir" ]] && echo "    ✓ /$resource_dir/"
+done < <(find "${CLAUDE_DIR}/commands" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
 
-# Copy skills
+echo "  Skills:"
+while IFS= read -r skill_dir; do
+    [[ -n "$skill_dir" ]] && echo "    ✓ $skill_dir"
+done < <(find "${CLAUDE_DIR}/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+
+echo "  Agents:"
+while IFS= read -r agent_name; do
+    [[ -n "$agent_name" ]] && echo "    ✓ $agent_name"
+done < <(find "${CLAUDE_DIR}/agents" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort)
+
+echo "  Governance:"
+while IFS= read -r governance_name; do
+    [[ -n "$governance_name" ]] && echo "    ✓ $governance_name"
+done < <(find "${CLAUDE_DIR}/governance" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort)
+
 echo ""
-echo "  Copying skills..."
-cp -r "${SCRIPT_DIR}/src/skills/"* "${CLAUDE_DIR}/skills/" 2>/dev/null || true
-for skill_dir in "${SCRIPT_DIR}/src/skills/"*/; do
-    if [ -d "$skill_dir" ]; then
-        skill_name=$(basename "$skill_dir")
-        echo "    ✓ $skill_name"
-    fi
-done
-
-# Copy agents
+echo -e "${YELLOW}Installing Codex Plugin${NC}"
 echo ""
-echo "  Copying agents..."
-cp -r "${SCRIPT_DIR}/src/agents/"* "${CLAUDE_DIR}/agents/" 2>/dev/null || true
-while IFS= read -r agent_file; do
-    agent_name=$(basename "$agent_file" .md)
-    echo "    ✓ $agent_name"
-done < <(find "${SCRIPT_DIR}/src/agents" -name "*.md" -type f 2>/dev/null)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Create Configuration Template (project-level only)
-# ─────────────────────────────────────────────────────────────────────────────
+copy_overlay "${SHARED_SRC}/commands" "${CODEX_DIR}/commands"
+copy_overlay "${CODEX_SRC}/commands" "${CODEX_DIR}/commands"
+copy_overlay "${SHARED_SRC}/skills" "${CODEX_DIR}/skills"
+copy_overlay "${CODEX_SRC}/skills" "${CODEX_DIR}/skills"
+copy_overlay "${SHARED_SRC}/agents" "${CODEX_DIR}/agents"
+copy_overlay "${CODEX_SRC}/agents" "${CODEX_DIR}/agents"
+copy_overlay "${SHARED_SRC}/governance" "${CODEX_DIR}/governance"
+copy_overlay "${CODEX_SRC}/governance" "${CODEX_DIR}/governance"
+copy_overlay "${SHARED_SRC}/docs" "${CODEX_DIR}/docs"
+copy_overlay "${CODEX_SRC}/docs" "${CODEX_DIR}/docs"
+copy_overlay "${CODEX_SRC}/scripts" "${CODEX_DIR}/scripts"
+copy_overlay "${CODEX_SRC}/.codex-plugin" "${CODEX_DIR}/.codex-plugin"
+copy_file_if_exists "${CODEX_SRC}/README.md" "${CODEX_DIR}/README.md"
+copy_file_if_exists "${CODEX_SRC}/.mcp.json" "${CODEX_DIR}/.mcp.json"
+
+echo "  Plugin root:"
+[[ -f "${CODEX_DIR}/README.md" ]] && echo "    ✓ README.md"
+[[ -f "${CODEX_DIR}/.mcp.json" ]] && echo "    ✓ .mcp.json"
+[[ -f "${CODEX_DIR}/.codex-plugin/plugin.json" ]] && echo "    ✓ .codex-plugin/plugin.json"
+
+echo "  Commands:"
+while IFS= read -r cmd; do
+    [[ -n "$cmd" ]] && echo "    ✓ scope:$cmd"
+done < <(list_markdown_commands "${CODEX_DIR}/commands")
+
+echo "  Skills:"
+while IFS= read -r skill_dir; do
+    [[ -n "$skill_dir" ]] && echo "    ✓ $skill_dir"
+done < <(find "${CODEX_DIR}/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+
+echo "  Agents:"
+while IFS= read -r agent_name; do
+    [[ -n "$agent_name" ]] && echo "    ✓ $agent_name"
+done < <(find "${CODEX_DIR}/agents" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort)
+
+echo "  Docs:"
+while IFS= read -r doc_name; do
+    [[ -n "$doc_name" ]] && echo "    ✓ $doc_name"
+done < <(find "${CODEX_DIR}/docs" -maxdepth 1 -type f -name "*.md" -exec basename {} \; | sort)
+
+echo "  Scripts:"
+while IFS= read -r script_name; do
+    [[ -n "$script_name" ]] && echo "    ✓ $script_name"
+done < <(find "${CODEX_DIR}/scripts" -maxdepth 1 -type f -exec basename {} \; | sort)
 
 if [[ "$INSTALL_TYPE" == "project" ]]; then
     echo ""
@@ -138,10 +183,10 @@ if [[ "$INSTALL_TYPE" == "project" ]]; then
 
     mkdir -p "${INSTALL_DIR}/.scope"
 
-    if [ -f "${INSTALL_DIR}/.scope/config.yaml" ]; then
+    if [[ -f "${INSTALL_DIR}/.scope/config.yaml" ]]; then
         echo "  ○ .scope/config.yaml already exists (skipped)"
     else
-        cp "${SCRIPT_DIR}/src/commands/config_example.yaml" "${INSTALL_DIR}/.scope/config.yaml"
+        cp "${SHARED_SRC}/commands/config_example.yaml" "${INSTALL_DIR}/.scope/config.yaml"
         echo "  ✓ Created .scope/config.yaml from template"
         echo ""
         echo -e "  ${YELLOW}Next: Edit .scope/config.yaml to set:${NC}"
@@ -150,10 +195,6 @@ if [[ "$INSTALL_TYPE" == "project" ]]; then
         echo ""
     fi
 fi
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Summary and Next Steps
-# ─────────────────────────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${GREEN}════════════════════════════════════════${NC}"
@@ -164,7 +205,7 @@ echo ""
 if [[ "$INSTALL_TYPE" == "project" ]]; then
     echo -e "${YELLOW}Next Steps:${NC}"
     echo ""
-    if [ "$INSTALL_DIR" != "." ]; then
+    if [[ "$INSTALL_DIR" != "." ]]; then
         echo "1. Navigate to the project:"
         echo "   cd ${INSTALL_DIR}"
         echo ""
@@ -176,19 +217,15 @@ if [[ "$INSTALL_TYPE" == "project" ]]; then
         echo ""
         echo "2. Start using SCOPE:"
     fi
-    echo "   /prd_refine"
-    echo "   /prd_breakdown"
-    echo "   /epic_refine {epic-id}"
-    echo "   /implement {epic-id}"
+    echo "   Claude: /prd_refine, /prd_breakdown, /epic_refine {epic-id}, /implement {epic-id}"
+    echo "   Codex:  scope:prd_refine, scope:prd_breakdown, scope:epic_refine E1, scope:implement E1"
     echo ""
 else
     echo -e "${YELLOW}Next Steps:${NC}"
     echo ""
-    echo "1. In any project, start using SCOPE:"
-    echo "   /prd_refine"
-    echo "   /prd_breakdown"
-    echo "   /epic_refine {epic-id}"
-    echo "   /implement {epic-id}"
+    echo "1. In any project, use the installed directories:"
+    echo "   Claude: ${CLAUDE_DIR}"
+    echo "   Codex:  ${CODEX_DIR}"
     echo ""
 fi
 

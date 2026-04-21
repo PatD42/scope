@@ -1,0 +1,39 @@
+{
+  "name": "scope",
+  "version": "0.1.0",
+  "description": "Scope-style product engineering workflows adapted for Codex.",
+  "author": {
+    "name": "AquaForge",
+    "email": "patrick.drolet@aquaforge.ai",
+    "url": "https://github.com/PatD42/scope"
+  },
+  "homepage": "https://github.com/PatD42/scope",
+  "repository": "https://github.com/PatD42/scope",
+  "license": "MIT",
+  "keywords": [
+    "scope",
+    "product-engineering",
+    "codex",
+    "workflows"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Scope for Codex",
+    "shortDescription": "PRD, epic, implementation, audit, and reverse-documentation workflows.",
+    "longDescription": "Scope for Codex adapts the Scope Claude Code workflow into Codex-friendly command playbooks, role instructions, skills, templates, governance rules, and project guidance.",
+    "developerName": "AquaForge",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/PatD42/scope",
+    "defaultPrompt": [
+      "Run scope:re_documentation for this codebase.",
+      "Run scope:epic_refine E1.",
+      "Run scope:implement E1."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

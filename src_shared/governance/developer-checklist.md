@@ -20,6 +20,7 @@ Do NOT rely on memory. Do NOT summarize. READ THE FILE every time.
 
 - [ ] **Live smoke test** — If this story introduces a new external service, verify it works live (not just mocked).
 - [ ] **Contract compliance** — If `contracts.py` exists, `mypy --strict` passes on all files you touched.
+- [ ] **Coverage threshold met** — Story-level automated test coverage is 90%+ for the code you created or modified, unless the approved test strategy documents an explicit exception.
 
 ### Consistency
 

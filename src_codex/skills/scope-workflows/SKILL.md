@@ -1,0 +1,92 @@
+---
+name: scope-workflows
+description: Run Scope-style product engineering workflows in Codex using command playbooks, role instructions, approval gates, docs, and worktrees.
+---
+
+# Scope Workflows for Codex
+
+Use this skill when the user asks for Scope-like workflows in Codex, invokes `scope:<command>`, or asks to run a Scope command such as `prd_refine`, `epic_refine`, `implement`, `audit_epic`, `re_documentation`, or `sync_product`.
+
+## Artifact Locations
+
+Resolve paths from the current checkout only.
+
+- Primary Codex plugin root: `./plugins/scope/`
+- Optional project overrides: `./.claude/`
+
+When running inside `./wip/{epic-id}`, use the `plugins/scope/` directory from that worktree checkout. Do not fall back to the main repo copy or any other checkout.
+
+Within the current checkout:
+
+- Commands: `commands/{command}.md`
+- Role instructions: `agents/{role}.md`
+- Governance: `governance/*.md`
+- Documentation templates and tracking adapters: `skills/`
+- Scope reference docs: `docs/`
+
+If the same artifact exists in the project `.claude/` directory, prefer the project copy because it may contain project-specific edits. That override must still come from the current checkout.
+
+## Command Invocation
+
+Treat these as equivalent user requests:
+
+- `scope:epic_refine E1`
+- `/epic_refine E1`
+- `run epic_refine for E1`
+
+Execution steps:
+
+1. Read the matching command file.
+2. Read referenced role files from `agents/`.
+3. Read referenced skills from `skills/`.
+4. Read governance files when the command or role requires them.
+5. Execute the command as a Codex workflow, preserving approval gates.
+6. Write or update project artifacts in `docs/`, `.scope/`, and `./wip/` as the command specifies.
+
+## Role Mapping
+
+Codex should usually perform Scope roles sequentially in the main session:
+
+- `product-owner`: validate business requirements, acceptance criteria, and product docs.
+- `architect`: architecture, ADRs, specs, contracts, and file plans.
+- `developer`: implementation plus tests.
+- `sdet`: test planning and test-first implementation when requested.
+- `reverse-engineer-po`: code-to-product-documentation workflow.
+- `reverse-engineer-architect`: code-to-architecture-documentation workflow.
+- `reverse-engineer-ops`: operations/runbook reverse engineering.
+
+Only spawn Codex sub-agents when the user explicitly asks for parallel agents or delegation. When spawned, pass the relevant Scope role file and a bounded task.
+
+## Codex Adaptations
+
+- Replace Claude `Read`, `Glob`, and `Grep` with local file reads and `rg`.
+- Replace Claude `TaskCreate/TaskUpdate` with `.scope/` tracking files, Codex plans, or explicit checklists.
+- Replace Claude `AskUserQuestion` with concise approval or clarification questions.
+- Preserve approval gates. Stop at a gate and ask before continuing when the command says approval is required.
+- Use git worktrees exactly as Scope specifies for implementation commands.
+- For Codex, the implementation worktree root is `./wip/`.
+- Keep implementation in the worktree once a command moves there.
+- In a worktree, read `plugins/scope/` from that worktree only. No fallback to the main checkout.
+
+## Context Sources
+
+Use Obsidian MCP when available for prior decisions, lessons, and related product notes. If Obsidian MCP is unavailable, continue with local repo search and say that MCP was unavailable.
+
+CodeGraph MCP is intentionally disabled for Codex in this project because the stdio MCP server can hold the SQLite DB lock. Use CodeGraph through Bash/CLI commands instead of MCP tools.
+
+### CodeGraph Working Directory Rule
+
+CodeGraph is scoped to the current working directory.
+
+- During refinement and planning, use the main repository root as the CodeGraph project path.
+- During implementation and audit, after the workflow changes into `./wip/{epic-id}`, use that worktree as the CodeGraph project path.
+- Do not query the main repo CodeGraph DB for implementation code that is being changed inside a worktree.
+- Before using CodeGraph in the current directory, ensure `./.codegraph` exists. If it does not, run `codegraph init .`.
+- Before relying on CodeGraph context, run `codegraph sync-if-dirty .` or `codegraph sync .` from the active working directory.
+- Use `codegraph status .`, `codegraph context "task description" --path .`, `codegraph query "SymbolName" --path .`, `codegraph files --path .`, and `codegraph affected --path . <changed-files>` for dependency, symbol, and impact context.
+- Do not use CodeGraph MCP tools or assume a long-running CodeGraph MCP server is available.
+- After `scope:wrap_epic` merges the epic branch back to the main project root, return to the main project root and sync the root CodeGraph DB.
+
+## Quality Bar
+
+For this IntelAgent project, also follow the repository instructions in `.claude/CLAUDE.md` when present. Generated intelligence outputs must be read and judged as a product, not just mechanically produced files.
