@@ -64,6 +64,17 @@ The previous approach produced file plans with method signatures in YAML prose. 
 └─────────────────────────────────────────────────────────┘
 ```
 
+## Phase Handoff Rule
+
+Do not pass a phase by "good enough" intuition. A phase passes only when downstream roles can execute without inventing missing decisions:
+- Product Owner must eliminate business ambiguity before architecture starts.
+- Architect must eliminate architecture ambiguity before implementation starts.
+- If a downstream role must invent missing decisions, refinement was incomplete and must return to the responsible upstream role.
+
+Operational test:
+- If the Architect or Developer must decide what the system should do, Phase 1 was incomplete and the Product Owner must interview the user before proceeding.
+- If the Developer must decide how the system should be designed, Phases 2-4 were incomplete and refinement must return to the Architect before implementation begins.
+
 ---
 
 ## Execution
@@ -121,6 +132,8 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 - Error scenarios (for docs/architecture/13-specs/errors/ generation)
 - E2E test scenarios
 - Written to `docs/epics/{epic-dir}/acceptance-criteria.md`
+
+**Phase 1 completeness rule:** If the Architect or Developer would still need to make business, policy, scope, workflow, or acceptance decisions, Phase 1 is not complete. The Product Owner must stop and interview the user before moving to Phase 2.
 
 ### Phase 1 Checklist
 
@@ -183,6 +196,8 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
   - `docs/epics/{epic-dir}/architecture.md`
   - `docs/epics/{epic-dir}/adr.md`
   - `docs/epics/{epic-dir}/test-strategy.md`
+
+**Phase 2-4 completeness rule:** If the Developer would still need to choose interfaces, component boundaries, data model structure, orchestration flow, integration patterns, error strategy, or other architecture decisions, refinement is not complete and must return to the Architect before implementation.
 
 ### Phase 2 Checklist
 

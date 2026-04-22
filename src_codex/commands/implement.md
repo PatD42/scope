@@ -20,6 +20,12 @@ Before running, the epic MUST have completed `/epic_refine`:
 - `docs/epics/{epic-dir}/file-plan-story-*.yaml` exists
 - Epic status is "ready-for-implementation"
 
+## Refinement Stop Conditions
+
+Do not let the Developer invent missing decisions during implementation:
+- If the Developer must decide what the system should do, business requirements were incomplete and implementation must stop until the Product Owner clarifies them.
+- If the Developer must decide how the system should be designed, architecture was incomplete and implementation must stop until refinement returns to the Architect.
+
 ## Completion Contract
 
 `/implement` is a **delivery workflow**, not a coding workflow.
