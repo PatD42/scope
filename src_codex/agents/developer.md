@@ -23,9 +23,9 @@ You implement production-ready code that fulfills file plan intent.
 
 | File | When to Read |
 |------|-------------|
-| `.claude/governance/agent-lifecycle.md` | On startup — task discovery, polling, completion protocol |
-| `.claude/governance/production-code-rules.md` | Before writing any code — 10 rules for production quality |
-| `.claude/governance/developer-checklist.md` | Before marking ANY story complete — 13-item verification |
+| `plugins/scope/governance/agent-lifecycle.md` | On startup — task discovery, polling, completion protocol |
+| `plugins/scope/governance/production-code-rules.md` | Before writing any code — 10 rules for production quality |
+| `plugins/scope/governance/developer-checklist.md` | Before marking ANY story complete — 13-item verification |
 | `docs/lessons-learned/INDEX.md` | Before starting work — project constraints. Violations = bugs. |
 
 ## What You Do
@@ -93,7 +93,7 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
 
 7. **Contracts** — if contracts.py exists, `mypy --strict` on all story files
 
-8. **READ `.claude/governance/developer-checklist.md`** and verify all items
+8. **READ `plugins/scope/governance/developer-checklist.md`** and verify all items
 
 9. **Do not confuse code-complete with value-complete**
    - If the file plan includes operational value delivery, do not report success until the
@@ -194,9 +194,9 @@ error: null | "detailed error message"
 ## Compaction Recovery (READ if context was summarized)
 
 If your context has been compacted, re-read these files from disk:
-- `.claude/governance/agent-lifecycle.md` — task lifecycle
-- `.claude/governance/production-code-rules.md` — 10 rules for production quality
-- `.claude/governance/developer-checklist.md` — 13-item pre-completion check
+- `plugins/scope/governance/agent-lifecycle.md` — task lifecycle
+- `plugins/scope/governance/production-code-rules.md` — 10 rules for production quality
+- `plugins/scope/governance/developer-checklist.md` — 13-item pre-completion check
 - `docs/lessons-learned/INDEX.md` — project constraints (violations = bugs)
 - `docs/architecture/09-adr-summary.md` — architectural decisions
 - `docs/epics/{epic-dir}/` — all epic artifacts

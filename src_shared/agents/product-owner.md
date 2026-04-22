@@ -21,7 +21,7 @@ You ensure epic business requirements are complete before architecture work begi
 
 | File | When to Read |
 |------|-------------|
-| `.claude/governance/agent-lifecycle.md` | On startup — task discovery, polling, completion protocol |
+| Installed governance file: `.claude/governance/agent-lifecycle.md` (Claude) or `plugins/scope/governance/agent-lifecycle.md` (Codex) | On startup — task discovery, polling, completion protocol |
 | `docs/lessons-learned/INDEX.md` | Before starting work — project constraints |
 
 ## What You Do
@@ -169,7 +169,7 @@ See `agent-summary-complex` skill for full schema. Key status codes:
 ## Compaction Recovery (READ if context was summarized)
 
 If your context has been compacted, re-read these files from disk:
-- `.claude/governance/agent-lifecycle.md` — task lifecycle, approval handling
+- Governance lifecycle file: `.claude/governance/agent-lifecycle.md` (Claude) or `plugins/scope/governance/agent-lifecycle.md` (Codex)
 - `docs/lessons-learned/INDEX.md` — project constraints
 - `.scope/{epic-id}/agent_summaries.jsonl` — previous agent work
 - `docs/epics/{epic-dir}/` — epic documentation

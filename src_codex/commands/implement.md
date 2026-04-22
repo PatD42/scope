@@ -342,7 +342,7 @@ Decision tracking:
 - These will be surfaced by /wrap_epic for formal recording.
 
 Pre-completion review (MANDATORY before marking story done):
-READ the full checklist from .claude/governance/developer-checklist.md before marking complete.
+READ the full checklist from plugins/scope/governance/developer-checklist.md before marking complete.
 Do NOT rely on memory of the checklist. Do NOT summarize it. READ THE FILE from disk.
 The checklist includes 13 items: intent match, no dead code, pattern consistency,
 lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
@@ -402,7 +402,7 @@ Task(
     5. Execute any operational deliverables required by the story/file plan and verify the real side effects
     6. Run all tests — all must pass
     7. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
-       Look for it at: .claude/governance/developer-checklist.md (or src/governance/developer-checklist.md in the SCOPE repo)
+       Look for it at: plugins/scope/governance/developer-checklist.md (or src_shared/governance/developer-checklist.md in the SCOPE repo)
        Do NOT skip this step. Do NOT rely on memory of the checklist. READ THE FILE.
     8. Mark completed
     9. Check TaskList again for next unblocked dev task
@@ -619,7 +619,7 @@ Decision tracking:
   agent summary under concerns with type: "decision_candidate".
 
 Pre-completion review:
-READ the full checklist from .claude/governance/developer-checklist.md before marking complete.
+READ the full checklist from plugins/scope/governance/developer-checklist.md before marking complete.
 Do NOT rely on memory. READ THE FILE.
 """,
                 activeForm=f"Implementing fix story {num}"
@@ -836,7 +836,7 @@ If context is summarized during implementation, the orchestrator MUST re-read th
 1. **Task state**: `TaskList()` — shows which stories are pending/in_progress/completed
 2. **Epic context**: `docs/epics/{EPIC_DIR}/` — all refinement artifacts
 3. **Agent summaries**: `.scope/{EPIC_DIR}/agent_summaries.jsonl` — what agents have done
-4. **Developer checklist**: `.claude/governance/developer-checklist.md` — MUST be re-read before any completion
+4. **Developer checklist**: `plugins/scope/governance/developer-checklist.md` — MUST be re-read before any completion
 5. **Lessons learned**: `docs/lessons-learned/INDEX.md` — project constraints
 6. **System ADRs**: `docs/architecture/09-adr-summary.md` — architectural decisions
 

@@ -31,9 +31,9 @@ You design technical solutions for epics: components, APIs, data models, ADRs, f
 
 | File | When to Read |
 |------|-------------|
-| `.claude/governance/agent-lifecycle.md` | On startup — task discovery, polling, completion protocol |
-| `.claude/governance/production-code-rules.md` | When creating Story 0 scaffolding |
-| `.claude/governance/test-strategy-guide.md` | When creating test strategy (Phase 2) and sequencing stories (Phase 5) |
+| Installed governance file: `.claude/governance/agent-lifecycle.md` (Claude) or `plugins/scope/governance/agent-lifecycle.md` (Codex) | On startup — task discovery, polling, completion protocol |
+| Installed governance file: `.claude/governance/production-code-rules.md` (Claude) or `plugins/scope/governance/production-code-rules.md` (Codex) | When creating Story 0 scaffolding |
+| Installed governance file: `.claude/governance/test-strategy-guide.md` (Claude) or `plugins/scope/governance/test-strategy-guide.md` (Codex) | When creating test strategy (Phase 2) and sequencing stories (Phase 5) |
 | `docs/lessons-learned/INDEX.md` | Before starting work — project constraints |
 
 ## Your Responsibilities
@@ -377,8 +377,8 @@ See `agent-summary-complex` skill for full schema. Include phase-appropriate del
 ## Compaction Recovery (READ if context was summarized)
 
 If your context has been compacted, re-read these files from disk:
-- `.claude/governance/agent-lifecycle.md` — task lifecycle
-- `.claude/governance/test-strategy-guide.md` — test strategy patterns
+- Governance lifecycle file: `.claude/governance/agent-lifecycle.md` (Claude) or `plugins/scope/governance/agent-lifecycle.md` (Codex)
+- Governance test strategy file: `.claude/governance/test-strategy-guide.md` (Claude) or `plugins/scope/governance/test-strategy-guide.md` (Codex)
 - `docs/lessons-learned/INDEX.md` — project constraints
 - `docs/epics/{epic-dir}/` — all epic artifacts
 - `.scope/{epic-dir}/agent_summaries.jsonl` — previous agent work
