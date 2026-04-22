@@ -1,3 +1,4 @@
+Also support Codex (but I'm too lazy to update the picture)
 <p align="center">
   <img src="assets/scope-banner.png" alt="SCOPE Banner" />
 </p>
