@@ -377,6 +377,23 @@ The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links 
 
 ## Epic Documentation
 
+### Epic Required Files
+Every epic folder must contain these required artifacts:
+- `details.md`
+- `acceptance-criteria.md`
+- `system-context.md`
+- `architecture.md`
+- `adr.md`
+- `pdr.md`
+- `test-strategy.md`
+
+During refinement, the epic folder must also contain one or more `file-plan-story-*.yaml` files before the epic can be marked ready-for-implementation.
+
+### Epic Folder Hygiene
+- Epic folders may contain only markdown and YAML files.
+- Do not place source code, generated code, cache directories, binaries, or OS artifacts in `docs/epics/...`.
+- `contracts.py` and any other implementation source files belong in the source package, not in epic docs.
+
 ### details.md
 **Template:** `templates-technical-arc42-c4/epic/details.md`
 **Content:** Intent, requirements, acceptance criteria, test scenarios, components, risks
@@ -413,7 +430,7 @@ The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links 
 
 ### adr.md
 **Template:** `templates-technical-arc42-c4/epic/adr.md`
-**Format:** Decision title, context, options, decision, consequences
+**Format:** ADR-NNN with date, status, scope, epic, context, decision, alternatives, consequences
 **Owner:** Architect
 **Readers:** Developer (when unclear), Epic Housekeeping
 

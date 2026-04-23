@@ -302,7 +302,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
    - List alternatives considered with pros/cons
    - Document consequences (positive, negative, risks)
    - Add implementation notes (code changes, configuration, migration)
-4. Number ADRs sequentially: ADR-{epic-id}-001, ADR-{epic-id}-002, etc.
+4. Number ADRs using the project-wide global sequence: ADR-{NNN}, ADR-{NNN+1}, etc.
 5. Most recent ADRs at top
 
 **Output**: ADR page with all architectural decisions documented

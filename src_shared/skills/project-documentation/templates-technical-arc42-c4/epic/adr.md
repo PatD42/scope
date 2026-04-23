@@ -34,11 +34,13 @@
 
 ---
 
-## ADR-{epic-id}-001: [Decision Title]
+## ADR-{NNN}: [Decision Title]
 
 **Date**: YYYY-MM-DD
 
 **Status**: [Proposed / Accepted / Deprecated / Superseded]
+**Scope**: [System / Backend / Frontend]
+**Epic**: {epic-id}
 
 **Deciders**: [Names/Roles]
 
@@ -92,11 +94,13 @@
 
 ---
 
-## ADR-{epic-id}-002: [Previous Decision Title]
+## ADR-{NNN}: [Previous Decision Title]
 
 **Date**: YYYY-MM-DD
 
 **Status**: [Accepted]
+**Scope**: [System / Backend / Frontend]
+**Epic**: {epic-id}
 
 **Deciders**:
 
@@ -121,4 +125,3 @@
 <!-- ... -->
 
 ---
-

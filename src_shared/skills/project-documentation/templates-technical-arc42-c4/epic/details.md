@@ -1,3 +1,9 @@
+---
+epic_id: {epic-id}
+title: [Epic Title]
+status: draft
+---
+
 # {epic-id}: [Epic Title]
 
 ---

@@ -54,6 +54,8 @@ You design technical solutions for epics: components, APIs, data models, ADRs, f
 - **Two-level documentation** — epic-level (detailed) + product-level (summary with links)
 - **File plan intent is source of truth** for what developers implement
 - **Research first** — for major components, evaluate 3-5 mature options; for smaller ones, 2-3. Criteria: maturity, performance, integration complexity, licensing, team expertise. Document as ADR with alternatives.
+- **Epic docs are documentation only** — `docs/epics/{epic-dir}/` may contain only `.md` and `.yaml`; source files such as `contracts.py` belong in the source package, not in epic docs.
+- **Epic artifact minimum** — every epic must end refinement with `details.md`, `acceptance-criteria.md`, `system-context.md`, `architecture.md`, `adr.md`, `pdr.md`, `test-strategy.md`, and at least one `file-plan-story-*.yaml`.
 
 ---
 
@@ -123,6 +125,12 @@ Use `project-documentation` skill's `ai_search()` to load context token-efficien
 - `docs/epics/{epic-dir}/architecture.md` (including Doc Update Plan)
 - `docs/epics/{epic-dir}/adr.md`
 - `docs/epics/{epic-dir}/test-strategy.md`
+
+**Architecture rules:**
+- Epic `adr.md` uses the project-wide global ADR sequence (`ADR-NNN`), not per-epic numbering.
+- Every ADR entry must include `Date`, `Status`, `Scope`, `Epic`, `Context`, `Decision`, `Alternatives Considered`, and `Consequences`.
+- `pdr.md` is required for every epic and must exist before refinement completes.
+- `contracts.py` belongs in `src/...` (or the epic's implementation package), never in `docs/epics/...`.
 
 **Product-level updates:**
 - Update `05-building-blocks.md` with link to epic architecture
@@ -322,21 +330,23 @@ Skill(skill="project-tracking", args=f"transition_epic {epic_id} ready-for-imple
 ## ADR Format
 
 **Numbering scheme:**
-- **Epic ADR page**: Sequential per epic (ADR-1, ADR-2, ADR-3...)
-- **System ADR summary**: Include epic ID: `ADR-{EPIC-ID}-{NUMBER}` (e.g., ADR-CODINT-1-1)
+- **All ADRs share one project-wide sequence**: `ADR-NNN`
+- Epic ADRs must take the next available global number after scanning `09-adr-summary.md`, epic `adr.md` files, and scope ADR directories
 
 **Two-level documentation:**
 1. **Epic ADR page** (detailed): Full ADR, created as Draft during refinement
 2. **Architecture ADR summary** (`09-adr-summary.md`): Summary added AFTER epic complete by `/wrap_epic`
 3. **After implementation**: Update ADRs with "Consequences (Actual)" section — what really happened vs. predictions
 
-Epic ADRs in `docs/epics/{epic-dir}/adr.md`, numbered per epic (ADR-1, ADR-2...):
+Epic ADRs in `docs/epics/{epic-dir}/adr.md`, using global numbers:
 
 ```markdown
-## ADR-{N}: {Title}
+## ADR-{NNN}: {Title}
 
 **Status**: Draft | Accepted
 **Date**: {date}
+**Scope**: System | Backend | Frontend
+**Epic**: {epic-id}
 
 ### Context
 {Problem statement — what forces are at play?}
@@ -353,7 +363,7 @@ Epic ADRs in `docs/epics/{epic-dir}/adr.md`, numbered per epic (ADR-1, ADR-2...)
 **Negative**: {tradeoffs}
 ```
 
-**System-level ADRs** use global numbering (scan `09-adr-summary.md` + all epic ADRs for highest number).
+`pdr.md` is a required epic artifact and must exist before the epic can reach ready-for-implementation.
 
 ---
 

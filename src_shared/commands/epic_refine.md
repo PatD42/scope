@@ -24,6 +24,25 @@ The previous approach produced file plans with method signatures in YAML prose. 
 
 **Key insight:** Agents need machine-verifiable contracts, not human-readable descriptions. TDD with mocks tests behavior in isolation; contracts + static analysis verifies integration mechanically.
 
+## Epic Artifact Rules
+
+These rules are mandatory for every refined epic:
+
+- `contracts.py` belongs in the source package for the epic's implementation, never under `docs/epics/...`.
+- The epic documentation folder may contain only `.md` and `.yaml` files.
+- Required epic artifacts:
+  - `details.md`
+  - `acceptance-criteria.md`
+  - `system-context.md`
+  - `architecture.md`
+  - `adr.md`
+  - `pdr.md`
+  - `test-strategy.md`
+- `details.md` must use YAML frontmatter with at least `epic_id`, `title`, and `status`.
+- `adr.md` must use the global ADR numbering sequence and include `Date`, `Status`, `Scope`, `Epic`, `Context`, `Decision`, `Alternatives Considered`, and `Consequences` for every ADR entry.
+
+Do not pass a phase if these artifact rules are not satisfied by the work completed so far.
+
 ## Workflow Overview
 
 ```
@@ -129,7 +148,10 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 - Acceptance criteria in Given/When/Then format
 - Error scenarios (for docs/architecture/13-specs/errors/ generation)
 - E2E test scenarios
-- Written to `docs/epics/{epic-dir}/acceptance-criteria.md`
+- Product decisions captured in `pdr.md`
+- Written to:
+  - `docs/epics/{epic-dir}/acceptance-criteria.md`
+  - `docs/epics/{epic-dir}/pdr.md`
 
 **Phase 1 completeness rule:** If the Architect or Developer would still need to make business, policy, scope, workflow, or acceptance decisions, Phase 1 is not complete. The Product Owner must stop and interview the user before moving to Phase 2.
 
@@ -152,6 +174,10 @@ Phase 1: Product Owner - Epic Validation
 
 ✅ Test Scenarios
    E2E scenarios: [N scenarios defined]
+
+✅ Product Decisions
+   pdr.md present: [Yes / No]
+   Decisions captured or explicitly stated as none: [Yes / No]
 
 Ready to proceed to architecture? [yes / refine]
 ```
@@ -184,11 +210,13 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 **Key deliverables:**
 - System context analysis (integration points, patterns, constraints)
 - Architecture design (components, data model, API contracts)
-- ADRs for key technology decisions
+- ADRs for key technology decisions using the global ADR sequence
 - Test strategy (boundaries, test data, mocking)
 - **Documentation update plan** — list of product-level architecture docs that must be
   updated when this epic is implemented, with specific changes needed. This plan is
   executed in Story 0 (scaffolding) by the architect, NOT by the developer.
+- Source placement rule for `contracts.py` documented in the file plans and epic architecture:
+  it must live in the source package, never in `docs/epics/...`.
 - Written to:
   - `docs/epics/{epic-dir}/system-context.md`
   - `docs/epics/{epic-dir}/architecture.md`
@@ -349,6 +377,8 @@ Before assigning deliverables to dev stories, classify each file by work type:
 
 The architect MUST produce a `contracts.py` file in the epic's source package. This file contains Python `Protocol` classes that define every public interface that will be called across story boundaries.
 
+`contracts.py` is implementation source code. It must never be created inside `docs/epics/{epic-dir}/`.
+
 **What goes in contracts.py:**
 - One Protocol class per component that other stories depend on
 - Exact method signatures with full type annotations
@@ -447,6 +477,27 @@ modified_files:
 
 **Rule:** If a file has a `calls` section, the developer MUST verify each call matches the exact signature listed. mypy enforces this when the implementation type-hints dependencies using Protocol types from contracts.py.
 
+### Final Validation (required before Gate #4)
+
+Before presenting the final approval checklist, run the epic documentation validator and fix every failure:
+
+```bash
+VALIDATE_EPIC_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "validate-epic-docs.sh" 2>/dev/null | head -1)
+if [ -z "$VALIDATE_EPIC_SCRIPT" ]; then
+  echo "validate-epic-docs.sh not found in installed or source paths"
+  exit 1
+fi
+
+"$VALIDATE_EPIC_SCRIPT" "docs/epics/${EPIC_DIR}"
+```
+
+The final approval gate cannot be shown until validation passes. Validation must confirm:
+- no `__pycache__`, `.py`, `.pyc`, `.DS_Store`, or other non-markdown/non-YAML artifacts exist in the epic docs folder
+- all required epic files exist
+- `details.md` frontmatter is present and contains at least `epic_id`, `title`, and `status`
+- `adr.md` uses global ADR numbering and includes the required template fields
+- at least one `file-plan-story-*.yaml` exists
+
 ### Phase 4 Checklist
 
 Present to user:
@@ -473,6 +524,12 @@ Phase 4: Architect - Stories, Contracts & File Plan
    All stories mapped to files: [Yes / No]
    All acceptance criteria traceable: [Yes / No]
    All cross-story calls have contracts: [Yes / No]
+
+✅ Epic Artifact Validation
+   Required epic files present: [Yes / No]
+   details.md frontmatter valid: [Yes / No]
+   adr.md numbering/template valid: [Yes / No]
+   Epic folder hygiene valid: [Yes / No]
 
 Ready to mark epic as ready-for-implementation? [yes / refine]
 ```
@@ -514,6 +571,7 @@ Artifacts created:
 │   ├── system-context.md
 │   ├── architecture.md
 │   ├── adr.md
+│   ├── pdr.md
 │   ├── test-strategy.md
 │   ├── file-plan-story-00.yaml   (only if scaffolding exists; may include contracts.py)
 │   ├── file-plan-story-01.yaml
