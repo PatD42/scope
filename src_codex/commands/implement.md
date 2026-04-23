@@ -47,6 +47,12 @@ Do not report the epic complete when code merely exists. The epic is complete on
 
 If any of the above are still pending, the command must say the epic is **implementation-complete but not delivery-complete**.
 
+No downstream command may declare the epic complete, or stop at an intermediate checkpoint, until implementation is finished and `audit_epic` passes.
+Until then, only report:
+- in progress
+- blocked
+- implementation-complete but not delivery-complete
+
 ---
 
 ## Orchestration Model
@@ -497,7 +503,7 @@ audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
 
 # Present to user
 Output: f"""
-Implementation complete for {epic_id}.
+Implementation work finished for {epic_id}. Final delivery is still pending audit closure.
 
 Audit results:
 - Status: {audit.status}
@@ -721,7 +727,7 @@ audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
 
 if audit.status == "PASS":
     Output: f"""
-    Epic {epic_id} implementation complete.
+    Epic {epic_id} delivery complete.
     Audit: PASS
     All tests: PASS
     """
@@ -737,6 +743,8 @@ else:
 ```
 
 **Max audit iterations: 3 total audit runs.** The initial audit (Step 5) plus up to two remediation cycles (Steps 6-9) is the limit. If the third audit still has findings, present them to the user and stop. Do not create a fourth round of fix stories without explicit user approval.
+
+If the final audit does not pass, the epic is not complete. Use one of the non-complete status outcomes from Step 10 instead of completion language.
 
 ### Step 10: Completion Artifacts and Documentation Closure
 

@@ -26,6 +26,17 @@ Do not let the Developer invent missing decisions during implementation:
 - If the Developer must decide what the system should do, business requirements were incomplete and implementation must stop until the Product Owner clarifies them.
 - If the Developer must decide how the system should be designed, architecture was incomplete and implementation must stop until refinement returns to the Architect.
 
+## Completion Policy
+
+`/implement` is not allowed to stop at "stories complete", "code complete", or any other intermediate checkpoint.
+
+No downstream command may declare the epic complete until:
+- all planned implementation and remediation work is finished
+- epic-wide tests pass
+- `audit_epic` has been run and the final audit passes
+
+Before that point, report only progress or a blocked state. Do not use completion language for the epic.
+
 ---
 
 ## Orchestration Model
@@ -400,7 +411,7 @@ audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
 
 # Present to user
 Output: f"""
-Implementation complete for {epic_id}.
+Implementation work finished for {epic_id}. Final audit is now running; the epic is not complete until audit passes.
 
 Audit results:
 - Status: {audit.status}
@@ -608,7 +619,7 @@ audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
 
 if audit.status == "PASS":
     Output: f"""
-    Epic {epic_id} implementation complete.
+    Epic {epic_id} complete.
     Audit: PASS
     All tests: PASS
     """
@@ -624,6 +635,8 @@ else:
 ```
 
 **Max audit iterations: 2.** The initial audit (Step 5) plus one fix cycle (Steps 6-9) is the limit. If the final audit still has findings, present them to the user and stop. Do not create a third round of fix stories — diminishing returns and compounding risk of drift.
+
+If the final audit does not pass, the epic is not complete. Report it as blocked on unresolved audit findings.
 
 ### Step 10: Worktree Cleanup
 
