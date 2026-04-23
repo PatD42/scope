@@ -67,13 +67,11 @@ The previous approach produced file plans with method signatures in YAML prose. 
 ## Phase Handoff Rule
 
 Do not pass a phase by "good enough" intuition. A phase passes only when downstream roles can execute without inventing missing decisions:
-- Product Owner must eliminate business ambiguity before architecture starts.
-- Architect must eliminate architecture ambiguity before implementation starts.
-- If a downstream role must invent missing decisions, refinement was incomplete and must return to the responsible upstream role.
-
-Operational test:
-- If the Architect or Developer must decide what the system should do, Phase 1 was incomplete and the Product Owner must interview the user before proceeding.
-- If the Developer must decide how the system should be designed, Phases 2-4 were incomplete and refinement must return to the Architect before implementation begins.
+- Phase 1 is not complete until the Product Owner has specified the business behavior in enough detail that neither the Architect nor the Developer would need to make product, policy, scope, workflow, or acceptance decisions during later phases.
+- If the Architect would need to choose what the business wants, or the Developer would need to choose what behavior is correct, then the business requirements are incomplete.
+- In that case, the Product Owner must interview the user in a semi-structured approach to complete the business requirements in enough details before proceeding.
+- Phases 2-4 are not complete until the architecture is detailed enough that the Developer would not need to make architecture decisions during implementation.
+- If the Developer must decide how the system should be designed, refinement was incomplete and must return to the Architect before implementation begins.
 
 ---
 
@@ -307,6 +305,8 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"spec_generati
 
 **Story sizing constraints:** Each story should have max 7 non-trivial files, ~600 LOC of new/modified code, and the epic should have 5-8 stories. Trivial files (empty `__init__.py`, config with no logic, re-exports) don't count toward the 7-file limit. If a story exceeds these limits, split it.
 
+**Story numbering rule:** Story 0 is reserved for epic scaffolding only. Create Story 0 only if the epic genuinely has scaffolding work such as contracts, config content, schemas with authored examples, prompts, or directory/module scaffolding that should be authored before developer implementation. If there is no scaffolding story, numbering starts at Story 1.
+
 **Phase context to pass:**
 ```
 epic_id: {epic-id}
@@ -335,6 +335,8 @@ Before assigning deliverables to dev stories, classify each file by work type:
 | Pydantic models, adapters, business logic | Yes — unit tests + mypy | Developer | **Story 1+** |
 
 **Rule:** If a file's primary value is its CONTENT (not its structure), it belongs in Story 0. The architect authors it directly.
+
+**Important:** Do not create a placeholder Story 0 just because the number exists. If no scaffolding deliverables exist for this epic, skip Story 0 entirely and start with Story 1.
 
 **Common Story 0 deliverables:**
 - Config files with domain-specific values
@@ -513,7 +515,7 @@ Artifacts created:
 │   ├── architecture.md
 │   ├── adr.md
 │   ├── test-strategy.md
-│   ├── file-plan-story-00.yaml   (includes contracts.py)
+│   ├── file-plan-story-00.yaml   (only if scaffolding exists; may include contracts.py)
 │   ├── file-plan-story-01.yaml
 │   └── file-plan-story-NN.yaml
 ├── docs/architecture/13-specs/
