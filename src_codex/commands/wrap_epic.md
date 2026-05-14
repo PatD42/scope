@@ -81,22 +81,44 @@ This is the natural end-of-epic routine. In most cases, the user just runs `/wra
 ```python
 EPIC_ID = "{epic-id}"
 
-# Codex/Scope path convention:
+# Worktree discovery:
 # - wrap_epic may be invoked from the main project root or from ./wip/{epic-id}
-# - implementation work is committed from the worktree
+# - implementation work must be read, written, staged, and committed from the epic worktree
 # - final merge and root CodeGraph sync happen from the main project root
-current_dir = Bash("pwd").strip()
-if "/wip/" in current_dir:
-    PROJECT_ROOT = current_dir.split("/wip/")[0]
-    WORKTREE_DIR = current_dir
-else:
-    PROJECT_ROOT = current_dir
-    WORKTREE_DIR = f"{PROJECT_ROOT}/wip/{EPIC_ID}"
+worktrees = Bash("git worktree list --porcelain").splitlines()
+
+PROJECT_ROOT = None
+WORKTREE_DIR = None
+current_worktree = None
+
+for line in worktrees:
+    if line.startswith("worktree "):
+        current_worktree = line.removeprefix("worktree ").strip()
+        if PROJECT_ROOT is None:
+            PROJECT_ROOT = current_worktree
+    elif line == f"branch refs/heads/epic/{EPIC_ID}" and current_worktree:
+        WORKTREE_DIR = current_worktree
+
+if PROJECT_ROOT is None:
+    PROJECT_ROOT = Bash("git rev-parse --show-toplevel").strip()
+
+if WORKTREE_DIR is None:
+    candidate = f"{PROJECT_ROOT}/wip/{EPIC_ID}"
+    if exists(candidate):
+        WORKTREE_DIR = candidate
+
+if WORKTREE_DIR is None or not exists(WORKTREE_DIR):
+    print(f"Epic worktree not found for {EPIC_ID}. Expected branch epic/{EPIC_ID} or {PROJECT_ROOT}/wip/{EPIC_ID}.")
+    exit(1)
 
 BRANCH_NAME = f"epic/{EPIC_ID}"
 
-# Find epic directory
-epic_dirs = Glob(f"docs/epics/{EPIC_ID}*/details.md")
+# CRITICAL WRITE RULE:
+# All wrap_epic reads, writes, mkdir, mv, git add, and commits must target WORKTREE_DIR.
+# Do not write wrap artifacts into PROJECT_ROOT before the final merge step.
+
+# Find epic directory inside the worktree
+epic_dirs = Glob(f"{WORKTREE_DIR}/docs/epics/{EPIC_ID}*/details.md")
 # Exclude _implemented/ and _deferred_superseded/
 epic_dirs = [d for d in epic_dirs if "/_" not in d]
 
@@ -105,7 +127,8 @@ if not epic_dirs:
     exit(1)
 
 EPIC_DIR = epic_dirs[0].split("/")[-2]
-SCOPE_DIR = f".scope/{EPIC_DIR}"
+EPIC_DOC_DIR = f"{WORKTREE_DIR}/docs/epics/{EPIC_DIR}"
+SCOPE_DIR = f"{WORKTREE_DIR}/.scope/{EPIC_DIR}"
 SUMMARIES = f"{SCOPE_DIR}/agent_summaries.jsonl"
 ```
 
@@ -117,8 +140,8 @@ Check prerequisites:
 
 ```python
 # Required files
-assert exists(f"docs/epics/{EPIC_DIR}/acceptance-criteria.md"), "Missing acceptance criteria"
-assert exists(f"docs/epics/{EPIC_DIR}/architecture.md"), "Missing architecture"
+assert exists(f"{EPIC_DOC_DIR}/acceptance-criteria.md"), "Missing acceptance criteria"
+assert exists(f"{EPIC_DOC_DIR}/architecture.md"), "Missing architecture"
 
 # Check agent summaries for completion
 summaries = Read(SUMMARIES)
@@ -186,19 +209,19 @@ If no lessons detected: "No lessons identified. Moving on."
 
 ### Step 4: Generate Implementation Summary
 
-Create `docs/epics/{EPIC_DIR}/implementation-summary.md`:
+Create `{EPIC_DOC_DIR}/implementation-summary.md`:
 
 #### 4.1: Diff Plan vs. Reality
 
 ```python
 # Load file plans
-file_plans = Glob(f"docs/epics/{EPIC_DIR}/file-plan-story-*.yaml")
+file_plans = Glob(f"{EPIC_DOC_DIR}/file-plan-story-*.yaml")
 
 # Load agent summaries for actual changes
 summaries = Read(SUMMARIES)
 
 # Load git changes attributed to this epic
-git_changes = Bash(f"git log --name-only --pretty=format:'%s' -- . | head -200")
+git_changes = Bash(f"cd '{WORKTREE_DIR}' && git log --name-only --pretty=format:'%s' -- . | head -200")
 ```
 
 Compare:
@@ -260,11 +283,11 @@ Present to user for review: "Here's the implementation summary. Anything to corr
 
 #### 5.1: Roll Up ADRs
 
-Read `docs/epics/{EPIC_DIR}/adr.md` and update `docs/architecture/09-adr-summary.md`:
+Read `{EPIC_DOC_DIR}/adr.md` and update `{WORKTREE_DIR}/docs/architecture/09-adr-summary.md`:
 
 ```python
 # Read epic ADRs
-epic_adrs = Read(f"docs/epics/{EPIC_DIR}/adr.md")
+epic_adrs = Read(f"{EPIC_DOC_DIR}/adr.md")
 
 # Append summaries to 09-adr-summary.md under appropriate scope sections
 # Format per SKILL.md:
@@ -276,7 +299,7 @@ Also create individual ADR files in `docs/architecture/adr/`, `backend/adr/`, or
 
 #### 5.2: Roll Up PDRs
 
-Read `docs/epics/{EPIC_DIR}/pdr.md` (if exists) and update `docs/product/decisions.md`:
+Read `{EPIC_DOC_DIR}/pdr.md` (if exists) and update `{WORKTREE_DIR}/docs/product/decisions.md`:
 
 ```python
 # Append product decisions with link to epic source
@@ -359,7 +382,7 @@ if mcp_available("obsidian"):
 
 ```python
 # Read .scope/config.yaml for tracking backend
-config = Read(".scope/config.yaml")
+config = Read(f"{WORKTREE_DIR}/.scope/config.yaml")
 
 if config.get("tracking", {}).get("backend"):
     # Transition epic to "done" / "closed"
@@ -370,31 +393,30 @@ if config.get("tracking", {}).get("backend"):
 
 ### Step 7: Commit and Merge
 
-Run Step 7.1 through Step 7.5 from the active epic worktree when it exists:
+Run Step 7.1 through Step 7.5 from the active epic worktree. Use absolute paths for every write and git staging command:
 
 ```bash
 PROJECT_ROOT="${PROJECT_ROOT}"
 WORKTREE_DIR="${WORKTREE_DIR}"
 BRANCH_NAME="epic/${EPIC_ID}"
+EPIC_DOC_DIR="${EPIC_DOC_DIR}"
 
-if [ -d "$WORKTREE_DIR" ]; then
-  cd "$WORKTREE_DIR"
-fi
+cd "$WORKTREE_DIR"
 ```
 
 #### 7.1: Stage Changes
 
 ```bash
 # Show what will be committed
-git status
+git -C "$WORKTREE_DIR" status
 
 # Stage documentation updates
-git add docs/epics/{EPIC_DIR}/implementation-summary.md
-git add docs/epics/{EPIC_DIR}/adr.md
-git add docs/epics/{EPIC_DIR}/pdr.md
-git add docs/architecture/09-adr-summary.md
-git add docs/product/decisions.md
-git add docs/lessons-learned/
+git -C "$WORKTREE_DIR" add "$EPIC_DOC_DIR/implementation-summary.md"
+git -C "$WORKTREE_DIR" add "$EPIC_DOC_DIR/adr.md"
+git -C "$WORKTREE_DIR" add "$EPIC_DOC_DIR/pdr.md"
+git -C "$WORKTREE_DIR" add "$WORKTREE_DIR/docs/architecture/09-adr-summary.md"
+git -C "$WORKTREE_DIR" add "$WORKTREE_DIR/docs/product/decisions.md"
+git -C "$WORKTREE_DIR" add "$WORKTREE_DIR/docs/lessons-learned/"
 
 # Stage any architecture/operations doc updates from Step 5
 # (list specific files that were updated)
@@ -428,7 +450,7 @@ Proceed? [commit / edit message / cancel]
 #### 7.2: Commit
 
 ```bash
-git commit -m "$(cat <<'EOF'
+git -C "$WORKTREE_DIR" commit -m "$(cat <<'EOF'
 wrap({EPIC_ID}): implementation summary, decisions, lessons learned
 
 - {N} ADRs rolled up to architecture summary
@@ -442,19 +464,19 @@ EOF
 #### 7.3: Move Epic to _implemented/
 
 ```bash
-mkdir -p docs/epics/_implemented/
-mv docs/epics/{EPIC_DIR} docs/epics/_implemented/{EPIC_DIR}
-git add docs/epics/
-git commit -m "wrap({EPIC_ID}): move to _implemented"
+mkdir -p "$WORKTREE_DIR/docs/epics/_implemented/"
+mv "$EPIC_DOC_DIR" "$WORKTREE_DIR/docs/epics/_implemented/{EPIC_DIR}"
+git -C "$WORKTREE_DIR" add "$WORKTREE_DIR/docs/epics/"
+git -C "$WORKTREE_DIR" commit -m "wrap({EPIC_ID}): move to _implemented"
 ```
 
 #### 7.4: Write Tracking Marker
 
 ```bash
-mkdir -p .scope/tracking/commands
-echo '{"command":"wrap_epic","epic_id":"'"$EPIC_ID"'","completed_at":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","decisions_recorded":{D},"lessons_recorded":{L},"docs_updated":[...]}' >> ".scope/tracking/commands/wrap_epic-$(date +%Y%m%d-%H%M%S).jsonl"
-git add .scope/tracking/commands/
-git commit -m "wrap({EPIC_ID}): record wrap marker"
+mkdir -p "$WORKTREE_DIR/.scope/tracking/commands"
+echo '{"command":"wrap_epic","epic_id":"'"$EPIC_ID"'","completed_at":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","decisions_recorded":{D},"lessons_recorded":{L},"docs_updated":[...]}' >> "$WORKTREE_DIR/.scope/tracking/commands/wrap_epic-$(date +%Y%m%d-%H%M%S).jsonl"
+git -C "$WORKTREE_DIR" add "$WORKTREE_DIR/.scope/tracking/commands/"
+git -C "$WORKTREE_DIR" commit -m "wrap({EPIC_ID}): record wrap marker"
 ```
 
 #### 7.5: Merge Worktree Branch to Main Project Root

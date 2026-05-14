@@ -67,8 +67,7 @@ jobs:
             esac
 
             if [ -f "$counterpart" ] && ! grep -F -x -q "$counterpart" "$changed_file_list"; then
-              missing="${missing}
-${file} changed, but matching ${counterpart} was not changed."
+              missing="${missing}\n${file} changed, but matching ${counterpart} was not changed."
             fi
           done < "$changed_file_list"
 
@@ -76,7 +75,7 @@ ${file} changed, but matching ${counterpart} was not changed."
 
           if [ -n "$missing" ]; then
             echo "Claude/Codex mirrored files must be updated together when a counterpart exists."
-            echo "$missing"
+            printf '%b\n' "$missing"
             echo "If the change is truly platform-specific, explain it in the PR and adjust the workflow in the same PR if needed."
             exit 1
           fi

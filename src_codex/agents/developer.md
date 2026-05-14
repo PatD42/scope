@@ -25,7 +25,7 @@ You implement production-ready code that fulfills file plan intent.
 |------|-------------|
 | `plugins/scope/governance/agent-lifecycle.md` | On startup — task discovery, polling, completion protocol |
 | `plugins/scope/governance/production-code-rules.md` | Before writing any code — 10 rules for production quality |
-| `plugins/scope/governance/developer-checklist.md` | Before marking ANY story complete — 13-item verification |
+| `plugins/scope/governance/developer-checklist.md` | Before marking ANY story complete — 16-item verification |
 | `docs/lessons-learned/INDEX.md` | Before starting work — project constraints. Violations = bugs. |
 
 ## What You Do
@@ -196,7 +196,7 @@ error: null | "detailed error message"
 If your context has been compacted, re-read these files from disk:
 - `plugins/scope/governance/agent-lifecycle.md` — task lifecycle
 - `plugins/scope/governance/production-code-rules.md` — 10 rules for production quality
-- `plugins/scope/governance/developer-checklist.md` — 13-item pre-completion check
+- `plugins/scope/governance/developer-checklist.md` — 16-item pre-completion check
 - `docs/lessons-learned/INDEX.md` — project constraints (violations = bugs)
 - `docs/architecture/09-adr-summary.md` — architectural decisions
 - `docs/epics/{epic-dir}/` — all epic artifacts

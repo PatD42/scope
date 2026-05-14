@@ -134,6 +134,19 @@ fi
 
 # All subsequent work happens in the worktree
 cd "$WORKTREE_DIR"
+WORKTREE_DIR_ABS="$(pwd)"
+
+cat > AGENTS.md <<EOF
+# Epic Worktree Instructions
+
+You are working inside the implementation worktree for ${EPIC_ID}.
+
+CRITICAL:
+- Stay in this directory for all implementation reads, writes, tests, and git status checks:
+  ${WORKTREE_DIR_ABS}
+- Do not write implementation files in the main repository root.
+- If you need the main repository root, use it only for explicit merge/wrap operations.
+EOF
 
 # CodeGraph is cwd-local. During implementation, initialize and sync the
 # worktree's own index so CodeGraph sees in-progress code changes.
@@ -367,7 +380,7 @@ Decision tracking:
 Pre-completion review (MANDATORY before marking story done):
 READ the full checklist from plugins/scope/governance/developer-checklist.md before marking complete.
 Do NOT rely on memory of the checklist. Do NOT summarize it. READ THE FILE from disk.
-The checklist includes 13 items: intent match, no dead code, pattern consistency,
+The checklist includes 16 items: intent match, no dead code, pattern consistency,
 lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
 values, LIVE SMOKE TEST for new services, operational deliverables executed,
 value-path verified, no redundant tests, documentation/follow-up captured.

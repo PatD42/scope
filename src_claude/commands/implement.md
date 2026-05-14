@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement an epic story-by-story. Developer implements and writes tests. Runs audit on completion and apply recommendations.
+description: Implement an epic story-by-story until value is delivered. Includes tests, rollout/backfill tasks, audit fixes, and completion artifacts.
 args: "{epic-id}"
 skills: project-documentation
 agents: architect, developer
@@ -27,16 +27,32 @@ Do not let the Developer invent missing decisions during implementation:
 - If the Developer must decide what the system should do, business requirements were incomplete and implementation must stop until the Product Owner clarifies them.
 - If the Developer must decide how the system should be designed, architecture was incomplete and implementation must stop until refinement returns to the Architect.
 
-## Completion Policy
+## Completion Contract
 
-`/implement` is not allowed to stop at "stories complete", "code complete", or any other intermediate checkpoint.
+`/implement` is a **delivery workflow**, not a coding workflow.
 
-No downstream command may declare the epic complete until:
-- all planned implementation and remediation work is finished
-- epic-wide tests pass
-- `audit_epic` has been run and the final audit passes
+Do not report the epic complete when code merely exists. The epic is complete only when:
+- All planned stories are implemented
+- All file-plan deliverables are executed, not just written
+- All epic tests pass (unit, integration, e2e when the epic calls for them)
+- One-time operational tasks are run and validated when the epic includes them
+  (examples: migrations, backfills, seed/bootstrap scripts, reindex jobs, onboarding runs)
+- The intended environment is verified ready (`.env`, schema/migrations, required services)
+- `audit_epic` has been run, fix stories implemented, and the final audit is acceptable
+- After implementation verification is green, the agent must automatically run `audit_epic`,
+  fix all findings from critical through minor unless the user explicitly approves a defer,
+  and rerun `audit_epic` until it passes or a maximum of 3 audit runs has been reached
+- `docs/epics/{epic-dir}/implementation-summary.md` is updated
+- Documentation follow-up decisions are surfaced explicitly instead of silently deferred
+- The user-facing value promised by the epic is demonstrated with concrete system-state checks
 
-Before that point, report only progress or a blocked state. Do not use completion language for the epic.
+If any of the above are still pending, the command must say the epic is **implementation-complete but not delivery-complete**.
+
+No downstream command may declare the epic complete, or stop at an intermediate checkpoint, until implementation is finished and `audit_epic` passes.
+Until then, only report:
+- in progress
+- blocked
+- implementation-complete but not delivery-complete
 
 ---
 
@@ -61,6 +77,7 @@ After all complete:
   Implement fix stories
   Run all epic tests
   Final audit
+  Repeat audit/remediation until audit passes, up to 3 total audit runs
 ```
 
 **Key rules:**
@@ -105,7 +122,7 @@ if [ -n "$EPIC_FILES" ]; then
 fi
 
 # Create worktree for implementation
-WORKTREE_DIR="wip/${EPIC_ID}"
+WORKTREE_DIR="./wip/${EPIC_ID}"
 BRANCH_NAME="epic/${EPIC_ID}"
 
 if [ -d "$WORKTREE_DIR" ]; then
@@ -117,19 +134,63 @@ fi
 
 # All subsequent work happens in the worktree
 cd "$WORKTREE_DIR"
+WORKTREE_DIR_ABS="$(pwd)"
+
+cat > CLAUDE.md <<EOF
+# Epic Worktree Instructions
+
+You are working inside the implementation worktree for ${EPIC_ID}.
+
+CRITICAL:
+- Stay in this directory for all implementation reads, writes, tests, and git status checks:
+  ${WORKTREE_DIR_ABS}
+- Do not write implementation files in the main repository root.
+- If you need the main repository root, use it only for explicit merge/wrap operations.
+EOF
+
+# CodeGraph is cwd-local. During implementation, initialize and sync the
+# worktree's own index so CodeGraph sees in-progress code changes.
+if [ ! -d ".codegraph" ]; then
+  codegraph init .
+fi
+codegraph sync-if-dirty . || codegraph sync .
 ```
+
+### Step 0a: Environment Readiness Gate
+
+Before creating any tasks, verify the implementation environment inside the worktree.
+
+```bash
+# 1. Env visibility
+if [ ! -f ".env" ] && [ -f "../../.env" ]; then
+  echo "NOTICE: worktree has no .env. Create a symlink if the epic needs live credentials:"
+  echo "  ln -s ../../.env .env"
+fi
+
+# 2. Schema / migration readiness
+# If the project has a schema ensure/apply command, run it now.
+# For IntelAgent this means the local sagara schema must include epic tables/columns
+# before any integration/e2e or rollout work is considered valid.
+
+# 3. Dependency readiness
+# Verify any required keys / services referenced by the epic are available.
+# If the epic includes live rollout tasks (backfill/bootstrap/onboarding), do not wait
+# until the end to discover missing credentials or stale schema.
+```
+
+If the environment is not ready, fix it before starting story work or explicitly tell the user what is blocked.
 
 ### Step 0b: Check for Unwrapped Epic
 
 ```python
 # If another epic has a worktree but hasn't been wrapped, warn the user
-existing_worktrees = Glob("wip/*/")
+existing_worktrees = Glob("./wip/*/")
 for wt in existing_worktrees:
     other_epic = wt.split("/")[1]
     if other_epic != EPIC_ID:
         wrap_markers = Glob(f".scope/tracking/commands/wrap_epic-*{other_epic}*.jsonl")
         if not wrap_markers:
-            print(f"WARNING: Epic {other_epic} has an active worktree at wip/{other_epic}/ but hasn't been wrapped.")
+            print(f"WARNING: Epic {other_epic} has an active worktree at ./wip/{other_epic}/ but hasn't been wrapped.")
             print(f"Run /wrap_epic {other_epic} first to capture decisions and lessons?")
             print("[yes — wrap first / no — proceed with {EPIC_ID}]")
             # If user says yes, run /wrap_epic for the other epic first
@@ -153,9 +214,15 @@ system_adr_context = system_adrs if system_adrs else ""
 # 3. CodeGraph context enrichment (recommended)
 mcp_context = ""
 
+# CodeGraph rule:
+# - We are now inside ./wip/{epic-id}.
+# - Use this worktree as CodeGraph projectPath.
+# - Do not query the main repo CodeGraph DB for implementation changes.
+# - If ./.codegraph is missing, initialize it before querying.
+# - Sync the worktree index before relying on dependency/caller/callee context.
+
 # Use CodeGraph when present. Prefer CodeGraph MCP when available. If MCP is
-# unavailable or unhealthy, use the CLI fallback from the active worktree so
-# dependency context reflects in-progress code.
+# unavailable or unhealthy, use the CLI fallback from the active worktree.
 #
 # CLI fallback examples with JSON output:
 #   if [ ! -d ".codegraph" ]; then codegraph init .; fi
@@ -290,6 +357,9 @@ Instructions:
   add actual implementation files, actual test functions/classes, runtime
   evidence commands/results, and set each affected row to implemented, tested,
   verified, blocked, or deferred.
+- If the story/file plan includes an operational deliverable (migration, bootstrap,
+  backfill, seed, sync, onboarding run, reindex, CLI execution), execute it and
+  validate the resulting system state unless the file plan explicitly says dry-run only
 - If contracts.py exists, include tests that verify implementations satisfy the
   Protocol interfaces. Import Protocol types and assert structural compatibility.
 - Run all tests after implementation — all must pass
@@ -310,9 +380,10 @@ Decision tracking:
 Pre-completion review (MANDATORY before marking story done):
 READ the full checklist from .claude/governance/developer-checklist.md before marking complete.
 Do NOT rely on memory of the checklist. Do NOT summarize it. READ THE FILE from disk.
-The checklist includes 10 items: intent match, no dead code, pattern consistency,
+The checklist includes 16 items: intent match, no dead code, pattern consistency,
 lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
-values, LIVE SMOKE TEST for new services, no redundant tests.
+values, LIVE SMOKE TEST for new services, operational deliverables executed,
+value-path verified, no redundant tests, documentation/follow-up captured.
 
 {f"Project lessons:{chr(10)}{lessons_context}" if lessons_context else ""}
 """,
@@ -364,19 +435,21 @@ Task(
     2. If none available, STOP — you will be re-launched when tasks unblock
     3. Read the task description — it contains file plan path, context to load, and constraints
     4. Implement production-ready code AND write tests
-    5. Run all tests — all must pass
-    6. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
+    5. Execute any operational deliverables required by the story/file plan and verify the real side effects
+    6. Run all tests — all must pass
+    7. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
        Look for it at: .claude/governance/developer-checklist.md (or src/governance/developer-checklist.md in the SCOPE repo)
        Do NOT skip this step. Do NOT rely on memory of the checklist. READ THE FILE.
-    7. Mark completed
-    8. Check TaskList again for next unblocked dev task
-    9. Repeat until no more dev tasks available
+    8. Mark completed
+    9. Check TaskList again for next unblocked dev task
+    10. Repeat until no more dev tasks available
 
     CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
     You are responsible for BOTH implementation AND tests — there is no SDET.
     The checklist in step 6 includes: intent match, no dead code, pattern consistency,
     lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
-    values, LIVE SMOKE TEST for new services, no redundant tests.""",
+    values, LIVE SMOKE TEST for new services, operational deliverables executed,
+    value-path verified, no redundant tests, documentation/follow-up captured.""",
     subagent_type="general-purpose",
     description="Developer: implement",
     run_in_background=True
@@ -390,7 +463,8 @@ Implementing {epic-id} with {N} stories (no SDET):
 🏗️ Architect: Story 0 scaffolding (if applicable)
 💻 Developer: Implementing + testing sequentially (story 1 → 2 → ... → N)
 
-Agent is working. I'll run the audit when it completes.
+Agent is working. I'll only call this epic complete after rollout/operational
+deliverables, epic tests, audit closure, and completion artifacts are done.
 ```
 
 ### Step 4: Wait for Completion
@@ -413,6 +487,35 @@ Run ruff and vulture across ALL files created/modified in this epic. Developer a
 
 Any remaining lint violations that couldn't be auto-fixed are written to `lint_findings.yaml` and will be picked up by the audit in the next step.
 
+### Step 4c: Epic-Wide Operational Verification
+
+Before the first audit, verify whether the epic includes runtime/ops deliverables that must be executed.
+
+Examples:
+- schema migrations
+- bootstrap scripts
+- backfill scripts
+- seed scripts
+- onboarding jobs
+- reindex/sync jobs
+- one-time CLI routines that produce the actual value of the epic
+
+Procedure:
+1. Scan all file plans for operational verbs: `bootstrap`, `backfill`, `migrate`, `seed`, `sync`, `reindex`, `onboard`, `rollout`
+2. Build an execution checklist of those deliverables
+3. Execute each deliverable in the intended environment unless the epic explicitly says dry-run only
+4. Validate the resulting state with concrete checks:
+   - DB rows/counts/columns
+   - files/artifacts created
+   - API/system behavior
+   - log or status evidence
+5. If credentials, schema, or runtime dependencies are missing, stop calling the epic complete and report:
+   - what was implemented in code
+   - what value-delivery step is still blocked
+   - what concrete prerequisite is missing
+
+If the epic changes no runtime state and is purely code-path work, record that explicitly and continue.
+
 ### Step 5: Audit
 
 `audit_epic` initializes/syncs CodeGraph before launching external reviewers. Do not ask reviewers to run CodeGraph maintenance commands; they use query mode only.
@@ -426,7 +529,7 @@ audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
 
 # Present to user
 Output: f"""
-Implementation work finished for {epic_id}. Final audit is now running; the epic is not complete until audit passes.
+Implementation work finished for {epic_id}. Final delivery is still pending audit closure.
 
 Audit results:
 - Status: {audit.status}
@@ -633,6 +736,22 @@ else:
     # Re-run tests until all pass or escalate to user
 ```
 
+### Step 8b: Value Delivery Check
+
+Before the final audit, answer these questions from evidence, not inference:
+- What user/business value was the epic meant to deliver?
+- What can now be done in the real system that could not be done before?
+- What concrete state proves that value exists?
+
+Examples of acceptable proof:
+- query results showing new graph relationships
+- rows present in a new catalog table
+- signals resolved/backfilled for a real target entity
+- successfully completed onboarding/backfill run
+- verified API/UI behavior against the intended environment
+
+If the answer is still "the code exists but the one-time rollout wasn't run", the epic is not done.
+
 ### Step 9: Final Audit
 
 Re-run audit to confirm all findings are resolved.
@@ -644,26 +763,52 @@ audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
 
 if audit.status == "PASS":
     Output: f"""
-    Epic {epic_id} complete.
+    Epic {epic_id} delivery complete.
     Audit: PASS
     All tests: PASS
     """
-    # Proceed to Step 10 (worktree cleanup)
+    # Proceed to Step 10 (completion artifacts)
 else:
     Output: f"""
     Epic {epic_id} still has open findings after fix stories.
     Remaining: {audit.critical_count} critical, {audit.major_count} major, {audit.minor_count} minor
     Review docs/epics/{epic_dir}/epic_audit.md for details.
     """
-    # ⚠️ DO NOT loop back to Step 6. Two audit cycles is the maximum.
-    # Escalate to user for manual resolution.
+    # If fewer than 3 total audit runs have happened, loop back through
+    # fix planning and remediation. Otherwise escalate to the user.
 ```
 
-**Max audit iterations: 2.** The initial audit (Step 5) plus one fix cycle (Steps 6-9) is the limit. If the final audit still has findings, present them to the user and stop. Do not create a third round of fix stories — diminishing returns and compounding risk of drift.
+**Max audit iterations: 3 total audit runs.** The initial audit (Step 5) plus up to two remediation cycles (Steps 6-9) is the limit. If the third audit still has findings, present them to the user and stop. Do not create a fourth round of fix stories without explicit user approval.
 
-If the final audit does not pass, the epic is not complete. Report it as blocked on unresolved audit findings.
+If the final audit does not pass, the epic is not complete. Use one of the non-complete status outcomes from Step 10 instead of completion language.
 
-### Step 10: Worktree Cleanup
+### Step 10: Completion Artifacts and Documentation Closure
+
+Before declaring the epic complete:
+
+1. Update `docs/epics/{epic-dir}/implementation-summary.md`
+   - stories implemented
+   - tests run and results
+   - operational deliverables executed
+   - value delivered and proof
+   - environment/setup issues encountered
+   - residual risks / follow-up items
+
+2. Review documentation implications from the final audit
+   - If docs are stale because implementation drifted, surface this explicitly
+   - Do not silently launder drift by pretending docs are current
+   - Record whether doc updates are:
+     - approved now
+     - deferred to `/wrap_epic`
+     - blocked on user decision
+
+3. Report epic status using one of these exact outcomes:
+   - `delivery-complete` — code, rollout, tests, audit, and completion artifacts all done
+   - `implementation-complete, rollout-pending`
+   - `implementation-complete, documentation-decision-pending`
+   - `blocked`
+
+### Step 11: Worktree Cleanup
 
 After the final audit passes (or after presenting unresolved findings to the user), do not clean up the worktree. The user will instruct you to merge and remove the worktree when he is satisfied with the quality.
 

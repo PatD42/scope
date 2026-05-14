@@ -25,7 +25,7 @@ You implement production-ready code that fulfills file plan intent.
 |------|-------------|
 | `.claude/governance/agent-lifecycle.md` | On startup — task discovery, polling, completion protocol |
 | `.claude/governance/production-code-rules.md` | Before writing any code — 10 rules for production quality |
-| `.claude/governance/developer-checklist.md` | Before marking ANY story complete — 15-item verification |
+| `.claude/governance/developer-checklist.md` | Before marking ANY story complete — 16-item verification |
 | `docs/lessons-learned/INDEX.md` | Before starting work — project constraints. Violations = bugs. |
 
 ## What You Do
@@ -34,11 +34,12 @@ You implement production-ready code that fulfills file plan intent.
 2. Read task description — contains epic context, file plan path, constraints
 3. Implement real, production-ready code (real I/O, real logic, no stubs)
 4. Write tests (unit + integration as appropriate)
-5. Run linters (ruff check --fix, ruff format, vulture) and fix findings
-6. Run mypy --strict if contracts.py exists — fix violations
-7. Run all tests — retry up to 4x if failures
-8. READ developer-checklist.md from disk and verify ALL items
-9. Write agent summary and mark task complete
+5. Execute operational deliverables in the file plan when they are part of the story's value
+6. Run linters (ruff check --fix, ruff format, vulture) and fix findings
+7. Run mypy --strict if contracts.py exists — fix violations
+8. Run all tests — retry up to 4x if failures
+9. READ developer-checklist.md from disk and verify ALL items
+10. Write agent summary and mark task complete
 
 ## Test Integrity
 
@@ -82,6 +83,9 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
    - Would it work in production with real services?
    - Compare `git diff --name-only` against ALL files in the file plan — any missing?
    - Is every new class/module imported and used somewhere upstream?
+   - If the story includes a migration, bootstrap, backfill, seed, sync, onboarding run,
+     or other one-time operational step, has it actually been executed and validated?
+   - If not executed, the story is not done unless the task explicitly says dry-run only
 
 5. **Run tests** — retry up to 4x (see Retry Logic below)
 
@@ -90,6 +94,12 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
 7. **Contracts** — if contracts.py exists, `mypy --strict` on all story files
 
 8. **READ `.claude/governance/developer-checklist.md`** and verify all items
+
+9. **Do not confuse code-complete with value-complete**
+   - If the file plan includes operational value delivery, do not report success until the
+     real side effect exists and you verified it with concrete evidence
+   - Example failures: script written but not run, migration coded but schema not updated,
+     backfill tested on synthetic data but not executed for the real target
 
 ## Debugging Phase
 
@@ -176,6 +186,8 @@ error: null | "detailed error message"
 - **4 failed test attempts** → `status: failure` with attempts_made details
 - **Missing dependencies** → `status: failure` with dependency details
 - **Ambiguous requirements** → `status: user_input` with specific questions
+- **Operational rollout blocked** → `status: failure` with the exact blocked deliverable,
+  the missing prerequisite, and what remains implementation-complete vs. delivery-pending
 
 ---
 
@@ -184,7 +196,7 @@ error: null | "detailed error message"
 If your context has been compacted, re-read these files from disk:
 - `.claude/governance/agent-lifecycle.md` — task lifecycle
 - `.claude/governance/production-code-rules.md` — 10 rules for production quality
-- `.claude/governance/developer-checklist.md` — 15-item pre-completion check
+- `.claude/governance/developer-checklist.md` — 16-item pre-completion check
 - `docs/lessons-learned/INDEX.md` — project constraints (violations = bugs)
 - `docs/architecture/09-adr-summary.md` — architectural decisions
 - `docs/epics/{epic-dir}/` — all epic artifacts
