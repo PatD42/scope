@@ -16,6 +16,7 @@ Implement an epic story-by-story using a single developer agent.
 
 Before running, the epic MUST have completed `/epic_refine`:
 - `docs/epics/{epic-dir}/acceptance-criteria.md` exists
+- `docs/epics/{epic-dir}/acceptance-traceability.yaml` exists
 - `docs/epics/{epic-dir}/architecture.md` exists
 - `docs/epics/{epic-dir}/file-plan-story-*.yaml` exists
 - Epic status is "ready-for-implementation"
@@ -149,18 +150,25 @@ else:
 system_adrs = Read("docs/architecture/09-adr-summary.md")
 system_adr_context = system_adrs if system_adrs else ""
 
-# 3. MCP context enrichment (optional)
+# 3. CodeGraph context enrichment (recommended)
 mcp_context = ""
 
-# If codegraph MCP is available, query for module dependencies
-# relevant to files in the epic's file plans
-if mcp_available("codegraph"):
-    file_plans = Glob(f"docs/epics/{EPIC_DIR}/file-plan-story-*.yaml")
-    planned_files = extract_file_paths(file_plans)
-    for f in planned_files:
-        deps = codegraph.query_dependencies(f)
-        mcp_context += f"\n# Dependencies for {f}: {deps}"
-    print(f"Loaded codegraph context for {len(planned_files)} planned files.")
+# Use CodeGraph when present. Prefer CodeGraph MCP when available. If MCP is
+# unavailable or unhealthy, use the CLI fallback from the active worktree so
+# dependency context reflects in-progress code.
+#
+# CLI fallback examples with JSON output:
+#   if [ ! -d ".codegraph" ]; then codegraph init .; fi
+#   codegraph sync-if-dirty . || codegraph sync .
+#   codegraph query "SymbolName" --path . --json
+#   codegraph context "story behavior or call path" --path . --format json --max-nodes 80 --max-code 20
+#   codegraph files --path . --json
+#
+# Use CodeGraph output as discovery context only. Implementation decisions,
+# findings, and task completion still require direct source/test evidence.
+file_plans = Glob(f"docs/epics/{EPIC_DIR}/file-plan-story-*.yaml")
+planned_files = extract_file_paths(file_plans)
+print(f"CodeGraph is recommended for dependency context across {len(planned_files)} planned files. Prefer MCP when available; use CLI fallback otherwise.")
 
 # If Obsidian MCP is available, query for relevant lessons and decisions
 if mcp_available("obsidian"):
@@ -258,6 +266,7 @@ terminate_upon_completion: no
 Context to load:
 - Read the file plan at {story['file_plan_path']}
 - Read acceptance criteria from docs/epics/{epic_dir}/acceptance-criteria.md
+- Read acceptance traceability from docs/epics/{epic_dir}/acceptance-traceability.yaml
 - Read architecture from docs/epics/{epic_dir}/architecture.md
 - Read ADRs from docs/epics/{epic_dir}/adr.md (epic-level decisions)
 - Read system ADRs from docs/architecture/09-adr-summary.md (project-wide decisions)
@@ -277,6 +286,10 @@ Instructions:
 - Follow the intent documentation in the file plan — intent is the source of truth
 - Match the public_interface / signature_changes exactly
 - Write tests (unit + integration as appropriate) for the code you implement
+- Update docs/epics/{epic_dir}/acceptance-traceability.yaml for this story:
+  add actual implementation files, actual test functions/classes, runtime
+  evidence commands/results, and set each affected row to implemented, tested,
+  verified, blocked, or deferred.
 - If contracts.py exists, include tests that verify implementations satisfy the
   Protocol interfaces. Import Protocol types and assert structural compatibility.
 - Run all tests after implementation — all must pass
@@ -402,6 +415,8 @@ Any remaining lint violations that couldn't be auto-fixed are written to `lint_f
 
 ### Step 5: Audit
 
+`audit_epic` initializes/syncs CodeGraph before launching external reviewers. Do not ask reviewers to run CodeGraph maintenance commands; they use query mode only.
+
 ```python
 # Run audit
 Skill(skill="audit_epic", args=epic_id)
@@ -517,6 +532,7 @@ terminate_upon_completion: no
 Context to load:
 - Read the file plan at {story['file_plan_path']}
 - Read the audit report at docs/epics/{epic_dir}/epic_audit.md for context
+- Read acceptance traceability from docs/epics/{epic_dir}/acceptance-traceability.yaml
 - Read system ADRs from docs/architecture/09-adr-summary.md
 - Read lessons learned from docs/lessons-learned/INDEX.md (if exists)
 
@@ -529,6 +545,8 @@ Instructions:
 - If this is a documentation update story, update files in docs/architecture/ to
   reflect the actual implementation accurately
 - Write tests that verify the audit finding is fixed
+- Update docs/epics/{epic_dir}/acceptance-traceability.yaml for every affected
+  row with actual files, actual tests, runtime evidence, and status changes.
 - If contracts.py exists, include tests that assert Protocol compliance for
   interfaces affected by the fix
 - Run all tests after implementation — all must pass
@@ -581,6 +599,12 @@ Do NOT rely on memory. READ THE FILE.
 
 After all stories (original + fixes) are implemented, run the full epic test suite.
 
+Before running tests, verify `docs/epics/{epic_dir}/acceptance-traceability.yaml` is current:
+- every implemented row has `actual_files`
+- every tested row has `actual_tests`
+- every required runtime evidence row has command/result evidence or is marked `blocked`
+- no row remains `planned` unless it is explicitly out of scope or deferred with a reason
+
 ```python
 # Collect ALL test files from ALL file plans (original + fix)
 all_file_plans = Glob(f"docs/epics/{epic_dir}/file-plan-story-*.yaml")
@@ -612,6 +636,7 @@ else:
 ### Step 9: Final Audit
 
 Re-run audit to confirm all findings are resolved.
+This call happens after fix stories are implemented, so `audit_epic` must resync CodeGraph before launching reviewers. Reviewers remain query-only.
 
 ```python
 Skill(skill="audit_epic", args=epic_id)

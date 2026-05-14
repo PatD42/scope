@@ -17,6 +17,7 @@ fi
 REQUIRED_FILES=(
     "details.md"
     "acceptance-criteria.md"
+    "acceptance-traceability.yaml"
     "system-context.md"
     "architecture.md"
     "adr.md"
@@ -131,6 +132,14 @@ validate_adr() {
     done <<< "$adr_numbers"
 }
 
+validate_acceptance_traceability() {
+    local traceability_file="$1"
+
+    rg -F -q "acceptance_items:" "$traceability_file" || fail "acceptance-traceability.yaml missing acceptance_items"
+    rg -F -q "required_assertions:" "$traceability_file" || fail "acceptance-traceability.yaml missing required_assertions"
+    rg -F -q "runtime_evidence:" "$traceability_file" || fail "acceptance-traceability.yaml missing runtime_evidence"
+}
+
 for file_name in "${REQUIRED_FILES[@]}"; do
     require_file "${EPIC_DIR}/${file_name}"
 done
@@ -140,5 +149,6 @@ compgen -G "${EPIC_DIR}/file-plan-story-*.yaml" > /dev/null || fail "missing fil
 validate_folder_hygiene
 validate_details_frontmatter "${EPIC_DIR}/details.md"
 validate_adr "${EPIC_DIR}/adr.md"
+validate_acceptance_traceability "${EPIC_DIR}/acceptance-traceability.yaml"
 
 echo "Epic documentation validation passed: ${EPIC_DIR}"

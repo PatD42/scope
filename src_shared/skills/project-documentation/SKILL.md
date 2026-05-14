@@ -83,6 +83,7 @@ docs/
 │   ├── details.md
 │   ├── system-context.md
 │   ├── acceptance-criteria.md
+│   ├── acceptance-traceability.yaml
 │   ├── test-strategy.md
 │   ├── architecture.md
 │   ├── adr.md
@@ -381,6 +382,7 @@ The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links 
 Every epic folder must contain these required artifacts:
 - `details.md`
 - `acceptance-criteria.md`
+- `acceptance-traceability.yaml`
 - `system-context.md`
 - `architecture.md`
 - `adr.md`
@@ -414,6 +416,13 @@ During refinement, the epic folder must also contain one or more `file-plan-stor
 **Owner:** Product Owner
 **Readers:** Architect, SDET
 **Trigger:** After system context analysis, before test strategy
+
+### acceptance-traceability.yaml
+**Template:** `templates-technical-arc42-c4/epic/acceptance-traceability.yaml`
+**Content:** Machine-readable matrix mapping acceptance criteria and story behaviors to expected implementation files, expected test files, required assertions, runtime evidence, status, and audit notes
+**Owner:** Architect during refinement, Developer during implementation, Auditor during audit
+**Readers:** Developer, Auditor, Epic Housekeeping
+**Trigger:** Created during epic refinement with file plans; updated during implementation and audit
 
 ### test-strategy.md
 **Template:** `templates-technical-arc42-c4/epic/test-strategy.md`

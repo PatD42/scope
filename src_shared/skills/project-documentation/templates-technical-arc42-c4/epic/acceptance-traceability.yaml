@@ -1,0 +1,27 @@
+epic_id: "{epic-id}"
+generated_at: "YYYY-MM-DD"
+status: draft
+
+acceptance_items:
+  - id: "AC1.1"
+    story: "Story 1"
+    requirement: "Plain-language expected behavior."
+    source:
+      doc: "docs/epics/{epic-dir}/acceptance-criteria.md"
+      section: "Story 1"
+    implementation:
+      expected_files:
+        - "src/package/module.py"
+      actual_files: []
+    tests:
+      expected_files:
+        - "tests/test_module.py"
+      required_assertions:
+        - "Specific behavior the test must prove."
+      actual_tests: []
+    runtime_evidence:
+      required: false
+      commands: []
+      evidence: []
+    status: planned
+    audit_notes: ""

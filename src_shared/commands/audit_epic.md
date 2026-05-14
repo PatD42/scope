@@ -13,6 +13,32 @@ Audit an epic's implementation to detect divergence from original architecture, 
 
 **Output:** `docs/epics/{epic-dir}/epic_audit.md`
 
+## Required Multi-Model Review
+
+Every audit must gather independent reviewer feedback before the final audit report is classified:
+
+| Reviewer | Required model | Prompt source | Output |
+|----------|----------------|---------------|--------|
+| Codex | `gpt-5.5` with high reasoning | `commands/audit_epic/reviewer-codex.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/codex-gpt-5.5-high.md` |
+| Claude | Opus 4.7 | `commands/audit_epic/reviewer-claude.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/claude-opus-4.7.md` |
+| Gemini | `gemini-3.1-pro-preview` | `commands/audit_epic/reviewer-gemini.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/gemini-3.1-pro-preview.md` |
+
+These reviewers are read-only auditors. They do not edit files and do not decide what to fix. The orchestrating audit command merges their findings, removes duplicates, assigns severities, and produces the fix plan for the responsible implementation agent.
+
+If any required reviewer cannot run, record the failure in the current audit attempt directory as `{reviewer}-unavailable.md`, mark the audit as `FAIL`, and do not declare the epic audit-passed unless the user explicitly approves a degraded audit.
+
+Model reviews are never overwritten. Each audit run writes to a new `reviews/audit-NNN/` directory.
+
+## Remediation Policy
+
+The responsible implementation agent must fix these findings without asking the user:
+
+- all `CRITICAL` findings
+- all `MAJOR` findings
+- `MINOR` findings that are easy, local, mechanical, and low-risk
+
+Ask the user only for findings that require a product decision, architecture decision, security tradeoff, destructive migration, external credential, or scope change. Documentation sync recommendations remain decision-gated as described in Phase 8.
+
 ## When to Run
 
 | Trigger | Use Case |
@@ -33,7 +59,13 @@ SOURCES:
 ├── Our architecture: docs/epics/{epic-id}/architecture.md
 ├── Our ADRs: docs/epics/{epic-id}/adr.md
 ├── Acceptance criteria: docs/epics/{epic-id}/acceptance-criteria.md
+├── Acceptance traceability: docs/epics/{epic-id}/acceptance-traceability.yaml
 ├── Lint findings: docs/epics/{epic-id}/lint_findings.yaml (if exists)
+├── Audit manifest: docs/epics/{epic-id}/audit-manifest.yaml
+├── Issue ledger: docs/epics/{epic-id}/audit-issue-ledger.yaml
+├── Codex review: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
+├── Claude review: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
+├── Gemini review: docs/epics/{epic-id}/reviews/audit-NNN/gemini-3.1-pro-preview.md
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
 └── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
 
@@ -111,6 +143,76 @@ if [ -z "$EPIC_DIR" ]; then
 fi
 
 AUDIT_FILE="docs/epics/${EPIC_DIR}/epic_audit.md"
+REVIEWS_DIR="docs/epics/${EPIC_DIR}/reviews"
+mkdir -p "$REVIEWS_DIR"
+
+ATTEMPT_NUM=$(find "$REVIEWS_DIR" -maxdepth 1 -type d -name 'audit-[0-9][0-9][0-9]' 2>/dev/null | sed 's/.*audit-//' | sort -n | tail -1)
+if [ -z "$ATTEMPT_NUM" ]; then
+  ATTEMPT_NUM=1
+else
+  ATTEMPT_NUM=$((10#$ATTEMPT_NUM + 1))
+fi
+
+ATTEMPT_ID=$(printf "audit-%03d" "$ATTEMPT_NUM")
+ATTEMPT_DIR="${REVIEWS_DIR}/${ATTEMPT_ID}"
+mkdir -p "$ATTEMPT_DIR"
+
+MANIFEST_FILE="docs/epics/${EPIC_DIR}/audit-manifest.yaml"
+ISSUE_LEDGER_FILE="docs/epics/${EPIC_DIR}/audit-issue-ledger.yaml"
+CHANGED_FILES_FILE="docs/epics/${EPIC_DIR}/changed-files.txt"
+
+# Generate the changed-file manifest once, before CodeGraph sync and reviewer
+# launch. Reviewers may use this as input to read-only impact queries.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  DEFAULT_BRANCH=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+  if [ -z "$DEFAULT_BRANCH" ]; then
+    for candidate in main master trunk; do
+      if git rev-parse --verify --quiet "$candidate" >/dev/null || git rev-parse --verify --quiet "origin/$candidate" >/dev/null; then
+        DEFAULT_BRANCH="$candidate"
+        break
+      fi
+    done
+  fi
+
+  BASE_REF=""
+  if [ -n "$DEFAULT_BRANCH" ]; then
+    if git rev-parse --verify --quiet "origin/$DEFAULT_BRANCH" >/dev/null; then
+      BASE_REF=$(git merge-base HEAD "origin/$DEFAULT_BRANCH" 2>/dev/null || true)
+    elif git rev-parse --verify --quiet "$DEFAULT_BRANCH" >/dev/null; then
+      BASE_REF=$(git merge-base HEAD "$DEFAULT_BRANCH" 2>/dev/null || true)
+    fi
+  fi
+
+  {
+    if [ -n "$BASE_REF" ]; then
+      git diff --name-only "$BASE_REF"...HEAD
+    fi
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+  } | sort -u | grep -F -x -v "$CHANGED_FILES_FILE" | while IFS= read -r path; do
+    if [ -n "$path" ] && [ -e "$path" ]; then
+      printf '%s\n' "$path"
+    fi
+  done > "$CHANGED_FILES_FILE"
+else
+  : > "$CHANGED_FILES_FILE"
+fi
+
+# CodeGraph is owned by the audit orchestrator, not by external reviewers.
+# Always sync the active repo/worktree index when audit_epic starts so reviewers
+# can use query-mode commands against current code without taking write locks.
+if command -v codegraph >/dev/null 2>&1; then
+  if [ ! -d ".codegraph" ]; then
+    codegraph init .
+  fi
+  codegraph sync . || {
+    echo "CodeGraph sync failed. Continue the audit, but record CodeGraph as unavailable for reviewer query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
+  }
+  codegraph status . > "${ATTEMPT_DIR}/codegraph-status.txt" 2>&1 || true
+else
+  echo "CodeGraph CLI not found. Reviewers may still use CodeGraph MCP if available; otherwise continue without CodeGraph query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
+fi
 ```
 
 ### Step 1: Load Sources
@@ -120,6 +222,7 @@ AUDIT_FILE="docs/epics/${EPIC_DIR}/epic_audit.md"
 architecture = Read(f"docs/epics/{epic_dir}/architecture.md")
 adrs = Read(f"docs/epics/{epic_dir}/adr.md")
 acceptance_criteria = Read(f"docs/epics/{epic_dir}/acceptance-criteria.md")
+acceptance_traceability = read_yaml(f"docs/epics/{epic_dir}/acceptance-traceability.yaml")
 
 # Auto Claude spec
 ac_spec = find_auto_claude_spec(epic_id)  # grep -l epic-id in .auto-claude/specs/*/spec.md
@@ -127,6 +230,183 @@ ac_spec = find_auto_claude_spec(epic_id)  # grep -l epic-id in .auto-claude/spec
 # Implementation
 implemented_files = scan_implementation(epic_id)
 ```
+
+---
+
+## Step 2: Generate Deterministic Audit Manifest
+
+Before model review, generate `docs/epics/{epic-dir}/audit-manifest.yaml`. The manifest is the deterministic scope of the audit and must not depend on what any reviewer happens to notice.
+
+Include:
+
+- all files from every `file-plan-story-*.yaml`
+- all implementation and test files from `acceptance-traceability.yaml`
+- all files changed in git for the epic branch/worktree, generated in `docs/epics/{epic-dir}/changed-files.txt`
+- API, schema, migration, worker, queue, dashboard, and storage files touched indirectly by changed imports or routes
+- tests touching those modules
+- missing or stale file-plan paths
+- required runtime evidence commands from `acceptance-traceability.yaml`
+
+Required format:
+
+```yaml
+epic_id: {epic-id}
+attempt_id: audit-001
+generated_at: YYYY-MM-DDTHH:MM:SSZ
+changed_files_path: docs/epics/{epic-dir}/changed-files.txt
+files:
+  from_file_plans: []
+  from_traceability: []
+  changed_in_git: []
+  indirectly_touched: []
+  tests: []
+missing_paths: []
+runtime_evidence_required: []
+scripted_gates:
+  file_plan_path_validation: pending
+  acceptance_traceability_validation: pending
+  contract_parity: pending
+  schema_openapi_enum_parity: pending
+  ruff_mypy_vulture: pending
+  real_pg_queue: pending
+  live_smoke_status_matrix: pending
+```
+
+If `missing_paths` is non-empty, create a `MAJOR` finding before model review. Missing or stale file-plan paths bias reviewers and must be visible.
+
+## Step 3: Run Scripted Pre-Audit Gates
+
+Run or explicitly mark blocked for each gate in `audit-manifest.yaml` before model review:
+
+- file-plan path validation
+- acceptance traceability validation: every row has implementation files, required assertions, expected tests, and status
+- contract parity test
+- schema/OpenAPI enum parity
+- ruff, mypy, and vulture
+- real Postgres queue test when the epic touches queue/database behavior
+- live smoke status matrix when `runtime_evidence.required` is true
+
+Scripted gates produce findings before LLM review. Do not let model reviewers be the only check for machine-verifiable issues.
+
+## Step 4: Fix-Verification Audit
+
+If this is not the first audit attempt, first verify previous findings from `audit-issue-ledger.yaml`:
+
+- Did each previous `AUTO-FIX` item get fixed?
+- Did the fix include an assertion or runtime evidence proving the issue stays fixed?
+- Did the fix introduce a regression in the same call path?
+
+Only after fix verification is complete should the command run a fresh audit for latent issues.
+
+## Step 5: Gather Independent Reviewer Feedback
+
+Before producing the final audit report, run all three required reviewers. Use the prompt files installed with this command and pass the epic id, epic directory, audit scope, repository root, and changed-files path.
+
+CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph unlock`, or other write/maintenance commands. They are in query mode only. Reviewers should use CodeGraph if present: prefer CodeGraph MCP when available, otherwise use CLI query commands such as `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
+
+```bash
+REVIEWER_PROMPT_DIR=$(find ./plugins/scope/commands/audit_epic ./.claude/commands/audit_epic ./src_shared/commands/audit_epic ~/.claude/commands/audit_epic -type d 2>/dev/null | head -1)
+
+if [ -z "$REVIEWER_PROMPT_DIR" ]; then
+  echo "Audit reviewer prompts not found"
+  exit 1
+fi
+
+build_review_prompt() {
+  local reviewer_file="$1"
+  sed \
+    -e "s|{{EPIC_ID}}|${EPIC_ID}|g" \
+    -e "s|{{EPIC_DIR}}|${EPIC_DIR}|g" \
+    -e "s|{{CHANGED_FILES_PATH}}|${CHANGED_FILES_FILE}|g" \
+    -e "s|{{REPO_ROOT}}|$(pwd)|g" \
+    "${REVIEWER_PROMPT_DIR}/${reviewer_file}"
+}
+
+run_codex_review() {
+  build_review_prompt "reviewer-codex.md" | \
+    codex exec \
+      --cd "$(pwd)" \
+      --model gpt-5.5 \
+      -c model_reasoning_effort='"high"' \
+      --sandbox read-only \
+      --ask-for-approval never \
+      --output-last-message "${ATTEMPT_DIR}/codex-gpt-5.5-high.md" \
+      -
+}
+
+run_claude_review() {
+  build_review_prompt "reviewer-claude.md" | \
+    claude --print \
+      --model opus \
+      --effort high \
+      --permission-mode plan \
+      --output-format text \
+      > "${ATTEMPT_DIR}/claude-opus-4.7.md"
+}
+
+run_gemini_review() {
+  build_review_prompt "reviewer-gemini.md" | \
+    gemini \
+      --model gemini-3.1-pro-preview \
+      --approval-mode plan \
+      --skip-trust \
+      --prompt "" \
+      > "${ATTEMPT_DIR}/gemini-3.1-pro-preview.md"
+}
+
+run_codex_review || echo "Codex reviewer failed. Audit cannot pass without user-approved degraded audit." > "${ATTEMPT_DIR}/codex-unavailable.md"
+run_claude_review || echo "Claude reviewer failed. Audit cannot pass without user-approved degraded audit." > "${ATTEMPT_DIR}/claude-unavailable.md"
+run_gemini_review || echo "Gemini reviewer failed. Audit cannot pass without user-approved degraded audit." > "${ATTEMPT_DIR}/gemini-unavailable.md"
+```
+
+Claude CLI model aliases vary by installation. The required model is Claude Opus 4.7; use the local alias that maps to Opus 4.7. If `--model opus` is not Opus 4.7 in the local environment, replace it with the exact installed Opus 4.7 model id.
+
+### Reviewer Output Contract
+
+Each reviewer must return markdown using this structure:
+
+```markdown
+# External Audit Review: {reviewer} / {model}
+
+## Summary
+{brief assessment}
+
+## Findings
+
+### CRITICAL
+- **Title**:
+  **Evidence**:
+  **Impact**:
+  **Fix**:
+
+### MAJOR
+- **Title**:
+  **Evidence**:
+  **Impact**:
+  **Fix**:
+
+### MINOR
+- **Title**:
+  **Evidence**:
+  **Impact**:
+  **Fix**:
+  **Easy fix**: yes/no
+
+## Questions For Human
+- {only product, architecture, security, destructive migration, credential, or scope decisions}
+```
+
+### Merge Reviewer Findings
+
+After all reviewer outputs exist:
+
+1. Read the current attempt's `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-preview.md`.
+2. Deduplicate findings by root cause, affected file, and required fix.
+3. Preserve the highest severity assigned by any reviewer unless clearly overclassified.
+4. Add reviewer attribution to each merged finding.
+5. Include a dedicated "External Reviewer Findings" section in `epic_audit.md`.
+6. If any `*-unavailable.md` file exists in the current attempt, mark the audit `FAIL` unless the user explicitly approved a degraded audit.
+7. Update `audit-issue-ledger.yaml` with every major and critical finding.
 
 ---
 
@@ -679,6 +959,48 @@ All findings are classified by severity:
 | **MINOR** | Cosmetic or consistency issues | Naming inconsistencies, missing glossary terms, pattern deviations |
 | **ENHANCEMENT** | Improvements not in original design | Performance optimizations, additional features |
 
+### Automatic Fix Classification
+
+Classify every finding into one remediation action:
+
+| Action | Applies To | User Approval |
+|--------|------------|---------------|
+| **AUTO-FIX** | All critical findings, all major findings, and easy low-risk minor findings | Not required |
+| **ASK USER** | Product decisions, architecture decisions, security tradeoffs, destructive migrations, external credentials, or scope changes | Required |
+| **DEFERRED DOC DECISION** | Documentation sync recommendations that may launder implementation drift | Required |
+| **DO NOT FIX** | False positives with evidence | Not required, but explain in audit report |
+
+Easy minor findings include local naming consistency, small docstring/comment cleanup, obvious formatting, missing low-risk test assertions, or mechanical cleanup in files already being edited. Do not ask the user before fixing those.
+
+### Cumulative Issue Ledger
+
+Maintain `docs/epics/{epic-dir}/audit-issue-ledger.yaml` across audit attempts. Every new `CRITICAL` or `MAJOR` finding must be classified:
+
+| RCA Class | Meaning |
+|-----------|---------|
+| `introduced_by_fix` | The issue was created by a remediation change after a previous audit |
+| `missed_previous_audit` | The issue existed earlier but the audit process did not catch it |
+| `new_requirement` | The issue comes from a requirement clarified after earlier audits |
+| `false_positive` | The issue is not valid, with evidence |
+
+For `missed_previous_audit`, include why it was missed: unchecked acceptance row, unread file, no runtime evidence, stale file plan, missing scripted gate, reviewer overtrusted docs, or other concrete reason.
+
+Required ledger shape:
+
+```yaml
+epic_id: {epic-id}
+issues:
+  - id: AUD-001
+    first_seen_attempt: audit-003
+    severity: CRITICAL
+    title: "Issue title"
+    rca_class: missed_previous_audit
+    missed_reason: "Acceptance row AC4.2 had no code/test evidence in previous audit"
+    affected_files: []
+    reviewer_sources: []
+    status: open
+```
+
 ---
 
 ## Audit Report Output
@@ -691,7 +1013,9 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 # Epic Audit Report: {epic-id}
 
 **Date**: {date}
-**Auditor**: Claude Code
+**Auditor**: Scope audit command
+**Audit Attempt**: {audit-NNN}
+**External Reviewers**: Codex `gpt-5.5-high`, Claude Opus 4.7, Gemini `gemini-3.1-pro-preview`
 **Status**: {PASS / FAIL / PASS WITH CONDITIONS}
 
 ---
@@ -711,7 +1035,46 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 
 ---
 
+## Deterministic Audit Inputs
+
+| Artifact | Path | Status |
+|----------|------|--------|
+| Acceptance traceability | `docs/epics/{epic-dir}/acceptance-traceability.yaml` | {valid/invalid} |
+| Audit manifest | `docs/epics/{epic-dir}/audit-manifest.yaml` | {valid/invalid} |
+| Issue ledger | `docs/epics/{epic-dir}/audit-issue-ledger.yaml` | {updated/not updated} |
+| Attempt reviews | `docs/epics/{epic-dir}/reviews/{audit-NNN}/` | {complete/incomplete} |
+
+### Acceptance Traceability Matrix Result
+
+| Row | Requirement | Implementation Evidence | Test Evidence | Runtime Evidence | Status |
+|-----|-------------|-------------------------|---------------|------------------|--------|
+| AC1.1 | {requirement} | {file:line or missing} | {test assertion or missing} | {command/result or n/a} | {verified/blocked/fail} |
+
+Rows without implementation evidence, test evidence, or required runtime evidence are findings. Do not mark acceptance criteria passed by relying on summaries.
+
+### Scripted Gate Results
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| File-plan path validation | {pass/fail/blocked} | {path/output} |
+| Acceptance traceability validation | {pass/fail/blocked} | {path/output} |
+| Contract parity | {pass/fail/blocked} | {command/output} |
+| Schema/OpenAPI enum parity | {pass/fail/blocked} | {command/output} |
+| ruff/mypy/vulture | {pass/fail/blocked} | {command/output} |
+| Real PG queue | {pass/fail/blocked/not applicable} | {command/output} |
+| Live smoke status matrix | {pass/fail/blocked/not applicable} | {command/output} |
+
+---
+
 ## Findings
+
+### External Reviewer Findings
+
+| Reviewer | Model | Status | Findings Imported |
+|----------|-------|--------|-------------------|
+| Codex | gpt-5.5-high | {completed/unavailable} | {N} |
+| Claude | Opus 4.7 | {completed/unavailable} | {N} |
+| Gemini | gemini-3.1-pro-preview | {completed/unavailable} | {N} |
 
 ### Critical Issues (Blocking)
 
@@ -745,9 +1108,18 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 2. {Root cause 2 - e.g., Architecture ambiguous on edge case}
 3. {Root cause 3 - e.g., Implementation added feature not in design}
 
+### New Major/Critical Findings Since Previous Audit
+
+Every new major or critical finding must include:
+- `introduced_by_fix`, `missed_previous_audit`, `new_requirement`, or `false_positive`
+- reason it was not caught previously
+- audit gate or reviewer prompt change that would have caught it
+
 ---
 
 ## Fix Plan
+
+The responsible implementation agent must automatically fix all `AUTO-FIX` items. Do not ask the user before fixing critical issues, major issues, or easy low-risk minor issues.
 
 ### Priority 1: Critical Fixes (BLOCKING)
 
@@ -793,10 +1165,11 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 
 ## Recommendations
 
-1. **IMMEDIATE**: Fix Critical issues (Priority 1) before merging
-2. **SHORT-TERM**: Address Major issues (Priority 2) within 1 week
-3. **LONG-TERM**: Clean up Minor issues (Priority 3) when convenient
-4. **DOCUMENT**: Update architecture.md to include enhancements
+1. **IMMEDIATE**: Fix all Critical issues (Priority 1) before merging
+2. **IMMEDIATE**: Fix all Major issues (Priority 2) before merging
+3. **IMMEDIATE**: Fix easy low-risk Minor issues before merging
+4. **ASK USER**: Escalate only product, architecture, security, destructive migration, credential, or scope decisions
+5. **DOCUMENT**: Record deferred documentation decisions for `/wrap_epic`
 
 ---
 
@@ -804,10 +1177,10 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 
 After reviewing this audit:
 
-1. Decide which fixes to implement
-2. Run `/audit_epic {epic-id}` again after fixes to verify
-3. Once CRITICAL issues resolved, run `/sync_architecture {epic-id}`
-4. Mark epic as "audit-passed" in tracking system
+1. Implement all AUTO-FIX findings
+2. Ask the user only for findings marked ASK USER or DEFERRED DOC DECISION
+3. Run `/audit_epic {epic-id}` again after fixes to verify
+4. Mark epic as "audit-passed" only when the final audit passes
 
 ---
 
@@ -842,21 +1215,10 @@ Fix Plan Summary:
 ├── Priority 2 (Major): {N} issues, {X} hours estimated
 └── Priority 3 (Minor): {N} issues, {X} hours estimated
 
-Implement fixes now? [yes / review report first / skip]
+Proceeding with automatic remediation for all critical, major, and easy minor findings.
 ```
 
-**If user says "yes":**
-1. Start with Priority 1 (Critical) fixes
-2. Implement each fix from the plan
-3. Re-run audit to verify fixes
-4. Repeat until Critical issues resolved
-
-**If user says "review report first":**
-- Display report location
-- Wait for further instructions
-
-**If user says "skip":**
-- End command, report remains for manual review
+Do not ask whether to implement critical or major fixes. Start remediation immediately unless the fix requires a user decision as defined in Automatic Fix Classification.
 
 ---
 
@@ -868,7 +1230,7 @@ After implementing fixes:
 /audit_epic {epic-id}
 ```
 
-The audit will update the existing `epic_audit.md` with new findings, showing progress:
+The audit writes a new `reviews/audit-NNN/` directory, updates `audit-manifest.yaml`, updates `audit-issue-ledger.yaml`, and updates the existing `epic_audit.md` with new findings and progress:
 
 ```markdown
 ## Audit History
@@ -878,6 +1240,7 @@ Status: PASS ✅
 Critical: 0 (was 2)
 Major: 1 (was 4)
 Minor: 2 (was 6)
+New major/critical issues: 0
 
 ### Audit #1 - {date}
 Status: FAIL ❌
@@ -885,6 +1248,8 @@ Critical: 2
 Major: 4
 Minor: 6
 ```
+
+For large epics, require two clean consecutive audits before merge. A large epic is one with 8 or more implementation stories, more than 30 changed implementation/test files, runtime evidence requirements, or prior audits that found new major/critical issues. A clean audit means zero critical findings, zero major findings, and zero new major/critical findings in the issue ledger.
 
 ---
 

@@ -33,6 +33,7 @@ These rules are mandatory for every refined epic:
 - Required epic artifacts:
   - `details.md`
   - `acceptance-criteria.md`
+  - `acceptance-traceability.yaml`
   - `system-context.md`
   - `architecture.md`
   - `adr.md`
@@ -347,8 +348,9 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 ### Story breakdown
 
 - User stories with acceptance criteria, test requirements, dependencies
+- Initial acceptance traceability matrix mapping AC/story checks to expected implementation files, expected test files, required assertions, and runtime evidence requirements
 - Stories sequenced for incremental delivery
-- Written to tracking system + `docs/epics/{epic-dir}/acceptance-criteria.md`
+- Written to tracking system, `docs/epics/{epic-dir}/acceptance-criteria.md`, and `docs/epics/{epic-dir}/acceptance-traceability.yaml`
 
 ### Story 0 extraction (CRITICAL — do this BEFORE writing file plans)
 
@@ -477,6 +479,74 @@ modified_files:
 
 **Rule:** If a file has a `calls` section, the developer MUST verify each call matches the exact signature listed. mypy enforces this when the implementation type-hints dependencies using Protocol types from contracts.py.
 
+### CodeGraph Context (Recommended)
+
+Use CodeGraph during refinement when it is present to discover existing symbols, dependencies, callers, and related files before finalizing architecture and file plans. Prefer CodeGraph MCP when available. If MCP is unavailable or unhealthy, use the CodeGraph CLI.
+
+During refinement, CodeGraph queries should target the main repository root. CLI fallback examples:
+
+```bash
+if [ ! -d ".codegraph" ]; then
+  codegraph init .
+fi
+
+codegraph sync-if-dirty . || codegraph sync .
+codegraph status .
+
+# JSON examples for architecture and file-plan context when using the CLI
+codegraph query "ExistingServiceName" --path . --json
+codegraph context "epic behavior or integration path to inspect" --path . --format json --max-nodes 80 --max-code 20
+codegraph files --path . --json
+```
+
+Use CodeGraph output as discovery context only. Architecture decisions and file plans must still cite the actual source files, contracts, tests, and documentation that were inspected.
+
+### Acceptance Traceability Matrix
+
+Create `docs/epics/{epic-dir}/acceptance-traceability.yaml` during Phase 4, alongside the file plans. This artifact is the audit checklist. It is not proof by itself; implementation and audit must verify each row against code, tests, and runtime evidence.
+
+The initial matrix is generated from `acceptance-criteria.md`, `architecture.md`, `adr.md`, `test-strategy.md`, and `file-plan-story-*.yaml`.
+
+Required format:
+
+```yaml
+epic_id: {epic-id}
+generated_at: YYYY-MM-DD
+status: draft
+
+acceptance_items:
+  - id: AC1.1
+    story: "Story 1"
+    requirement: "Plain-language expected behavior."
+    source:
+      doc: docs/epics/{epic-dir}/acceptance-criteria.md
+      section: "Story 1"
+    implementation:
+      expected_files:
+        - src/package/module.py
+      actual_files: []
+    tests:
+      expected_files:
+        - tests/test_module.py
+      required_assertions:
+        - "Specific behavior the test must prove."
+      actual_tests: []
+    runtime_evidence:
+      required: false
+      commands: []
+      evidence: []
+    status: planned
+    audit_notes: ""
+```
+
+Rules:
+- Every acceptance criterion, story-level behavior, required edge case, and runtime/operational requirement gets a row.
+- `expected_files` come from the file plans.
+- `required_assertions` describe what must be proven, not just which test file should exist.
+- `runtime_evidence.required` is `true` for live smoke, migration, backfill, seed/bootstrap, reindex, onboarding, external sync, or other value-delivery checks.
+- Initial `actual_files`, `actual_tests`, and `runtime_evidence.evidence` remain empty until implementation.
+- `status` starts as `planned` and can later become `implemented`, `tested`, `verified`, `blocked`, or `deferred`.
+
 ### Final Validation (required before Gate #4)
 
 Before presenting the final approval checklist, run the epic documentation validator and fix every failure:
@@ -496,6 +566,7 @@ The final approval gate cannot be shown until validation passes. Validation must
 - all required epic files exist
 - `details.md` frontmatter is present and contains at least `epic_id`, `title`, and `status`
 - `adr.md` uses global ADR numbering and includes the required template fields
+- `acceptance-traceability.yaml` exists and contains `acceptance_items`
 - at least one `file-plan-story-*.yaml` exists
 
 ### Phase 4 Checklist
@@ -524,6 +595,11 @@ Phase 4: Architect - Stories, Contracts & File Plan
    All stories mapped to files: [Yes / No]
    All acceptance criteria traceable: [Yes / No]
    All cross-story calls have contracts: [Yes / No]
+
+✅ Acceptance Traceability
+   acceptance-traceability.yaml present: [Yes / No]
+   AC/story/runtime rows created: [N rows]
+   Required assertions specified: [Yes / No]
 
 ✅ Epic Artifact Validation
    Required epic files present: [Yes / No]
@@ -568,6 +644,7 @@ Epic Refinement Complete: {epic-id}
 Artifacts created:
 ├── docs/epics/{epic-dir}/
 │   ├── acceptance-criteria.md
+│   ├── acceptance-traceability.yaml
 │   ├── system-context.md
 │   ├── architecture.md
 │   ├── adr.md
