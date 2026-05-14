@@ -13,9 +13,9 @@ Audit an epic's implementation to detect divergence from original architecture, 
 
 **Output:** `docs/epics/{epic-dir}/epic_audit.md`
 
-## Required Multi-Model Review
+## Preferred Multi-Model Review
 
-Every audit must gather independent reviewer feedback before the final audit report is classified:
+Every audit should gather independent reviewer feedback before the final audit report is classified when the relevant tools are available:
 
 | Reviewer | Required model | Prompt source | Output |
 |----------|----------------|---------------|--------|
@@ -25,7 +25,7 @@ Every audit must gather independent reviewer feedback before the final audit rep
 
 These reviewers are read-only auditors. They do not edit files and do not decide what to fix. The orchestrating audit command merges their findings, removes duplicates, assigns severities, and produces the fix plan for the responsible implementation agent.
 
-If any required reviewer cannot run, record the failure in the current audit attempt directory as `{reviewer}-unavailable.md`, mark the audit as `FAIL`, and do not declare the epic audit-passed unless the user explicitly approves a degraded audit.
+Reviewer tools are optional. If Codex, Claude, Gemini, or a required model is unavailable or not configured in the user's environment, record the failure in the current audit attempt directory as `{reviewer}-unavailable.md` and continue with the reviewers that are available. Do not mark the audit as `FAIL` solely because an external reviewer tool is missing. The audit report must disclose which reviewers completed and which were unavailable.
 
 Model reviews are never overwritten. Each audit run writes to a new `reviews/audit-NNN/` directory.
 
@@ -63,9 +63,9 @@ SOURCES:
 ├── Lint findings: docs/epics/{epic-id}/lint_findings.yaml (if exists)
 ├── Audit manifest: docs/epics/{epic-id}/audit-manifest.yaml
 ├── Issue ledger: docs/epics/{epic-id}/audit-issue-ledger.yaml
-├── Codex review: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
-├── Claude review: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
-├── Gemini review: docs/epics/{epic-id}/reviews/audit-NNN/gemini-3.1-pro-preview.md
+├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
+├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
+├── Gemini review if available: docs/epics/{epic-id}/reviews/audit-NNN/gemini-3.1-pro-preview.md
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
 └── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
 
@@ -300,7 +300,9 @@ Only after fix verification is complete should the command run a fresh audit for
 
 ## Step 5: Gather Independent Reviewer Feedback
 
-Before producing the final audit report, run all three required reviewers. Use the prompt files installed with this command and pass the epic id, epic directory, audit scope, repository root, and changed-files path.
+Before producing the final audit report, try to run all three preferred reviewers. Use the prompt files installed with this command and pass the epic id, epic directory, audit scope, repository root, and changed-files path.
+
+Reviewer execution is best-effort. Missing local tools, missing credentials, unavailable models, or local CLI incompatibilities must be recorded, not treated as a blocking audit failure. The audit should still proceed with scripted gates, local inspection, and any reviewer outputs that were successfully produced.
 
 CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph unlock`, or other write/maintenance commands. They are in query mode only. Reviewers should use CodeGraph if present: prefer CodeGraph MCP when available, otherwise use CLI query commands such as `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
 
@@ -323,6 +325,11 @@ build_review_prompt() {
 }
 
 run_codex_review() {
+  if ! command -v codex >/dev/null 2>&1; then
+    echo "Codex CLI not found. Skipped Codex external review." > "${ATTEMPT_DIR}/codex-unavailable.md"
+    return 0
+  fi
+
   build_review_prompt "reviewer-codex.md" | \
     codex exec \
       --cd "$(pwd)" \
@@ -335,6 +342,11 @@ run_codex_review() {
 }
 
 run_claude_review() {
+  if ! command -v claude >/dev/null 2>&1; then
+    echo "Claude CLI not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
+    return 0
+  fi
+
   build_review_prompt "reviewer-claude.md" | \
     claude --print \
       --model opus \
@@ -345,6 +357,11 @@ run_claude_review() {
 }
 
 run_gemini_review() {
+  if ! command -v gemini >/dev/null 2>&1; then
+    echo "Gemini CLI not found. Skipped Gemini external review." > "${ATTEMPT_DIR}/gemini-unavailable.md"
+    return 0
+  fi
+
   build_review_prompt "reviewer-gemini.md" | \
     gemini \
       --model gemini-3.1-pro-preview \
@@ -354,9 +371,9 @@ run_gemini_review() {
       > "${ATTEMPT_DIR}/gemini-3.1-pro-preview.md"
 }
 
-run_codex_review || echo "Codex reviewer failed. Audit cannot pass without user-approved degraded audit." > "${ATTEMPT_DIR}/codex-unavailable.md"
-run_claude_review || echo "Claude reviewer failed. Audit cannot pass without user-approved degraded audit." > "${ATTEMPT_DIR}/claude-unavailable.md"
-run_gemini_review || echo "Gemini reviewer failed. Audit cannot pass without user-approved degraded audit." > "${ATTEMPT_DIR}/gemini-unavailable.md"
+run_codex_review || echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
+run_claude_review || echo "Claude reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/claude-unavailable.md"
+run_gemini_review || echo "Gemini reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/gemini-unavailable.md"
 ```
 
 Claude CLI model aliases vary by installation. The required model is Claude Opus 4.7; use the local alias that maps to Opus 4.7. If `--model opus` is not Opus 4.7 in the local environment, replace it with the exact installed Opus 4.7 model id.
@@ -398,14 +415,14 @@ Each reviewer must return markdown using this structure:
 
 ### Merge Reviewer Findings
 
-After all reviewer outputs exist:
+After reviewer execution finishes:
 
-1. Read the current attempt's `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-preview.md`.
+1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-preview.md`, but any of them may be absent when the local tool is unavailable.
 2. Deduplicate findings by root cause, affected file, and required fix.
 3. Preserve the highest severity assigned by any reviewer unless clearly overclassified.
 4. Add reviewer attribution to each merged finding.
 5. Include a dedicated "External Reviewer Findings" section in `epic_audit.md`.
-6. If any `*-unavailable.md` file exists in the current attempt, mark the audit `FAIL` unless the user explicitly approved a degraded audit.
+6. If any `*-unavailable.md` file exists in the current attempt, disclose it in `epic_audit.md` under reviewer coverage. Do not fail the audit solely for unavailable reviewers.
 7. Update `audit-issue-ledger.yaml` with every major and critical finding.
 
 ---
