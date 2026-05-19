@@ -21,7 +21,7 @@ Every audit should gather independent reviewer feedback before the final audit r
 |----------|----------------|---------------|--------|
 | Codex | `gpt-5.5` with high reasoning | `commands/audit_epic/reviewer-codex.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/codex-gpt-5.5-high.md` |
 | Claude | Opus 4.7 | `commands/audit_epic/reviewer-claude.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/claude-opus-4.7.md` |
-| Gemini | `gemini-3.1-pro-preview` | `commands/audit_epic/reviewer-gemini.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/gemini-3.1-pro-preview.md` |
+| Gemini | `gemini-3.1-pro-high` | `commands/audit_epic/reviewer-gemini.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/gemini-3.1-pro-high.md` |
 
 These reviewers are read-only auditors. They do not edit files and do not decide what to fix. The orchestrating audit command merges their findings, removes duplicates, assigns severities, and produces the fix plan for the responsible implementation agent.
 
@@ -67,7 +67,7 @@ SOURCES:
 ├── Issue ledger: docs/epics/{epic-id}/audit-issue-ledger.yaml
 ├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
 ├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
-├── Gemini review if available: docs/epics/{epic-id}/reviews/audit-NNN/gemini-3.1-pro-preview.md
+├── Gemini review if available: docs/epics/{epic-id}/reviews/audit-NNN/gemini-3.1-pro-high.md
 ├── Reviewer metadata: docs/epics/{epic-id}/reviews/audit-NNN/review-metadata.yaml
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
 └── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
@@ -317,16 +317,19 @@ Reviewer execution is best-effort. Missing local tools, missing credentials, una
 
 CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph unlock`, or other write/maintenance commands. They are in query mode only. Reviewers should use CodeGraph if present: prefer CodeGraph MCP when available, otherwise use CLI query commands such as `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
 
-Claude and Gemini should be run through persistent tmux sessions when available:
+Claude should be run through a persistent tmux session when available because
+Claude CLI headless mode can be restricted in some subscription environments.
+Gemini should use the direct CLI/headless invocation; do not route Gemini
+through tmux unless the direct Gemini CLI becomes unusable.
 
 - Claude session name: `scope_claude`
-- Gemini session name: `scope_gemini`
 - If the tmux session does not exist and the corresponding CLI exists, start it.
 - If a named session already exists, Scope assumes it is already running the corresponding LLM for Scope reviews.
 - When Scope starts a session for the first time, send the configured clear command before the first review request.
 - Existing sessions are reused and are not cleared, so they can retain broader epic audit context across repeated requests.
-- Requests are blocking until the reviewer sentinel appears or the timeout expires.
-- On timeout, interrupt the session, clear context, and retry once.
+- Claude requests are blocking until the reviewer sentinel appears or the timeout expires.
+- On Claude timeout, interrupt the session, clear context, and retry once.
+- Gemini runs headless with `gemini --model gemini-3.1-pro-high --approval-mode plan --skip-trust --prompt ""`.
 - Write timing/status data for every reviewer into `review-metadata.yaml`.
 
 ```bash
@@ -334,6 +337,7 @@ REVIEWER_PROMPT_DIR=$(find ./plugins/scope/commands/audit_epic ./.claude/command
 REVIEWER_TMUX_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-tmux.sh" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
+GEMINI_REVIEW_MODEL="${SCOPE_GEMINI_MODEL:-gemini-3.1-pro-high}"
 
 if [ -z "$REVIEWER_PROMPT_DIR" ]; then
   echo "Audit reviewer prompts not found"
@@ -448,30 +452,35 @@ run_claude_review() {
 
 run_gemini_review() {
   local prompt_file="${ATTEMPT_DIR}/reviewer-gemini-prompt.md"
-  local output_file="${ATTEMPT_DIR}/gemini-3.1-pro-preview.md"
+  local output_file="${ATTEMPT_DIR}/${GEMINI_REVIEW_MODEL}.md"
+  local started_epoch started_at completed_at duration_seconds
 
-  if [ -z "$REVIEWER_TMUX_SCRIPT" ]; then
-    echo "scope-reviewer-tmux.sh not found. Skipped Gemini external review." > "${ATTEMPT_DIR}/gemini-unavailable.md"
-    append_review_metadata "gemini" "gemini-3.1-pro-preview" "tmux" "scope_gemini" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/gemini-unavailable.md" "scope-reviewer-tmux.sh not found"
+  if ! command -v gemini >/dev/null 2>&1; then
+    echo "Gemini CLI not found. Skipped Gemini external review." > "${ATTEMPT_DIR}/gemini-unavailable.md"
+    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/gemini-unavailable.md" "Gemini CLI not found"
     return 0
   fi
 
   build_review_prompt_file "reviewer-gemini.md" "$prompt_file"
-  "$REVIEWER_TMUX_SCRIPT" \
-    --reviewer "gemini" \
-    --model "gemini-3.1-pro-preview" \
-    --session "scope_gemini" \
-    --llm-command "${SCOPE_GEMINI_TMUX_COMMAND:-gemini --model gemini-3.1-pro-preview}" \
-    --clear-command "${SCOPE_GEMINI_CLEAR_COMMAND:-/clear}" \
-    --prompt-file "$prompt_file" \
-    --output-file "$output_file" \
-    --metadata-file "$REVIEW_METADATA_FILE" \
-    --cwd "$(pwd)" \
-    --timeout-seconds "$REVIEW_TIMEOUT_SECONDS" \
-    --retries "$REVIEW_RETRIES" || {
-      rm -f "$output_file"
-      return 1
-    }
+  started_epoch="$(date +%s)"
+  started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  if gemini \
+      --model "$GEMINI_REVIEW_MODEL" \
+      --approval-mode plan \
+      --skip-trust \
+      --prompt "" \
+      < "$prompt_file" \
+      > "$output_file"; then
+    completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    duration_seconds="$(( $(date +%s) - started_epoch ))"
+    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" ""
+  else
+    completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    duration_seconds="$(( $(date +%s) - started_epoch ))"
+    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" "Gemini reviewer command failed"
+    rm -f "$output_file"
+    return 1
+  fi
 }
 
 run_codex_review || echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
@@ -520,7 +529,7 @@ Each reviewer must return markdown using this structure:
 
 After reviewer execution finishes:
 
-1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-preview.md`, but any of them may be absent when the local tool is unavailable.
+1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-high.md`, but any of them may be absent when the local tool is unavailable.
 2. Read `reviews/audit-NNN/review-metadata.yaml` and use it to report reviewer duration, timeout, retry count, transport, and status.
 3. Deduplicate findings by root cause, affected file, and required fix.
 4. Preserve the highest severity assigned by any reviewer unless clearly overclassified.
@@ -1136,7 +1145,7 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 **Date**: {date}
 **Auditor**: Scope audit command
 **Audit Attempt**: {audit-NNN}
-**External Reviewers**: Codex `gpt-5.5-high`, Claude Opus 4.7, Gemini `gemini-3.1-pro-preview`
+**External Reviewers**: Codex `gpt-5.5-high`, Claude Opus 4.7, Gemini `gemini-3.1-pro-high`
 **Status**: {PASS / FAIL / PASS WITH CONDITIONS}
 
 ---
@@ -1195,7 +1204,7 @@ Rows without implementation evidence, test evidence, or required runtime evidenc
 |----------|-------|-----------|---------|--------|----------|---------|-------------------|
 | Codex | gpt-5.5-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Claude | Opus 4.7 | tmux | scope_claude | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
-| Gemini | gemini-3.1-pro-preview | tmux | scope_gemini | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Gemini | gemini-3.1-pro-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 
 ### Critical Issues (Blocking)
 

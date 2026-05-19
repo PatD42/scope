@@ -357,22 +357,65 @@ Unavailable reviewer tooling is not, by itself, a refinement failure. However,
 Gate #3 must still include the three-reviewer coverage table and must clearly
 state which of Codex, Claude, and Gemini completed or were unavailable.
 
+### Phase 3.5 Autonomous Review Loop
+
+Phase 3.5 runs autonomously unless a reviewer finding requires user input.
+
+Required loop:
+
+1. Run the initial Codex, Claude, and Gemini reviews.
+2. Merge reviewer findings and classify every issue as `BLOCKING`,
+   `NON-BLOCKING`, or `QUESTION_FOR_USER`.
+3. If there are no blocking findings, create `refinement-review.md` with
+   `Approved for Gate #3`.
+4. If there are blocking findings that can be fixed from existing product,
+   architecture, and documentation context, fix them autonomously in the Phase
+   1-3 artifacts and specs.
+5. Rerun all three reviewers after each correction batch.
+6. Repeat correction batches up to `MAX_PHASE_35_CORRECTION_CYCLES=3`.
+
+Cycle counting:
+
+- The initial review does not count as a correction cycle.
+- Each "fix blockers + rerun all three reviewers" batch counts as one
+  correction cycle.
+- The default and maximum correction cycle limit is 3.
+
+Stop and ask the user only if:
+
+- a blocker requires a product, scope, policy, security, or credential decision
+- reviewers disagree on an irreversible architecture tradeoff
+- the same blocker persists after 3 correction cycles
+- the correction would materially change epic scope
+
+Do not ask the user before fixing concrete architecture/spec/doc mismatches that
+are implied by existing approved requirements and architecture direction.
+
+The final `refinement-review.md` must include review attempt directories,
+blockers found per cycle, corrections applied, final reviewer decisions, and any
+unresolved issues if the loop stopped.
+
 | Reviewer | Required model | Prompt source | Output |
 |----------|----------------|---------------|--------|
 | Codex | `gpt-5.5` with high reasoning | `commands/epic_refine/reviewer-architecture-codex.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/codex-gpt-5.5-high.md` |
 | Claude | Opus 4.7 | `commands/epic_refine/reviewer-architecture-claude.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/claude-opus-4.7.md` |
-| Gemini | `gemini-3.1-pro-preview` | `commands/epic_refine/reviewer-architecture-gemini.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/gemini-3.1-pro-preview.md` |
+| Gemini | `gemini-3.1-pro-high` | `commands/epic_refine/reviewer-architecture-gemini.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/gemini-3.1-pro-high.md` |
 
-If using tmux-backed Claude or Gemini review, use the persistent sessions
-`scope_claude` and `scope_gemini`. Start the session if it does not exist,
-clear context before each Phase 3.5 architecture review request, block until
-response or timeout, and retry once on timeout.
+Use the transport appropriate to each reviewer:
+
+- Claude uses the persistent `scope_claude` tmux session because Claude CLI
+  headless mode can be restricted in some subscription environments. Start the
+  session if it does not exist, clear context before each Phase 3.5 architecture
+  review request, block until response or timeout, and retry once on timeout.
+- Gemini uses the direct CLI/headless invocation. Do not route Gemini through
+  `scope_gemini` for Phase 3.5 unless the direct Gemini CLI becomes unusable.
 
 Reviewer execution skeleton:
 
 ```bash
 REVIEWS_DIR="docs/epics/${EPIC_DIR}/reviews"
 mkdir -p "$REVIEWS_DIR"
+MAX_PHASE_35_CORRECTION_CYCLES="${SCOPE_PHASE_35_MAX_CYCLES:-3}"
 
 REFINE_REVIEW_NUM=$(find "$REVIEWS_DIR" -maxdepth 1 -type d -name 'refine-architecture-[0-9][0-9][0-9]' 2>/dev/null | sed 's/.*refine-architecture-//' | sort -n | tail -1)
 if [ -z "$REFINE_REVIEW_NUM" ]; then
@@ -397,6 +440,7 @@ REFINE_REVIEW_PROMPT_DIR=$(find ./plugins/scope/commands/epic_refine ./.claude/c
 REVIEWER_TMUX_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-tmux.sh" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
+GEMINI_REVIEW_MODEL="${SCOPE_GEMINI_MODEL:-gemini-3.1-pro-high}"
 
 build_refine_review_prompt_file() {
   local reviewer_file="$1"
@@ -412,8 +456,9 @@ build_refine_review_prompt_file() {
 # - Codex directly when `codex` is available, otherwise codex-unavailable.md
 # - Claude through scope_claude tmux when helper + `claude` are available,
 #   passing --force-clear before the review request, otherwise claude-unavailable.md
-# - Gemini through scope_gemini tmux when helper + `gemini` are available,
-#   passing --force-clear before the review request, otherwise gemini-unavailable.md
+# - Gemini directly with:
+#     gemini --model "$GEMINI_REVIEW_MODEL" --approval-mode plan --skip-trust --prompt ""
+#   otherwise gemini-unavailable.md
 ```
 
 **Review questions:**
@@ -441,6 +486,12 @@ build_refine_review_prompt_file() {
 | Codex | {completed/unavailable/not run} | {N} |
 | Claude | {completed/unavailable/not run} | {N} |
 | Gemini | {completed/unavailable/not run} | {N} |
+
+## Review Cycle Summary
+| Cycle | Review directory | Blockers found | Corrections applied | Result |
+|-------|------------------|----------------|---------------------|--------|
+| Initial | reviews/refine-architecture-001 | {N} | n/a | {approved / corrections needed} |
+| 1 | reviews/refine-architecture-002 | {N} | {summary} | {approved / corrections needed / stopped} |
 
 ## Strategic Findings
 
@@ -471,6 +522,8 @@ Gate #3 cannot be shown if any reviewer or the orchestrator finds:
 Fix all blocking findings before Gate #3. If a blocking finding reveals product
 ambiguity, return to Phase 1 and interview the user. If it reveals architecture
 or spec ambiguity, update Phase 2/3 artifacts and rerun Phase 3.5 review.
+Apply the autonomous review loop above before asking the user, unless one of the
+explicit stop conditions applies.
 
 ### Approval Gate #3
 
