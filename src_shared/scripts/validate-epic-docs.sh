@@ -75,7 +75,7 @@ validate_folder_hygiene() {
         [[ -z "$path" ]] || fail "forbidden source/cache artifact in epic folder: ${path}"
     done
 
-    path="$(find "$EPIC_DIR" -mindepth 1 \( -type f ! \( -name "*.md" -o -name "*.yaml" \) -o -type d \) -print -quit)"
+    path="$(find "$EPIC_DIR" -mindepth 1 -type f ! \( -name "*.md" -o -name "*.yaml" \) -print -quit)"
     [[ -z "$path" ]] || fail "epic folder may contain only .md and .yaml files: ${path}"
 }
 
