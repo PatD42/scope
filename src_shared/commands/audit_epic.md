@@ -212,7 +212,8 @@ fi
 
 # CodeGraph is owned by the audit orchestrator, not by external reviewers.
 # Always sync the active repo/worktree index when audit_epic starts so reviewers
-# can use query-mode commands against current code without taking write locks.
+# can use read-only query commands against current code without taking write
+# locks. External reviewers must never run CodeGraph maintenance/write commands.
 if command -v codegraph >/dev/null 2>&1; then
   if [ ! -d ".codegraph" ]; then
     codegraph init .
@@ -222,7 +223,7 @@ if command -v codegraph >/dev/null 2>&1; then
   }
   codegraph status . > "${ATTEMPT_DIR}/codegraph-status.txt" 2>&1 || true
 else
-  echo "CodeGraph CLI not found. Reviewers may still use CodeGraph MCP if available; otherwise continue without CodeGraph query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
+  echo "CodeGraph CLI not found. Reviewers must not use CodeGraph MCP for audit reviews; continue without CodeGraph query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
 fi
 ```
 
@@ -315,7 +316,7 @@ Before producing the final audit report, try to run all three preferred reviewer
 
 Reviewer execution is best-effort. Missing local tools, missing credentials, unavailable models, or local CLI incompatibilities must be recorded, not treated as a blocking audit failure. The audit should still proceed with scripted gates, local inspection, and any reviewer outputs that were successfully produced.
 
-CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph unlock`, or other write/maintenance commands. They are in query mode only. Reviewers should use CodeGraph if present: prefer CodeGraph MCP when available, otherwise use CLI query commands such as `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
+CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph mark-dirty`, `codegraph unlock`, `codegraph index`, or other write/maintenance commands. They are in read-only query mode only. Reviewers should use CodeGraph if present through CLI read commands only: `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. Do not ask reviewers to use CodeGraph MCP for audit reviews; the stdio MCP server can hold the SQLite DB lock. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
 
 Claude should be run through a persistent tmux session when available because
 Claude CLI headless mode can be restricted in some subscription environments.
