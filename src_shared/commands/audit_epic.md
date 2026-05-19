@@ -29,6 +29,8 @@ Reviewer tools are optional. If Codex, Claude, Gemini, or a required model is un
 
 Model reviews are never overwritten. Each audit run writes to a new `reviews/audit-NNN/` directory.
 
+Each audit attempt also writes `reviews/audit-NNN/review-metadata.yaml` with reviewer transport, session, start/end timestamps, duration, timeout, retry count, status, and output file.
+
 ## Remediation Policy
 
 The responsible implementation agent must fix these findings without asking the user:
@@ -66,6 +68,7 @@ SOURCES:
 ├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
 ├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
 ├── Gemini review if available: docs/epics/{epic-id}/reviews/audit-NNN/gemini-3.1-pro-preview.md
+├── Reviewer metadata: docs/epics/{epic-id}/reviews/audit-NNN/review-metadata.yaml
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
 └── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
 
@@ -160,6 +163,14 @@ mkdir -p "$ATTEMPT_DIR"
 MANIFEST_FILE="docs/epics/${EPIC_DIR}/audit-manifest.yaml"
 ISSUE_LEDGER_FILE="docs/epics/${EPIC_DIR}/audit-issue-ledger.yaml"
 CHANGED_FILES_FILE="docs/epics/${EPIC_DIR}/changed-files.txt"
+REVIEW_METADATA_FILE="${ATTEMPT_DIR}/review-metadata.yaml"
+
+cat > "$REVIEW_METADATA_FILE" <<EOF
+epic_id: "${EPIC_ID}"
+attempt_id: "${ATTEMPT_ID}"
+created_at: "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+reviews:
+EOF
 
 # Generate the changed-file manifest once, before CodeGraph sync and reviewer
 # launch. Reviewers may use this as input to read-only impact queries.
@@ -306,69 +317,161 @@ Reviewer execution is best-effort. Missing local tools, missing credentials, una
 
 CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph unlock`, or other write/maintenance commands. They are in query mode only. Reviewers should use CodeGraph if present: prefer CodeGraph MCP when available, otherwise use CLI query commands such as `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
 
+Claude and Gemini should be run through persistent tmux sessions when available:
+
+- Claude session name: `scope_claude`
+- Gemini session name: `scope_gemini`
+- If the tmux session does not exist and the corresponding CLI exists, start it.
+- If a named session already exists, Scope assumes it is already running the corresponding LLM for Scope reviews.
+- When Scope starts a session for the first time, send the configured clear command before the first review request.
+- Existing sessions are reused and are not cleared, so they can retain broader epic audit context across repeated requests.
+- Requests are blocking until the reviewer sentinel appears or the timeout expires.
+- On timeout, interrupt the session, clear context, and retry once.
+- Write timing/status data for every reviewer into `review-metadata.yaml`.
+
 ```bash
 REVIEWER_PROMPT_DIR=$(find ./plugins/scope/commands/audit_epic ./.claude/commands/audit_epic ./src_shared/commands/audit_epic ~/.claude/commands/audit_epic -type d 2>/dev/null | head -1)
+REVIEWER_TMUX_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-tmux.sh" 2>/dev/null | head -1)
+REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
+REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
 
 if [ -z "$REVIEWER_PROMPT_DIR" ]; then
   echo "Audit reviewer prompts not found"
   exit 1
 fi
 
-build_review_prompt() {
+json_quote() {
+  python3 -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$1"
+}
+
+append_review_metadata() {
+  local reviewer="$1"
+  local model="$2"
+  local transport="$3"
+  local session="$4"
+  local status="$5"
+  local started_at="$6"
+  local completed_at="$7"
+  local duration_seconds="$8"
+  local timeout_seconds="$9"
+  local retry_count="${10}"
+  local output_file="${11}"
+  local error_message="${12:-}"
+
+  {
+    printf '  - reviewer: %s\n' "$(json_quote "$reviewer")"
+    printf '    model: %s\n' "$(json_quote "$model")"
+    printf '    transport: %s\n' "$(json_quote "$transport")"
+    printf '    session: %s\n' "$(json_quote "$session")"
+    printf '    status: %s\n' "$(json_quote "$status")"
+    printf '    started_at: %s\n' "$(json_quote "$started_at")"
+    printf '    completed_at: %s\n' "$(json_quote "$completed_at")"
+    printf '    duration_seconds: %s\n' "$duration_seconds"
+    printf '    timeout_seconds: %s\n' "$timeout_seconds"
+    printf '    retry_count: %s\n' "$retry_count"
+    printf '    output_file: %s\n' "$(json_quote "$output_file")"
+    printf '    error: %s\n' "$(json_quote "$error_message")"
+  } >> "$REVIEW_METADATA_FILE"
+}
+
+build_review_prompt_file() {
   local reviewer_file="$1"
+  local output_file="$2"
   sed \
     -e "s|{{EPIC_ID}}|${EPIC_ID}|g" \
     -e "s|{{EPIC_DIR}}|${EPIC_DIR}|g" \
     -e "s|{{CHANGED_FILES_PATH}}|${CHANGED_FILES_FILE}|g" \
     -e "s|{{REPO_ROOT}}|$(pwd)|g" \
-    "${REVIEWER_PROMPT_DIR}/${reviewer_file}"
+    "${REVIEWER_PROMPT_DIR}/${reviewer_file}" > "$output_file"
 }
 
 run_codex_review() {
+  local prompt_file="${ATTEMPT_DIR}/reviewer-codex-prompt.md"
+  local output_file="${ATTEMPT_DIR}/codex-gpt-5.5-high.md"
+  local started_epoch started_at completed_at duration_seconds
+
   if ! command -v codex >/dev/null 2>&1; then
     echo "Codex CLI not found. Skipped Codex external review." > "${ATTEMPT_DIR}/codex-unavailable.md"
+    append_review_metadata "codex" "gpt-5.5-high" "exec" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/codex-unavailable.md" "Codex CLI not found"
     return 0
   fi
 
-  build_review_prompt "reviewer-codex.md" | \
-    codex exec \
+  build_review_prompt_file "reviewer-codex.md" "$prompt_file"
+  started_epoch="$(date +%s)"
+  started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  if codex exec \
       --cd "$(pwd)" \
       --model gpt-5.5 \
       -c model_reasoning_effort='"high"' \
       --sandbox read-only \
       --ask-for-approval never \
-      --output-last-message "${ATTEMPT_DIR}/codex-gpt-5.5-high.md" \
-      -
+      --output-last-message "$output_file" \
+      - < "$prompt_file"; then
+    completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    duration_seconds="$(( $(date +%s) - started_epoch ))"
+    append_review_metadata "codex" "gpt-5.5-high" "exec" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" ""
+  else
+    completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    duration_seconds="$(( $(date +%s) - started_epoch ))"
+    append_review_metadata "codex" "gpt-5.5-high" "exec" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" "Codex reviewer command failed"
+    return 1
+  fi
 }
 
 run_claude_review() {
-  if ! command -v claude >/dev/null 2>&1; then
-    echo "Claude CLI not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
+  local prompt_file="${ATTEMPT_DIR}/reviewer-claude-prompt.md"
+  local output_file="${ATTEMPT_DIR}/claude-opus-4.7.md"
+
+  if [ -z "$REVIEWER_TMUX_SCRIPT" ]; then
+    echo "scope-reviewer-tmux.sh not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
+    append_review_metadata "claude" "Claude Opus 4.7" "tmux" "scope_claude" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "scope-reviewer-tmux.sh not found"
     return 0
   fi
 
-  build_review_prompt "reviewer-claude.md" | \
-    claude --print \
-      --model opus \
-      --effort high \
-      --permission-mode plan \
-      --output-format text \
-      > "${ATTEMPT_DIR}/claude-opus-4.7.md"
+  build_review_prompt_file "reviewer-claude.md" "$prompt_file"
+  "$REVIEWER_TMUX_SCRIPT" \
+    --reviewer "claude" \
+    --model "Claude Opus 4.7" \
+    --session "scope_claude" \
+    --llm-command "${SCOPE_CLAUDE_TMUX_COMMAND:-claude --model opus}" \
+    --clear-command "${SCOPE_CLAUDE_CLEAR_COMMAND:-/clear}" \
+    --prompt-file "$prompt_file" \
+    --output-file "$output_file" \
+    --metadata-file "$REVIEW_METADATA_FILE" \
+    --cwd "$(pwd)" \
+    --timeout-seconds "$REVIEW_TIMEOUT_SECONDS" \
+    --retries "$REVIEW_RETRIES" || {
+      rm -f "$output_file"
+      return 1
+    }
 }
 
 run_gemini_review() {
-  if ! command -v gemini >/dev/null 2>&1; then
-    echo "Gemini CLI not found. Skipped Gemini external review." > "${ATTEMPT_DIR}/gemini-unavailable.md"
+  local prompt_file="${ATTEMPT_DIR}/reviewer-gemini-prompt.md"
+  local output_file="${ATTEMPT_DIR}/gemini-3.1-pro-preview.md"
+
+  if [ -z "$REVIEWER_TMUX_SCRIPT" ]; then
+    echo "scope-reviewer-tmux.sh not found. Skipped Gemini external review." > "${ATTEMPT_DIR}/gemini-unavailable.md"
+    append_review_metadata "gemini" "gemini-3.1-pro-preview" "tmux" "scope_gemini" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/gemini-unavailable.md" "scope-reviewer-tmux.sh not found"
     return 0
   fi
 
-  build_review_prompt "reviewer-gemini.md" | \
-    gemini \
-      --model gemini-3.1-pro-preview \
-      --approval-mode plan \
-      --skip-trust \
-      --prompt "" \
-      > "${ATTEMPT_DIR}/gemini-3.1-pro-preview.md"
+  build_review_prompt_file "reviewer-gemini.md" "$prompt_file"
+  "$REVIEWER_TMUX_SCRIPT" \
+    --reviewer "gemini" \
+    --model "gemini-3.1-pro-preview" \
+    --session "scope_gemini" \
+    --llm-command "${SCOPE_GEMINI_TMUX_COMMAND:-gemini --model gemini-3.1-pro-preview}" \
+    --clear-command "${SCOPE_GEMINI_CLEAR_COMMAND:-/clear}" \
+    --prompt-file "$prompt_file" \
+    --output-file "$output_file" \
+    --metadata-file "$REVIEW_METADATA_FILE" \
+    --cwd "$(pwd)" \
+    --timeout-seconds "$REVIEW_TIMEOUT_SECONDS" \
+    --retries "$REVIEW_RETRIES" || {
+      rm -f "$output_file"
+      return 1
+    }
 }
 
 run_codex_review || echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
@@ -418,12 +521,13 @@ Each reviewer must return markdown using this structure:
 After reviewer execution finishes:
 
 1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-preview.md`, but any of them may be absent when the local tool is unavailable.
-2. Deduplicate findings by root cause, affected file, and required fix.
-3. Preserve the highest severity assigned by any reviewer unless clearly overclassified.
-4. Add reviewer attribution to each merged finding.
-5. Include a dedicated "External Reviewer Findings" section in `epic_audit.md`.
-6. If any `*-unavailable.md` file exists in the current attempt, disclose it in `epic_audit.md` under reviewer coverage. Do not fail the audit solely for unavailable reviewers.
-7. Update `audit-issue-ledger.yaml` with every major and critical finding.
+2. Read `reviews/audit-NNN/review-metadata.yaml` and use it to report reviewer duration, timeout, retry count, transport, and status.
+3. Deduplicate findings by root cause, affected file, and required fix.
+4. Preserve the highest severity assigned by any reviewer unless clearly overclassified.
+5. Add reviewer attribution to each merged finding.
+6. Include a dedicated "External Reviewer Findings" section in `epic_audit.md`.
+7. If any `*-unavailable.md` file exists in the current attempt, disclose it in `epic_audit.md` under reviewer coverage. Do not fail the audit solely for unavailable reviewers.
+8. Update `audit-issue-ledger.yaml` with every major and critical finding.
 
 ---
 
@@ -1087,11 +1191,11 @@ Rows without implementation evidence, test evidence, or required runtime evidenc
 
 ### External Reviewer Findings
 
-| Reviewer | Model | Status | Findings Imported |
-|----------|-------|--------|-------------------|
-| Codex | gpt-5.5-high | {completed/unavailable} | {N} |
-| Claude | Opus 4.7 | {completed/unavailable} | {N} |
-| Gemini | gemini-3.1-pro-preview | {completed/unavailable} | {N} |
+| Reviewer | Model | Transport | Session | Status | Duration | Retries | Findings Imported |
+|----------|-------|-----------|---------|--------|----------|---------|-------------------|
+| Codex | gpt-5.5-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Claude | Opus 4.7 | tmux | scope_claude | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Gemini | gemini-3.1-pro-preview | tmux | scope_gemini | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 
 ### Critical Issues (Blocking)
 

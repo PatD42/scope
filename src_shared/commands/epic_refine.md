@@ -68,6 +68,8 @@ Do not pass a phase if these artifact rules are not satisfied by the work comple
 ┌─────────────────────────────────────────────────────────┐
 │ Phase 3: Continue as architect (spec_generation)        │
 │ - Generate specs in docs/architecture/13-specs/          │
+│ - Phase 3.5: Review architecture/spec coherence         │
+│ - Fix strategic gaps before tactical story planning     │
 │ ──────────────────────────────────────────────────────  │
 │ → USER APPROVAL GATE #3                                 │
 └─────────────────────────────────────────────────────────┘
@@ -311,15 +313,175 @@ Phase 3: Architect - Spec Generation
    Error codes defined: [N codes]
    Taxonomy updated: [Yes / No]
 
-Ready to proceed to story breakdown? [yes / refine]
+Ready to proceed to strategic architecture review? [yes / refine]
 ```
 
+## Phase 3.5: Architecture Review (strategic)
+
+Run this review after Phase 3 deliverables are complete and before Approval Gate #3.
+This review is strategic, not tactical: it evaluates whether the business
+requirements, architecture, ADRs, test strategy, and generated specs are
+coherent enough to justify moving into story/file-plan breakdown.
+
+Do not start Phase 4 until Phase 3.5 is complete.
+
+**Goal:** prevent returning to Phase 3 after Phase 4 by catching architecture
+and spec gaps before tactical planning begins.
+
+**Inputs to review:**
+- `docs/epics/{epic-dir}/details.md`
+- `docs/epics/{epic-dir}/acceptance-criteria.md`
+- `docs/epics/{epic-dir}/system-context.md`
+- `docs/epics/{epic-dir}/architecture.md`
+- `docs/epics/{epic-dir}/adr.md`
+- `docs/epics/{epic-dir}/pdr.md`
+- `docs/epics/{epic-dir}/test-strategy.md`
+- `docs/architecture/13-specs/api/{epic-id}-*.yaml`
+- `docs/architecture/13-specs/schemas/domain/{epic-id}-*.json`
+- `docs/architecture/13-specs/errors/by-domain/{epic-id}.yaml`
+- `docs/architecture/13-specs/errors/taxonomy.yaml`
+
+**Required reviewer set:**
+
+Phase 3.5 review must be performed by all three reviewer perspectives: Codex,
+Claude, and Gemini. Do not choose only one reviewer and do not treat one
+reviewer's approval as sufficient.
+
+Each reviewer must be attempted for every Phase 3.5 review. If a local tool,
+credential, model, or CLI mode is unavailable, write an explicit
+`{reviewer}-unavailable.md` file in the current `refine-architecture-NNN`
+directory and disclose that coverage gap in `refinement-review.md`. Do not
+silently skip a reviewer.
+
+Unavailable reviewer tooling is not, by itself, a refinement failure. However,
+Gate #3 must still include the three-reviewer coverage table and must clearly
+state which of Codex, Claude, and Gemini completed or were unavailable.
+
+| Reviewer | Required model | Prompt source | Output |
+|----------|----------------|---------------|--------|
+| Codex | `gpt-5.5` with high reasoning | `commands/epic_refine/reviewer-architecture-codex.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/codex-gpt-5.5-high.md` |
+| Claude | Opus 4.7 | `commands/epic_refine/reviewer-architecture-claude.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/claude-opus-4.7.md` |
+| Gemini | `gemini-3.1-pro-preview` | `commands/epic_refine/reviewer-architecture-gemini.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/gemini-3.1-pro-preview.md` |
+
+If using tmux-backed Claude or Gemini review, use the persistent sessions
+`scope_claude` and `scope_gemini`. Start the session if it does not exist,
+clear context before each Phase 3.5 architecture review request, block until
+response or timeout, and retry once on timeout.
+
+Reviewer execution skeleton:
+
+```bash
+REVIEWS_DIR="docs/epics/${EPIC_DIR}/reviews"
+mkdir -p "$REVIEWS_DIR"
+
+REFINE_REVIEW_NUM=$(find "$REVIEWS_DIR" -maxdepth 1 -type d -name 'refine-architecture-[0-9][0-9][0-9]' 2>/dev/null | sed 's/.*refine-architecture-//' | sort -n | tail -1)
+if [ -z "$REFINE_REVIEW_NUM" ]; then
+  REFINE_REVIEW_NUM=1
+else
+  REFINE_REVIEW_NUM=$((10#$REFINE_REVIEW_NUM + 1))
+fi
+
+REFINE_REVIEW_ID=$(printf "refine-architecture-%03d" "$REFINE_REVIEW_NUM")
+REFINE_REVIEW_DIR="${REVIEWS_DIR}/${REFINE_REVIEW_ID}"
+mkdir -p "$REFINE_REVIEW_DIR"
+REFINE_REVIEW_METADATA_FILE="${REFINE_REVIEW_DIR}/review-metadata.yaml"
+
+cat > "$REFINE_REVIEW_METADATA_FILE" <<EOF
+epic_id: "${EPIC_ID}"
+review_id: "${REFINE_REVIEW_ID}"
+created_at: "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+reviews:
+EOF
+
+REFINE_REVIEW_PROMPT_DIR=$(find ./plugins/scope/commands/epic_refine ./.claude/commands/epic_refine ./src_shared/commands/epic_refine ~/.claude/commands/epic_refine -type d 2>/dev/null | head -1)
+REVIEWER_TMUX_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-tmux.sh" 2>/dev/null | head -1)
+REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
+REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
+
+build_refine_review_prompt_file() {
+  local reviewer_file="$1"
+  local output_file="$2"
+  sed \
+    -e "s|{{EPIC_ID}}|${EPIC_ID}|g" \
+    -e "s|{{EPIC_DIR}}|${EPIC_DIR}|g" \
+    -e "s|{{REPO_ROOT}}|$(pwd)|g" \
+    "${REFINE_REVIEW_PROMPT_DIR}/${reviewer_file}" > "$output_file"
+}
+
+# Attempt all three reviewers every time:
+# - Codex directly when `codex` is available, otherwise codex-unavailable.md
+# - Claude through scope_claude tmux when helper + `claude` are available,
+#   passing --force-clear before the review request, otherwise claude-unavailable.md
+# - Gemini through scope_gemini tmux when helper + `gemini` are available,
+#   passing --force-clear before the review request, otherwise gemini-unavailable.md
+```
+
+**Review questions:**
+
+- Does the architecture fully satisfy the Phase 1 business behavior and acceptance criteria?
+- Does the architecture force the Architect to make product, policy, scope, workflow, or acceptance decisions that should have been specified by the Product Owner?
+- Are component boundaries, APIs, data models, persistence, orchestration, error handling, migration strategy, and operational behavior clear enough that Phase 4 can decompose work without redesign?
+- Do generated API/schema/error specs match the architecture and ADRs?
+- Does the test strategy prove the high-risk architectural behavior, including the 90%+ story coverage floor?
+- Are ADRs and PDRs sufficient, globally numbered where required, and consistent with project documentation rules?
+- Are there missing decisions that would cause developers to invent architecture during implementation?
+
+**Required output:** create or update
+`docs/epics/{epic-dir}/refinement-review.md` with:
+
+```markdown
+# Refinement Review: {epic-id}
+
+## Summary
+{pass / changes required}
+
+## Reviewer Coverage
+| Reviewer | Status | Findings imported |
+|----------|--------|-------------------|
+| Codex | {completed/unavailable/not run} | {N} |
+| Claude | {completed/unavailable/not run} | {N} |
+| Gemini | {completed/unavailable/not run} | {N} |
+
+## Strategic Findings
+
+### BLOCKING
+- {Architecture/spec/business ambiguity that must be fixed before Gate #3}
+
+### NON-BLOCKING
+- {Useful improvements that can be handled before or during Phase 4}
+
+## Required Corrections Before Gate #3
+- {Concrete docs/specs/ADRs/PDRs/test-strategy updates}
+
+## Decision
+{Approved for Gate #3 / Not approved for Gate #3}
+```
+
+**Blocking criteria:**
+
+Gate #3 cannot be shown if any reviewer or the orchestrator finds:
+
+- unresolved business ambiguity that would require Architect or Developer product decisions
+- missing or contradictory architecture decisions
+- generated specs that do not match architecture or ADRs
+- missing API/schema/error contracts for behavior required by acceptance criteria
+- insufficient test strategy for high-risk behavior or the 90%+ story coverage floor
+- architectural gaps that would force Phase 4 to invent design while writing file plans
+
+Fix all blocking findings before Gate #3. If a blocking finding reveals product
+ambiguity, return to Phase 1 and interview the user. If it reveals architecture
+or spec ambiguity, update Phase 2/3 artifacts and rerun Phase 3.5 review.
+
 ### Approval Gate #3
+
+Before presenting this gate, confirm `docs/epics/{epic-dir}/refinement-review.md`
+exists and its decision is `Approved for Gate #3`.
 
 **If user approves**: Write summary entry and proceed to Phase 4
 
 ```bash
 echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"spec_generation","status":"success","completed_at":"'"$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\(..\)$/:\1/')"'"}' >> "$SUMMARIES_FILE"
+echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"architecture_review","status":"success","completed_at":"'"$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\(..\)$/:\1/')"'"}' >> "$SUMMARIES_FILE"
 ```
 
 **If user wants refinement**: Address concerns, update specs, re-present checklist
@@ -650,6 +812,7 @@ Artifacts created:
 │   ├── adr.md
 │   ├── pdr.md
 │   ├── test-strategy.md
+│   ├── refinement-review.md
 │   ├── file-plan-story-00.yaml   (only if scaffolding exists; may include contracts.py)
 │   ├── file-plan-story-01.yaml
 │   └── file-plan-story-NN.yaml
@@ -682,6 +845,7 @@ If session compacts mid-refinement:
    - `acceptance-criteria.md` exists → Phase 1 complete
    - `architecture.md` exists → Phase 2 complete
    - `docs/architecture/13-specs/api/{epic-id}-*` exists → Phase 3 complete
+   - `refinement-review.md` exists with `Approved for Gate #3` → Phase 3.5 complete
    - `file-plan-story-*.yaml` exists → Phase 4 complete
 3. Resume from appropriate phase
 
@@ -693,6 +857,7 @@ If session compacts mid-refinement:
 - "Phase 1/4: Product Owner - Epic Validation"
 - "Phase 2/4: Architect - System Context & Architecture"
 - "Phase 3/4: Architect - Spec Generation"
+- "Phase 3.5/4: Strategic Architecture Review"
 - "Phase 4/4: Architect - Stories, Contracts & File Plan"
 
 **Approval gates:**

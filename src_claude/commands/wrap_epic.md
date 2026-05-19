@@ -299,11 +299,48 @@ Also create individual ADR files in `docs/architecture/adr/`, `backend/adr/`, or
 
 #### 5.2: Roll Up PDRs
 
-Read `{EPIC_DOC_DIR}/pdr.md` (if exists) and update `{WORKTREE_DIR}/docs/product/decisions.md`:
+Read `{EPIC_DOC_DIR}/pdr.md` and update `{WORKTREE_DIR}/docs/product/decisions.md`.
 
-```python
-# Append product decisions with link to epic source
+This step is mandatory. `wrap_epic` is not complete until every accepted epic
+PDR has either been rolled up to product decisions or explicitly classified as
+not product-level with evidence.
+
+Required behavior:
+
+1. If `{EPIC_DOC_DIR}/pdr.md` is missing, record a wrap finding and stop for correction. Every epic must have the artifact, even if it says no product decisions were made.
+2. Parse every epic PDR heading in `{EPIC_DOC_DIR}/pdr.md`.
+3. Ignore template/example PDR entries and entries whose status is not `Accepted`, unless the epic explicitly says a proposed/deprecated decision must be visible at product level.
+4. Ensure `{WORKTREE_DIR}/docs/product/decisions.md` exists. If missing, create it from the product decisions template before appending.
+5. Append each accepted epic PDR as a product-level PDR summary using the next global `PDR-NNN` sequence in `docs/product/decisions.md`.
+6. Preserve the source epic PDR id and link back to `{EPIC_DOC_DIR}/pdr.md` so the rollup is traceable.
+7. Be idempotent: before appending, search `docs/product/decisions.md` for the source epic PDR id or exact epic PDR link. Do not duplicate an already rolled-up decision.
+8. If an epic PDR is intentionally not rolled up, add a short note in the wrap summary explaining why it is epic-local only.
+
+Recommended product-level rollup format:
+
+```markdown
+## PDR-042: {Decision Title}
+
+**Date**: YYYY-MM-DD
+**Status**: Accepted
+**Epic**: [{EPIC_ID}: {Epic Title}](../epics/{epic-dir}/details.md)
+**Source Epic PDR**: [{EPIC_PDR_ID}: {Decision Title}](../epics/{epic-dir}/pdr.md#{anchor})
+
+### Context
+{One-paragraph summary of the product question/tradeoff.}
+
+### Decision
+{Product decision summary.}
+
+### Consequences
+{Short summary of user, workflow, policy, or scope consequences.}
 ```
+
+Verification before leaving Step 5.2:
+
+- Count accepted non-template epic PDRs.
+- Count matching source epic PDR links or ids in `docs/product/decisions.md`.
+- If the counts do not match and no explicit epic-local exception exists, stop and fix the rollup before proceeding.
 
 #### 5.3: Update Architecture Docs (If Changed)
 
