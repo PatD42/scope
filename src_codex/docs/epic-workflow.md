@@ -681,6 +681,7 @@ These slash commands orchestrate the workflow:
 
 ```bash
 # Product Documentation
+/prd_create                     # Create a first-pass PRD from an interview
 /prd_refine                     # Refine product requirements document
 /prd_breakdown                  # Break PRD into implementable epics
 

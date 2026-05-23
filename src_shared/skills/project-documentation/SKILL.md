@@ -147,6 +147,13 @@ glob(f"{root}/{path}/**/*.md")
 
 ## Product Documentation
 
+### prd.md
+**Template:** `templates-product-atlassian/prd.md`
+**Content:** Starting Product Requirements Document with purpose, project posture, vision, users, problem, outcomes, scope, key features, workflows, product rules, acceptance criteria, constraints, success metrics, risks, launch plan, non-goals, and readiness checklist
+**Owner:** Product Owner
+**Readers:** Product Owner, Architect, SDET
+**Trigger:** Before PRD refinement or when starting a new product from raw intent
+
 ### strategy.md
 **Template:** `templates-product-atlassian/strategy.md`
 **Content:** Vision, target markets, customer problems, scope boundaries, competitive landscape

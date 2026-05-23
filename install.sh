@@ -90,6 +90,12 @@ mkdir -p "${CLAUDE_DIR}/commands/scripts"
 echo "  Created ${CLAUDE_DIR}/"
 echo "  Created ${CODEX_DIR}/"
 
+# Remove obsolete transports that are no longer installed from source. The
+# Claude reviewer now uses the pexpect file-output wrapper; leaving the old tmux
+# helper behind makes installed Scope trees ambiguous after upgrades.
+rm -f "${CLAUDE_DIR}/commands/scripts/scope-reviewer-tmux.sh"
+rm -f "${CODEX_DIR}/scripts/scope-reviewer-tmux.sh"
+
 echo ""
 echo -e "${YELLOW}Installing Claude Files${NC}"
 echo ""
@@ -221,8 +227,8 @@ if [[ "$INSTALL_TYPE" == "project" ]]; then
         echo ""
         echo "2. Start using SCOPE:"
     fi
-    echo "   Claude: /prd_refine, /prd_breakdown, /epic_refine {epic-id}, /implement {epic-id}"
-    echo "   Codex:  scope:prd_refine, scope:prd_breakdown, scope:epic_refine E1, scope:implement E1"
+    echo "   Claude: /prd_create, /prd_refine, /prd_breakdown, /epic_refine {epic-id}, /implement {epic-id}"
+    echo "   Codex:  scope:prd_create, scope:prd_refine, scope:prd_breakdown, scope:epic_refine E1, scope:implement E1"
     echo ""
 else
     echo -e "${YELLOW}Next Steps:${NC}"

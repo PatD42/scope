@@ -8,7 +8,7 @@
 
 SCOPE turns Claude Code into a structured product engineering environment. It gives you slash commands that take a product from PRD to implemented, tested, and audited epics — with approval gates at every step.
 
-PRD draft → /prd_refine → /prd_breakdown → /epic_refine → /implement → merge
+Idea → /prd_create → /prd_refine → /prd_breakdown → /epic_refine → /implement → merge
 
 **Already have code but no docs?** Use `/re_documentation` to reverse engineer the product and architecture documentation from your existing codebase.
 
@@ -20,6 +20,7 @@ No custom tooling. No MCP servers. Just Claude Code slash commands, agents, skil
 
 ### Forward Engineering (PRD to Code)
 
+- **`/prd_create`** — Interview the user to create a lightweight first-pass PRD before refinement
 - **`/prd_refine`** — Interactively refine a product requirements document using a checklist-driven approach
 - **`/prd_breakdown`** — Break the PRD into implementable epics with architecture and dependency analysis
 - **`/epic_refine`** — Refine each epic through 4 approval gates: business validation, architecture design, spec generation, story breakdown with executable Python contracts
@@ -77,10 +78,10 @@ The script copies commands, agents, skills, and a config template into `.claude/
 
 ## Quick Start
 
-**Starting from a PRD:**
+**Starting from an idea or a PRD:**
 
 ```
-1. Write a PRD draft (or bring an existing one)
+1. /prd_create              → Create a first-pass PRD if you do not have one
 2. /prd_refine              → Refine it interactively
 3. /prd_breakdown           → Get epics with dependencies
 4. /epic_refine EPIC-001    → Refine the first epic (4 approval gates)

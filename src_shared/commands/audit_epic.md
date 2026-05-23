@@ -318,27 +318,31 @@ Reviewer execution is best-effort. Missing local tools, missing credentials, una
 
 CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph mark-dirty`, `codegraph unlock`, `codegraph index`, or other write/maintenance commands. They are in read-only query mode only. Reviewers should use CodeGraph if present through CLI read commands only: `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. Do not ask reviewers to use CodeGraph MCP for audit reviews; the stdio MCP server can hold the SQLite DB lock. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
 
-Claude should be run through a persistent tmux session when available because
-Claude CLI headless mode can be restricted in some subscription environments.
-Gemini should use the direct CLI/headless invocation; do not route Gemini
-through tmux unless the direct Gemini CLI becomes unusable.
+Claude should be run through the `pexpect` one-shot file-output wrapper when
+available because Claude CLI headless mode can be token-only or restricted in
+some subscription environments. Do not use tmux pane scraping for Claude review
+output.
+Gemini should use the direct CLI/headless invocation.
 
-- Claude session name: `scope_claude`
-- If the tmux session does not exist and the corresponding CLI exists, start it.
-- If a named session already exists, Scope assumes it is already running the corresponding LLM for Scope reviews.
-- When Scope starts a session for the first time, send the configured clear command before the first review request.
-- Existing sessions are reused and are not cleared, so they can retain broader epic audit context across repeated requests.
-- Claude requests are blocking until the reviewer sentinel appears or the timeout expires.
-- On Claude timeout, interrupt the session, clear context, and retry once.
+- Claude receives a short one-shot instruction that points to the reviewer
+  prompt file, repository/worktree path, and required output file.
+- Claude writes the review report to `claude-opus-4.7.md` with wrapper-managed
+  sentinels; the wrapper strips the sentinels before the file is consumed.
+- Claude requests are blocking until the output file is valid or the timeout
+  expires.
+- On Claude timeout, terminate the process and retry once.
+- If `pexpect`, `python3`, `claude`, or the wrapper is unavailable, record
+  `claude-unavailable.md` and continue.
 - Gemini runs headless with `gemini --model gemini-3.1-pro-high --approval-mode plan --skip-trust --prompt ""`.
 - Write timing/status data for every reviewer into `review-metadata.yaml`.
 
 ```bash
 REVIEWER_PROMPT_DIR=$(find ./plugins/scope/commands/audit_epic ./.claude/commands/audit_epic ./src_shared/commands/audit_epic ~/.claude/commands/audit_epic -type d 2>/dev/null | head -1)
-REVIEWER_TMUX_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-tmux.sh" 2>/dev/null | head -1)
+REVIEWER_CLAUDE_PEXPECT_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-claude-pexpect.py" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
 GEMINI_REVIEW_MODEL="${SCOPE_GEMINI_MODEL:-gemini-3.1-pro-high}"
+SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
 
 if [ -z "$REVIEWER_PROMPT_DIR" ]; then
   echo "Audit reviewer prompts not found"
@@ -427,26 +431,41 @@ run_claude_review() {
   local prompt_file="${ATTEMPT_DIR}/reviewer-claude-prompt.md"
   local output_file="${ATTEMPT_DIR}/claude-opus-4.7.md"
 
-  if [ -z "$REVIEWER_TMUX_SCRIPT" ]; then
-    echo "scope-reviewer-tmux.sh not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
-    append_review_metadata "claude" "Claude Opus 4.7" "tmux" "scope_claude" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "scope-reviewer-tmux.sh not found"
+  if [ -z "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" ]; then
+    echo "scope-reviewer-claude-pexpect.py not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
+    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "scope-reviewer-claude-pexpect.py not found"
+    return 0
+  fi
+
+  if ! command -v claude >/dev/null 2>&1; then
+    echo "Claude CLI not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
+    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Claude CLI not found"
+    return 0
+  fi
+
+  if ! command -v "$SCOPE_REVIEW_PYTHON" >/dev/null 2>&1; then
+    echo "Python not found: ${SCOPE_REVIEW_PYTHON}. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
+    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Python not found: ${SCOPE_REVIEW_PYTHON}"
+    return 0
+  fi
+
+  if ! "$SCOPE_REVIEW_PYTHON" -c 'import pexpect' >/dev/null 2>&1; then
+    echo "Python pexpect module not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
+    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Python pexpect module not found"
     return 0
   fi
 
   build_review_prompt_file "reviewer-claude.md" "$prompt_file"
-  "$REVIEWER_TMUX_SCRIPT" \
+  "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
     --reviewer "claude" \
     --model "Claude Opus 4.7" \
-    --session "scope_claude" \
-    --llm-command "${SCOPE_CLAUDE_TMUX_COMMAND:-claude --model opus}" \
-    --clear-command "${SCOPE_CLAUDE_CLEAR_COMMAND:-/clear}" \
+    --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools 'Read,Glob,Grep,Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write' --no-chrome}" \
     --prompt-file "$prompt_file" \
     --output-file "$output_file" \
     --metadata-file "$REVIEW_METADATA_FILE" \
     --cwd "$(pwd)" \
     --timeout-seconds "$REVIEW_TIMEOUT_SECONDS" \
     --retries "$REVIEW_RETRIES" || {
-      rm -f "$output_file"
       return 1
     }
 }
@@ -489,7 +508,12 @@ run_claude_review || echo "Claude reviewer failed or model unavailable. Continui
 run_gemini_review || echo "Gemini reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/gemini-unavailable.md"
 ```
 
-Claude CLI model aliases vary by installation. The required model is Claude Opus 4.7; use the local alias that maps to Opus 4.7. If `--model opus` is not Opus 4.7 in the local environment, replace it with the exact installed Opus 4.7 model id.
+Claude CLI model aliases vary by installation. The required model is Claude
+Opus 4.7; use the local alias that maps to Opus 4.7. If `--model opus` is not
+Opus 4.7 in the local environment, set `SCOPE_CLAUDE_PEXPECT_COMMAND` to the
+exact installed Opus 4.7 command. The Claude wrapper requires Python with the
+`pexpect` module available; set `SCOPE_REVIEW_PYTHON` to a Python executable
+that can import `pexpect` if needed.
 
 ### Reviewer Output Contract
 
@@ -1204,7 +1228,7 @@ Rows without implementation evidence, test evidence, or required runtime evidenc
 | Reviewer | Model | Transport | Session | Status | Duration | Retries | Findings Imported |
 |----------|-------|-----------|---------|--------|----------|---------|-------------------|
 | Codex | gpt-5.5-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
-| Claude | Opus 4.7 | tmux | scope_claude | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Claude | Opus 4.7 | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Gemini | gemini-3.1-pro-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 
 ### Critical Issues (Blocking)

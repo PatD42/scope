@@ -29,6 +29,7 @@ Claude Code is the orchestrator. Commands contain the workflow logic (phases, ap
 ┌──────────────────────────────────────────────────────────────────┐
 │                         User Commands                             │
 │                                                                   │
+│   /prd_create [product]    Create first-pass PRD from interview  │
 │   /prd_refine [product]    Refine product requirements           │
 │   /prd_breakdown           Break PRD into epics                  │
 │   /epic_refine {epic-id}   Refine epic (contract-first)          │
@@ -169,7 +170,7 @@ user-project/
 The complete product development pipeline:
 
 ```
-Create PRD draft
+Create PRD draft or run /prd_create
        │
        ▼
 /prd_refine [product]          Interactive PRD refinement
@@ -206,6 +207,7 @@ Each command is a self-contained workflow definition in markdown with YAML front
 
 | Command | Description | Agents Used | Skills Used |
 |---------|-------------|-------------|-------------|
+| `/prd_create` | Lightweight interview to create a first-pass PRD | (inline) | project-documentation |
 | `/prd_refine` | Interactive PRD refinement with checklist | (inline) | project-documentation |
 | `/prd_breakdown` | Convert PRD into implementable epics | (inline) | project-documentation, project-tracking |
 | `/epic_refine` | Contract-first epic refinement, 4 gates | product-owner, architect | project-documentation |

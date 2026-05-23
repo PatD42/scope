@@ -403,10 +403,12 @@ unresolved issues if the loop stopped.
 
 Use the transport appropriate to each reviewer:
 
-- Claude uses the persistent `scope_claude` tmux session because Claude CLI
-  headless mode can be restricted in some subscription environments. Start the
-  session if it does not exist, clear context before each Phase 3.5 architecture
-  review request, block until response or timeout, and retry once on timeout.
+- Claude uses the `pexpect` one-shot file-output wrapper because Claude CLI
+  headless mode can be token-only or restricted in some subscription
+  environments. The wrapper gives Claude a short instruction with absolute
+  paths to the reviewer prompt, repository/worktree, and output file. Claude
+  writes the report file directly; the wrapper validates it with sentinels,
+  strips the sentinels, and retries once on timeout.
 - Gemini uses the direct CLI/headless invocation. Do not route Gemini through
   `scope_gemini` for Phase 3.5 unless the direct Gemini CLI becomes unusable.
 
@@ -437,10 +439,11 @@ reviews:
 EOF
 
 REFINE_REVIEW_PROMPT_DIR=$(find ./plugins/scope/commands/epic_refine ./.claude/commands/epic_refine ./src_shared/commands/epic_refine ~/.claude/commands/epic_refine -type d 2>/dev/null | head -1)
-REVIEWER_TMUX_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-tmux.sh" 2>/dev/null | head -1)
+REVIEWER_CLAUDE_PEXPECT_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-claude-pexpect.py" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
 GEMINI_REVIEW_MODEL="${SCOPE_GEMINI_MODEL:-gemini-3.1-pro-high}"
+SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
 
 build_refine_review_prompt_file() {
   local reviewer_file="$1"
@@ -454,11 +457,23 @@ build_refine_review_prompt_file() {
 
 # Attempt all three reviewers every time:
 # - Codex directly when `codex` is available, otherwise codex-unavailable.md
-# - Claude through scope_claude tmux when helper + `claude` are available,
-#   passing --force-clear before the review request, otherwise claude-unavailable.md
+# - Claude through scope-reviewer-claude-pexpect.py when helper + `claude` +
+#   Python pexpect are available, otherwise claude-unavailable.md
 # - Gemini directly with:
 #     gemini --model "$GEMINI_REVIEW_MODEL" --approval-mode plan --skip-trust --prompt ""
 #   otherwise gemini-unavailable.md
+#
+# Claude invocation shape for each refine attempt:
+#   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
+#     --reviewer "claude" \
+#     --model "Claude Opus 4.7" \
+#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools 'Read,Glob,Grep,Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Write' --no-chrome}" \
+#     --prompt-file "${REFINE_REVIEW_DIR}/reviewer-architecture-claude-prompt.md" \
+#     --output-file "${REFINE_REVIEW_DIR}/claude-opus-4.7.md" \
+#     --metadata-file "$REFINE_REVIEW_METADATA_FILE" \
+#     --cwd "$(pwd)" \
+#     --timeout-seconds "$REVIEW_TIMEOUT_SECONDS" \
+#     --retries "$REVIEW_RETRIES"
 ```
 
 **Review questions:**

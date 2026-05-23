@@ -9,8 +9,8 @@ Also support Codex (but I'm too lazy to update the picture)
 
 SCOPE turns Claude Code or OpenAI Codex into a structured product engineering environment. It gives you slash commands that take a product from PRD to implemented, tested, and audited epics — with approval gates at every step.
 
-Claude: PRD draft → /prd_refine → /prd_breakdown → /epic_refine → /implement → /wrap_epic
-Codex: PRD draft → scope:prd_refine → scope:prd_breakdown → scope:epic_refine → scope:implement → scope:wrap_epic
+Claude: idea → /prd_create → /prd_refine → /prd_breakdown → /epic_refine → /implement → /wrap_epic
+Codex: idea → scope:prd_create → scope:prd_refine → scope:prd_breakdown → scope:epic_refine → scope:implement → scope:wrap_epic
 
 **Already have code but no docs?** Use `/re_documentation` or `run scope:re_documentation` to reverse engineer the product and architecture documentation from your existing codebase.
 
@@ -24,6 +24,7 @@ No custom tooling. No MCP servers. Just commands, agents, skills, and documentat
 
 ### Forward Engineering (PRD to Code)
 
+- **`/prd_create`** — Interview the user to create a lightweight first-pass PRD before refinement
 - **`/prd_refine`** — Interactively refine a product requirements document using a checklist-driven approach
 - **`/prd_breakdown`** — Break the PRD into implementable epics with architecture and dependency analysis
 - **`/epic_refine`** — Refine each epic through 4 approval gates: business validation, architecture design, spec generation, story breakdown with executable Python contracts
@@ -89,10 +90,10 @@ The script copies commands, agents, skills, and a config template into `.claude/
 
 ## Quick Start
 
-**Starting from a PRD:**
+**Starting from an idea or a PRD:**
 
 ```
-1. Write a PRD draft (or bring an existing one)
+1. /prd_create              → Create a first-pass PRD if you do not have one
 2. /prd_refine              → Refine it interactively
 3. /prd_breakdown           → Get epics with dependencies
 4. /epic_refine EPIC-001    → Refine the first epic (4 approval gates)
