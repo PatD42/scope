@@ -18,7 +18,7 @@ Changed files manifest: `{{CHANGED_FILES_PATH}}`
 
 The audit orchestrator owns CodeGraph initialization and sync for `{{REPO_ROOT}}` when CLI CodeGraph is available. If CLI CodeGraph is available in this audit, it has already been synced before reviewer launch.
 
-Use CodeGraph if it is present, but only in read-only CLI query mode. Do not use CodeGraph MCP for audit reviews because a long-running MCP server can hold the SQLite DB lock. Use these CLI commands for read-only relationship discovery:
+Use CodeGraph if it is present, but stay in read-only query mode. Prefer read-only CodeGraph MCP when it is available and healthy because it can provide relationship context directly. If MCP is unavailable, unhealthy, or appears to hold a database lock, use these read-only CLI commands for relationship discovery:
 
 - `codegraph status {{REPO_ROOT}}`
 - `codegraph query "<symbol>" --path {{REPO_ROOT}}`
@@ -27,6 +27,7 @@ Use CodeGraph if it is present, but only in read-only CLI query mode. Do not use
 - `codegraph affected --path {{REPO_ROOT}} --stdin < {{CHANGED_FILES_PATH}}`
 
 Do not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph mark-dirty`, `codegraph unlock`, `codegraph index`, or any CodeGraph maintenance/write command. Use CodeGraph only to find relevant relationships, callers, dependencies, and affected tests. Do not treat CodeGraph output as proof; findings and pass decisions require direct source/test evidence with file and line references.
+
 
 ## Read First
 

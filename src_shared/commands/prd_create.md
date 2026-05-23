@@ -316,4 +316,3 @@ PRD draft created at docs/product/prd.md.
 Next recommended command: /prd_refine [product-name]
 Codex: run scope:prd_refine [product-name]
 ```
-
