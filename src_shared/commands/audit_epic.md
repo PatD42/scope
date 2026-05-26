@@ -211,16 +211,20 @@ else
 fi
 
 # CodeGraph is owned by the audit orchestrator, not by external reviewers.
-# Always sync the active repo/worktree index when audit_epic starts so reviewers
-# can use read-only query commands against current code without taking write
-# locks. External reviewers must never run CodeGraph maintenance/write commands.
+# Always initialize/index or sync the active repo/worktree when audit_epic
+# starts so reviewers can use read-only query commands against current code
+# without taking write locks. External reviewers must never run CodeGraph
+# maintenance/write commands.
 if command -v codegraph >/dev/null 2>&1; then
   if [ ! -d ".codegraph" ]; then
-    codegraph init .
+    codegraph init . && codegraph index . || {
+      echo "CodeGraph initial index failed. Continue the audit, but record CodeGraph as unavailable for reviewer query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
+    }
+  else
+    codegraph sync-if-dirty . || codegraph sync . || {
+      echo "CodeGraph sync failed. Continue the audit, but record CodeGraph as unavailable for reviewer query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
+    }
   fi
-  codegraph sync . || {
-    echo "CodeGraph sync failed. Continue the audit, but record CodeGraph as unavailable for reviewer query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
-  }
   codegraph status . > "${ATTEMPT_DIR}/codegraph-status.txt" 2>&1 || true
 else
   echo "CodeGraph CLI not found. Reviewers may still use read-only CodeGraph MCP if it is available and healthy; otherwise continue without CodeGraph query context." > "${ATTEMPT_DIR}/codegraph-unavailable.md"
@@ -316,7 +320,7 @@ Before producing the final audit report, try to run all three preferred reviewer
 
 Reviewer execution is best-effort. Missing local tools, missing credentials, unavailable models, or local CLI incompatibilities must be recorded, not treated as a blocking audit failure. The audit should still proceed with scripted gates, local inspection, and any reviewer outputs that were successfully produced.
 
-CodeGraph must already be initialized and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph mark-dirty`, `codegraph unlock`, `codegraph index`, or other write/maintenance commands. They are in read-only query mode only. Reviewers should use CodeGraph if present. Prefer read-only CodeGraph MCP when available and healthy because it can provide relationship context directly to the reviewer. If MCP is unavailable, unhealthy, or appears to hold a database lock, use read-only CLI commands instead: `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
+CodeGraph must already be initialized, indexed, and synced by this command before reviewers are launched when CLI CodeGraph is available. Reviewers must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph mark-dirty`, `codegraph unlock`, `codegraph index`, or other write/maintenance commands. They are in read-only query mode only. Reviewers should use CodeGraph if present. Prefer read-only CodeGraph MCP when available and healthy because it can provide relationship context directly to the reviewer. If MCP is unavailable, unhealthy, or appears to hold a database lock, use read-only CLI commands instead: `codegraph status`, `codegraph query`, `codegraph context`, `codegraph files`, and `codegraph affected`. CodeGraph helps discover relationships, but findings and pass decisions still require direct source/test evidence.
 
 Claude should be run through the `pexpect` one-shot file-output wrapper when
 available because Claude CLI headless mode can be token-only or restricted in
@@ -328,6 +332,8 @@ Gemini should use the direct CLI/headless invocation.
   prompt file, repository/worktree path, and required output file.
 - Claude writes the review report to `claude-opus-4.7.md` with wrapper-managed
   sentinels; the wrapper strips the sentinels before the file is consumed.
+- Claude's allowed tools include common read-only shell inspection commands used
+  during audits, while still excluding mutating commands.
 - Claude requests are blocking until the output file is valid or the timeout
   expires.
 - On Claude timeout, terminate the process and retry once.
@@ -343,6 +349,7 @@ REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
 GEMINI_REVIEW_MODEL="${SCOPE_GEMINI_MODEL:-gemini-3.1-pro-high}"
 SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
+CLAUDE_AUDIT_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write"
 
 if [ -z "$REVIEWER_PROMPT_DIR" ]; then
   echo "Audit reviewer prompts not found"
@@ -456,10 +463,11 @@ run_claude_review() {
   fi
 
   build_review_prompt_file "reviewer-claude.md" "$prompt_file"
+  local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools ${CLAUDE_AUDIT_ALLOWED_TOOLS} --no-chrome}"
   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
     --reviewer "claude" \
     --model "Claude Opus 4.7" \
-    --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools 'Read,Glob,Grep,Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write' --no-chrome}" \
+    --claude-command "$claude_command" \
     --prompt-file "$prompt_file" \
     --output-file "$output_file" \
     --metadata-file "$REVIEW_METADATA_FILE" \

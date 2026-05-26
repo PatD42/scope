@@ -718,9 +718,10 @@ During refinement, CodeGraph queries should target the main repository root. CLI
 ```bash
 if [ ! -d ".codegraph" ]; then
   codegraph init .
+  codegraph index .
+else
+  codegraph sync-if-dirty . || codegraph sync .
 fi
-
-codegraph sync-if-dirty . || codegraph sync .
 codegraph status .
 
 # JSON examples for architecture and file-plan context when using the CLI

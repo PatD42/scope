@@ -152,8 +152,10 @@ EOF
 # worktree's own index so CodeGraph sees in-progress code changes.
 if [ ! -d ".codegraph" ]; then
   codegraph init .
+  codegraph index .
+else
+  codegraph sync-if-dirty . || codegraph sync .
 fi
-codegraph sync-if-dirty . || codegraph sync .
 ```
 
 ### Step 0a: Environment Readiness Gate
@@ -218,15 +220,14 @@ mcp_context = ""
 # - We are now inside ./wip/{epic-id}.
 # - Use this worktree as CodeGraph projectPath.
 # - Do not query the main repo CodeGraph DB for implementation changes.
-# - If ./.codegraph is missing, initialize it before querying.
+# - If ./.codegraph is missing, initialize and index it before querying.
 # - Sync the worktree index before relying on dependency/caller/callee context.
 
 # Use CodeGraph when present. Prefer CodeGraph MCP when available. If MCP is
 # unavailable or unhealthy, use the CLI fallback from the active worktree.
 #
 # CLI fallback examples with JSON output:
-#   if [ ! -d ".codegraph" ]; then codegraph init .; fi
-#   codegraph sync-if-dirty . || codegraph sync .
+#   if [ ! -d ".codegraph" ]; then codegraph init .; codegraph index .; else codegraph sync-if-dirty . || codegraph sync .; fi
 #   codegraph query "SymbolName" --path . --json
 #   codegraph context "story behavior or call path" --path . --format json --max-nodes 80 --max-code 20
 #   codegraph files --path . --json

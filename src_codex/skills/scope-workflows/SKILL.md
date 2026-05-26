@@ -81,11 +81,11 @@ CodeGraph is scoped to the current working directory.
 - During refinement and planning, use the main repository root as the CodeGraph project path.
 - During implementation and audit, after the workflow changes into `./wip/{epic-id}`, use that worktree as the CodeGraph project path.
 - Do not query the main repo CodeGraph DB for implementation code that is being changed inside a worktree.
-- When using the CLI fallback, ensure `./.codegraph` exists. If it does not, run `codegraph init .`.
-- Scope commands that launch audits own CodeGraph initialization and sync before reviewers run. External reviewers are query-only and must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, or `codegraph unlock`.
-- Outside external reviewer mode, before relying on CLI CodeGraph context, run `codegraph sync-if-dirty .` or `codegraph sync .` from the active working directory.
+- When using the CLI fallback, ensure `./.codegraph` exists. If it does not, run `codegraph init .` followed by `codegraph index .`; `codegraph sync .` alone does not populate a brand-new index.
+- Scope commands that launch audits own CodeGraph initialization, initial index, and sync before reviewers run. External reviewers are query-only and must not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, or `codegraph unlock`.
+- Outside external reviewer mode, before relying on CLI CodeGraph context, run `codegraph index .` after first-time initialization, otherwise run `codegraph sync-if-dirty .` or `codegraph sync .` from the active working directory.
 - When CodeGraph MCP is available, use the MCP equivalent for relationship, dependency, caller/callee, or context queries before falling back to CLI commands.
-- Use `codegraph status .`, `codegraph context "task description" --path .`, `codegraph query "SymbolName" --path .`, `codegraph files --path .`, and `codegraph affected --path . <changed-files>` for dependency, symbol, and impact context.
+- Use `codegraph status .`, `codegraph context "task description" --path .`, `codegraph query "SymbolName" --path .`, `codegraph files --path .`, and `codegraph affected --path . --stdin < changed-files.txt` for dependency, symbol, and impact context.
 - After `scope:wrap_epic` merges the epic branch back to the main project root, return to the main project root and sync the root CodeGraph DB.
 
 ## Quality Bar

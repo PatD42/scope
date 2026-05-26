@@ -551,9 +551,10 @@ cd "$PROJECT_ROOT"
 
 if [ ! -d ".codegraph" ]; then
   codegraph init .
+  codegraph index .
+else
+  codegraph sync-if-dirty . || codegraph sync .
 fi
-
-codegraph sync-if-dirty . || codegraph sync .
 codegraph status .
 ```
 

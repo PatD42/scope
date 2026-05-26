@@ -16,7 +16,7 @@ Changed files manifest: `{{CHANGED_FILES_PATH}}`
 
 ## CodeGraph Query Mode
 
-The audit orchestrator owns CodeGraph initialization and sync for `{{REPO_ROOT}}` when CLI CodeGraph is available. If CLI CodeGraph is available in this audit, it has already been synced before reviewer launch.
+The audit orchestrator owns CodeGraph initialization, initial index, and sync for `{{REPO_ROOT}}` when CLI CodeGraph is available. If CLI CodeGraph is available in this audit, it has already been initialized, indexed, or synced before reviewer launch.
 
 Use CodeGraph if it is present, but stay in read-only query mode. Prefer read-only CodeGraph MCP when it is available and healthy because it can provide relationship context directly. If MCP is unavailable, unhealthy, or appears to hold a database lock, use these read-only CLI commands for relationship discovery:
 
@@ -26,7 +26,7 @@ Use CodeGraph if it is present, but stay in read-only query mode. Prefer read-on
 - `codegraph files --path {{REPO_ROOT}}`
 - `codegraph affected --path {{REPO_ROOT}} --stdin < {{CHANGED_FILES_PATH}}`
 
-Do not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph mark-dirty`, `codegraph unlock`, `codegraph index`, or any CodeGraph maintenance/write command. Use CodeGraph only to find relevant relationships, callers, dependencies, and affected tests. Do not treat CodeGraph output as proof; findings and pass decisions require direct source/test evidence with file and line references.
+Do not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codegraph mark-dirty`, `codegraph unlock`, `codegraph index`, or any CodeGraph maintenance/write command. Use CodeGraph only to find relevant relationships, callers, dependencies, and affected tests. Do not treat CodeGraph output as proof; findings and pass decisions require direct source/test evidence with file and line references. If a read-only CodeGraph command fails with `unable to open database file`, `No files indexed`, or another database/index availability error, stop using CodeGraph for this review, note it briefly under tool coverage, and continue with direct file inspection.
 
 
 ## Required Inputs
