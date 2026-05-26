@@ -16,6 +16,8 @@ Epic directory: `docs/epics/{{EPIC_DIR}}`
 
 Changed files manifest: `{{CHANGED_FILES_PATH}}`
 
+Audit verification matrix: `{{AUDIT_MATRIX_PATH}}`
+
 ## CodeGraph Query Mode
 
 The audit orchestrator owns CodeGraph initialization, initial index, and sync for `{{REPO_ROOT}}` when CLI CodeGraph is available. If CLI CodeGraph is available in this audit, it has already been initialized, indexed, or synced before reviewer launch.
@@ -54,6 +56,8 @@ Read these files before judging the code:
 
 - `docs/epics/{{EPIC_DIR}}/details.md`
 - `docs/epics/{{EPIC_DIR}}/acceptance-criteria.md`
+- `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`
+- `{{AUDIT_MATRIX_PATH}}`
 - `docs/epics/{{EPIC_DIR}}/architecture.md`
 - `docs/epics/{{EPIC_DIR}}/adr.md`
 - `docs/epics/{{EPIC_DIR}}/pdr.md`
@@ -68,13 +72,15 @@ Read these files before judging the code:
 Before writing the review, you MUST complete this inspection procedure:
 
 1. Read every `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml` file. Do not rely on glob results or file names alone.
-2. Extract every implementation path and test path named in those file plans, including `files_to_create`, `files_to_modify`, `tests`, `test_files`, and any path mentioned in intent or acceptance notes.
-3. Read each named implementation file and each named test file. Inspect test contents directly; directory listings are not enough.
-4. If any required file cannot be read, list it under `Unread Required Files` with the exact path and error.
-5. Do not report `None` for findings unless every required file was read successfully and the Required Checks Performed table has evidence for every story or acceptance area.
-6. If a test coverage claim depends on a test file, cite the test file and the behavior asserted. Do not infer robust coverage from file names, directory structure, or test counts.
-7. If a file plan names an operational deliverable such as migration, backfill, seed/bootstrap, reindex, onboarding, or external sync, inspect evidence that it was executed or explicitly blocked.
-8. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
+2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml` and `{{AUDIT_MATRIX_PATH}}`.
+3. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, and audit verification matrix.
+4. Read each named implementation file and each named test file. Inspect test contents directly; directory listings are not enough.
+5. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
+6. If any required file cannot be read, list it under `Unread Required Files` with the exact path and error.
+7. Do not report `None` for findings unless every required file was read successfully and the Required Checks Performed table has evidence for every audit matrix row.
+8. If a test coverage claim depends on a test file, cite the test file and the behavior asserted. Do not infer robust coverage from file names, directory structure, or test counts.
+9. If a file plan names an operational deliverable such as migration, backfill, seed/bootstrap, reindex, onboarding, or external sync, inspect evidence that it was executed or explicitly blocked.
+10. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
 
 ## Required Evidence Sections
 
@@ -82,7 +88,7 @@ Your final answer MUST include these sections before `Findings`:
 
 - `Files Inspected`: list every required epic artifact, file-plan file, implementation file, and test file actually read.
 - `Unread Required Files`: list every required file that could not be read, with the read error. If none, write `None`.
-- `Required Checks Performed`: a table mapping each acceptance criterion or story area to the implementation files inspected, test files inspected, and result.
+- `Required Checks Performed`: a table with one row per audit matrix row, including implementation evidence, test evidence, runtime evidence, and result.
 
 If `Unread Required Files` is not `None`, include at least one finding explaining the review gap. Do not give a clean review when required files were unread.
 
@@ -111,13 +117,15 @@ In addition to the generic audit checks, explicitly verify these recurring risk 
 - 429 and 503 handling unblocks or retries according to the design instead of permanently wedging work
 - invalid inventory API inputs return the designed 422 paths and are tested at the API boundary
 
-For each relevant targeted risk, include it in `Required Checks Performed` with the files inspected and result. If a targeted risk is not relevant, mark it `Not applicable` and cite the artifact that makes it out of scope.
+For each relevant targeted risk, include it in `Required Checks Performed` with the files inspected and result. If a targeted risk is not relevant, mark it `not_applicable` and cite the artifact that makes it out of scope.
 
 ## Severity Rules
 
-- `CRITICAL`: broken core behavior, missing acceptance criteria, data loss, security exposure, production stub/fake, contract violation, or audit-blocking test failure
-- `MAJOR`: significant design drift, missing important edge case, stale required docs, coverage below the required floor, missing operational execution, or maintainability issue likely to cause defects
-- `MINOR`: local cleanup, naming inconsistency, missing low-risk assertion, small docstring/comment issue, or mechanical polish
+- `CRITICAL`: failed matrix row for core behavior, data integrity, security, destructive side effect, production stub/fake, contract violation, or runtime-required acceptance evidence where runtime evidence is the only proof.
+- `MAJOR`: failed required/high-risk matrix row, unverified required/high-risk matrix row, significant design drift, coverage below the required floor, missing operational execution, or maintainability issue likely to cause defects.
+- `MINOR`: optional/documentation matrix row unverified, local cleanup, naming inconsistency, missing low-risk assertion, small docstring/comment issue, or mechanical polish.
+
+Do not inflate missing proof into `CRITICAL` unless the matrix row is runtime-required and runtime evidence is the only acceptance proof. Use `unverified` in the row result and explain the missing evidence.
 
 ## Human Questions
 
@@ -142,9 +150,9 @@ Return markdown only:
 - {path}: {error}
 
 ## Required Checks Performed
-| Check | Implementation Files Inspected | Test Files Inspected | Result |
-|-------|--------------------------------|----------------------|--------|
-| {acceptance criterion/story/risk} | {files} | {files} | {pass/fail/blocked/unverified/not applicable with evidence} |
+| Matrix Row ID | Requirement | Implementation Evidence | Test Evidence | Runtime Evidence | Result |
+|---------------|-------------|-------------------------|---------------|------------------|--------|
+| {row id} | {requirement} | {file:line or missing} | {test assertion or missing} | {command/evidence/n/a} | {pass/fail/blocked/unverified/not_applicable with evidence} |
 
 ## Findings
 

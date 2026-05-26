@@ -14,6 +14,8 @@ Epic directory: `docs/epics/{{EPIC_DIR}}`
 
 Changed files manifest: `{{CHANGED_FILES_PATH}}`
 
+Audit verification matrix: `{{AUDIT_MATRIX_PATH}}`
+
 ## CodeGraph Query Mode
 
 The audit orchestrator owns CodeGraph initialization, initial index, and sync for `{{REPO_ROOT}}` when CLI CodeGraph is available. If CLI CodeGraph is available in this audit, it has already been initialized, indexed, or synced before reviewer launch.
@@ -36,6 +38,7 @@ Read:
 - `docs/epics/{{EPIC_DIR}}/details.md`
 - `docs/epics/{{EPIC_DIR}}/acceptance-criteria.md`
 - `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`
+- `{{AUDIT_MATRIX_PATH}}`
 - `docs/epics/{{EPIC_DIR}}/architecture.md`
 - `docs/epics/{{EPIC_DIR}}/adr.md`
 - `docs/epics/{{EPIC_DIR}}/pdr.md`
@@ -51,14 +54,18 @@ Before writing the review, you MUST:
 
 1. Read every `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml`.
 2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`.
-3. Extract every implementation path and test path named in the file plans and traceability matrix.
-4. Read each named implementation file and each named test file.
-5. Inspect test contents directly. Directory listings, test names, or counts are not enough.
-6. If any required file cannot be read, list it under `Unread Required Files` with the error.
-7. Fill a `Required Checks Performed` table mapping each acceptance row/story/risk to inspected implementation files, inspected test files, and result.
-8. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
+3. Read `{{AUDIT_MATRIX_PATH}}`.
+4. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, and audit verification matrix.
+5. Read each named implementation file and each named test file.
+6. Inspect test contents directly. Directory listings, test names, or counts are not enough.
+7. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
+8. If any required file cannot be read, list it under `Unread Required Files` with the error.
+9. Fill a `Required Checks Performed` table with one row per audit matrix row.
+10. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
 
 Avoid narrative claims such as "appears resolved" unless backed by file/line/test evidence. Separate bugs from product decisions and future hardening.
+
+Do not inflate missing proof into `CRITICAL` unless the matrix row is runtime-required and runtime evidence is the only acceptance proof. Use `unverified` in the row result and explain the missing evidence.
 
 ## Audit Questions
 
@@ -69,6 +76,12 @@ Avoid narrative claims such as "appears resolved" unless backed by file/line/tes
 - Were required operational deliverables executed and validated?
 - Did implementation drift from docs in a way that should be fixed in code or escalated as a decision?
 - Which minor findings are easy and safe for the implementation agent to fix without user input?
+
+## Severity Rules
+
+- `CRITICAL`: failed matrix row for core behavior, data integrity, security, destructive side effect, production stub/fake, contract violation, or runtime-required acceptance evidence where runtime evidence is the only proof.
+- `MAJOR`: failed required/high-risk matrix row, unverified required/high-risk matrix row, significant design drift, coverage below the required floor, missing operational execution, or maintainability issue likely to cause defects.
+- `MINOR`: optional/documentation matrix row unverified, local cleanup, naming inconsistency, missing low-risk assertion, small docstring/comment issue, or mechanical polish.
 
 ## Output
 
@@ -87,9 +100,9 @@ Return markdown only:
 - {path}: {error}
 
 ## Required Checks Performed
-| Check | Implementation Files Inspected | Test Files Inspected | Result |
-|-------|--------------------------------|----------------------|--------|
-| {acceptance criterion/story/risk} | {files} | {files} | {pass/fail/blocked/unverified/not applicable with evidence} |
+| Matrix Row ID | Requirement | Implementation Evidence | Test Evidence | Runtime Evidence | Result |
+|---------------|-------------|-------------------------|---------------|------------------|--------|
+| {row id} | {requirement} | {file:line or missing} | {test assertion or missing} | {command/evidence/n/a} | {pass/fail/blocked/unverified/not_applicable with evidence} |
 
 ## Findings
 

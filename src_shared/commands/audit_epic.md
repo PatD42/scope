@@ -64,6 +64,7 @@ SOURCES:
 ├── Acceptance traceability: docs/epics/{epic-id}/acceptance-traceability.yaml
 ├── Lint findings: docs/epics/{epic-id}/lint_findings.yaml (if exists)
 ├── Audit manifest: docs/epics/{epic-id}/audit-manifest.yaml
+├── Audit verification matrix: docs/epics/{epic-id}/audit-verification-matrix.yaml
 ├── Issue ledger: docs/epics/{epic-id}/audit-issue-ledger.yaml
 ├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
 ├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
@@ -161,6 +162,7 @@ ATTEMPT_DIR="${REVIEWS_DIR}/${ATTEMPT_ID}"
 mkdir -p "$ATTEMPT_DIR"
 
 MANIFEST_FILE="docs/epics/${EPIC_DIR}/audit-manifest.yaml"
+VERIFICATION_MATRIX_FILE="docs/epics/${EPIC_DIR}/audit-verification-matrix.yaml"
 ISSUE_LEDGER_FILE="docs/epics/${EPIC_DIR}/audit-issue-ledger.yaml"
 CHANGED_FILES_FILE="docs/epics/${EPIC_DIR}/changed-files.txt"
 REVIEW_METADATA_FILE="${ATTEMPT_DIR}/review-metadata.yaml"
@@ -290,7 +292,101 @@ scripted_gates:
 
 If `missing_paths` is non-empty, create a `MAJOR` finding before model review. Missing or stale file-plan paths bias reviewers and must be visible.
 
-## Step 3: Run Scripted Pre-Audit Gates
+## Step 3: Generate Audit Verification Matrix
+
+Before model review, generate `docs/epics/{epic-dir}/audit-verification-matrix.yaml` from `acceptance-traceability.yaml`, `audit-manifest.yaml`, file plans, changed files, previous issue ledger rows, and known recurring risk dimensions.
+
+This matrix is the primary audit contract. The audit is no longer a broad "find what you notice" review. Every required row must be evaluated as `pass`, `fail`, `unverified`, `blocked`, or `not_applicable`.
+
+Required matrix shape:
+
+```yaml
+epic_id: {epic-id}
+attempt_id: audit-001
+generated_at: YYYY-MM-DDTHH:MM:SSZ
+source_traceability: docs/epics/{epic-dir}/acceptance-traceability.yaml
+source_manifest: docs/epics/{epic-dir}/audit-manifest.yaml
+rows:
+  - id: AC2.2-P10-REPROCESS-SERVICE
+    source_acceptance_id: AC2.2
+    story: "Story 6"
+    category: behavior
+    requirement: "Service focused pass 10 in reprocess mode requires current pass 9 before projection."
+    priority: required
+    risk_level: high
+    dimensions:
+      execution_surface: service
+      pass_mode: reprocess
+      pass_number: 10
+      prior_state: missing_or_stale_dependency
+    implementation:
+      expected_files: []
+      actual_files: []
+    tests:
+      expected_files: []
+      required_assertions: []
+      actual_tests: []
+    runtime_evidence:
+      required: false
+      commands: []
+      evidence: []
+    reviewer_status:
+      codex: pending
+      claude: pending
+      gemini: pending
+    final_status: pending
+    audit_notes: ""
+```
+
+Required row fields:
+
+- `id`: stable, unique row id. Use acceptance ids plus risk dimensions, not vague prose names.
+- `requirement`: one concrete behavior or evidence obligation.
+- `priority`: `required`, `runtime_required`, `high_risk`, `optional`, or `documentation`.
+- `risk_level`: `critical`, `high`, `medium`, or `low`.
+- `implementation.expected_files` and `tests.expected_files`: copied from traceability and file plans.
+- `tests.required_assertions`: behavior that must be proven, not just test file names.
+- `runtime_evidence.required`: true for smoke, migration, backfill, queue, service, or external integration requirements.
+- `dimensions`: include relevant mode/state dimensions for orchestration-heavy epics.
+
+For high-risk orchestration, queue, migration, storage, security, data integrity, or local/service parity work, expand broad acceptance items into matrix rows that cover the relevant state space. Examples:
+
+- `execution_surface`: `service`, `local`, `worker`, `api`, `dashboard`
+- `mode`: `idempotency`, `reprocess`, `only-pass`, `retry`, `resume`
+- `prior_state`: `missing`, `stale`, `current`, `partial`, `duplicate`
+- `data_shape`: `empty`, `single`, `multi`, `invalid`, `large`
+- `failure_path`: `timeout`, `429`, `503`, `validation_error`, `permission_denied`
+
+Do not let the matrix explode mechanically. Generate rows only for dimensions that are relevant to the epic, named in the acceptance criteria, implied by the architecture/ADRs, or historically risky in the touched code path.
+
+### Matrix Status and Severity Rules
+
+Use deterministic severity mapping:
+
+| Matrix result | Row priority/risk | Finding severity |
+|---------------|-------------------|------------------|
+| `fail` | `runtime_required`, `required` with core behavior, data integrity, security, or destructive side effect | `CRITICAL` |
+| `fail` | `required`, `high_risk` implementation/test coverage, architecture contract, or operational evidence | `MAJOR` |
+| `unverified` | `runtime_required` or `required` row | `MAJOR` unless runtime evidence is the only acceptance proof, then `CRITICAL` |
+| `unverified` | `high_risk` row | `MAJOR` |
+| `unverified` | `optional` or `documentation` row | `MINOR` or documentation follow-up |
+| `blocked` | needs user/product/security/credential/destructive migration decision | `ASK USER` |
+| `not_applicable` | cited evidence shows the row is out of scope | no finding |
+
+Missing proof is not automatically the same as a broken behavior. Label it `unverified` and map severity by row priority. Do not classify unverified optional/documentation rows as `CRITICAL`.
+
+### Follow-Up Audit Scope
+
+On audit attempts after the first one, prioritize:
+
+- all previously failed, blocked, or unverified matrix rows
+- sibling rows with the same risk pattern or dimensions
+- rows touched by the remediation diff
+- required runtime evidence rows
+
+Run a bounded fresh scan for new high-impact issues, but do not let follow-up audits repeatedly rediscover unrelated low-priority risks before failed matrix rows are resolved.
+
+## Step 4: Run Scripted Pre-Audit Gates
 
 Run or explicitly mark blocked for each gate in `audit-manifest.yaml` before model review:
 
@@ -304,7 +400,15 @@ Run or explicitly mark blocked for each gate in `audit-manifest.yaml` before mod
 
 Scripted gates produce findings before LLM review. Do not let model reviewers be the only check for machine-verifiable issues.
 
-## Step 4: Fix-Verification Audit
+Also validate `audit-verification-matrix.yaml` before model review:
+
+- every `required`, `runtime_required`, and `high_risk` row has implementation files or an explicit reason why implementation is not applicable
+- every `required`, `runtime_required`, and `high_risk` row has expected test files and required assertions, unless it is explicitly runtime-only
+- every runtime-required row has a command and evidence field
+- every row id is stable and unique
+- every expected file path exists or is listed as a manifest missing path
+
+## Step 5: Fix-Verification Audit
 
 If this is not the first audit attempt, first verify previous findings from `audit-issue-ledger.yaml`:
 
@@ -314,9 +418,9 @@ If this is not the first audit attempt, first verify previous findings from `aud
 
 Only after fix verification is complete should the command run a fresh audit for latent issues.
 
-## Step 5: Gather Independent Reviewer Feedback
+## Step 6: Gather Independent Reviewer Feedback
 
-Before producing the final audit report, try to run all three preferred reviewers. Use the prompt files installed with this command and pass the epic id, epic directory, audit scope, repository root, and changed-files path.
+Before producing the final audit report, try to run all three preferred reviewers. Use the prompt files installed with this command and pass the epic id, epic directory, audit scope, repository root, changed-files path, and audit verification matrix path.
 
 Reviewer execution is best-effort. Missing local tools, missing credentials, unavailable models, or local CLI incompatibilities must be recorded, not treated as a blocking audit failure. The audit should still proceed with scripted gates, local inspection, and any reviewer outputs that were successfully produced.
 
@@ -397,6 +501,7 @@ build_review_prompt_file() {
     -e "s|{{EPIC_ID}}|${EPIC_ID}|g" \
     -e "s|{{EPIC_DIR}}|${EPIC_DIR}|g" \
     -e "s|{{CHANGED_FILES_PATH}}|${CHANGED_FILES_FILE}|g" \
+    -e "s|{{AUDIT_MATRIX_PATH}}|${VERIFICATION_MATRIX_FILE}|g" \
     -e "s|{{REPO_ROOT}}|$(pwd)|g" \
     "${REVIEWER_PROMPT_DIR}/${reviewer_file}" > "$output_file"
 }
@@ -533,6 +638,17 @@ Each reviewer must return markdown using this structure:
 ## Summary
 {brief assessment}
 
+## Files Inspected
+- {path}
+
+## Unread Required Files
+- {path}: {error}
+
+## Required Checks Performed
+| Matrix Row ID | Requirement | Implementation Evidence | Test Evidence | Runtime Evidence | Result |
+|---------------|-------------|-------------------------|---------------|------------------|--------|
+| {row id} | {requirement} | {file:line or missing} | {test assertion or missing} | {command/evidence/n/a} | {pass/fail/blocked/unverified/not_applicable with evidence} |
+
 ## Findings
 
 ### CRITICAL
@@ -558,18 +674,69 @@ Each reviewer must return markdown using this structure:
 - {only product, architecture, security, destructive migration, credential, or scope decisions}
 ```
 
-### Merge Reviewer Findings
+## Step 7: Same-Agent Exploratory Residual Review
+
+After the traceability/matrix-driven review is complete, the orchestrating agent running this command performs a bounded exploratory residual review:
+
+- If `/audit_epic` is running in Codex, Codex performs this residual review locally.
+- If `/audit_epic` is running in Claude, Claude performs this residual review locally.
+- Do not launch another external model for this step.
+- Do not repeat the full matrix audit.
+- Spend the review budget on undocumented high-impact risks that a traceability matrix is likely to miss.
+
+Write the result to `docs/epics/{epic-dir}/reviews/{audit-NNN}/exploratory-residual-review.md`.
+
+Residual review focus:
+
+- undocumented negative-space behavior: things the implementation must not do but the ACs did not say explicitly
+- emergent interactions between changed modules and adjacent unchanged modules
+- operational/concurrency/lock/timeout/retry risks not covered by the matrix
+- security, privacy, auth, secret handling, and unsafe logging risks
+- data-loss, duplicate-write, stale-state, or rollback risks outside named AC rows
+- bad or incomplete requirements that the matrix would verify too narrowly
+
+Residual review output:
+
+```markdown
+# Exploratory Residual Review
+
+## Scope
+{brief statement of what was intentionally inspected outside the matrix}
+
+## Findings
+
+### CRITICAL
+...
+
+### MAJOR
+...
+
+### MINOR
+...
+
+## No-Finding Rationale
+{if clean, explain which high-risk areas were sampled and why no issue was found}
+```
+
+Residual findings must still be evidence-backed. Do not use the residual review to relabel matrix `unverified` rows as bugs without proof.
+
+## Step 8: Merge Reviewer Findings
 
 After reviewer execution finishes:
 
 1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-high.md`, but any of them may be absent when the local tool is unavailable.
 2. Read `reviews/audit-NNN/review-metadata.yaml` and use it to report reviewer duration, timeout, retry count, transport, and status.
-3. Deduplicate findings by root cause, affected file, and required fix.
-4. Preserve the highest severity assigned by any reviewer unless clearly overclassified.
-5. Add reviewer attribution to each merged finding.
-6. Include a dedicated "External Reviewer Findings" section in `epic_audit.md`.
-7. If any `*-unavailable.md` file exists in the current attempt, disclose it in `epic_audit.md` under reviewer coverage. Do not fail the audit solely for unavailable reviewers.
-8. Update `audit-issue-ledger.yaml` with every major and critical finding.
+3. Read `reviews/audit-NNN/exploratory-residual-review.md` if it exists.
+4. Merge reviewer row statuses into `audit-verification-matrix.yaml` under `reviewer_status`.
+5. Assign `final_status` for every matrix row using source/test/runtime evidence and reviewer consensus.
+6. Convert failed or unverified matrix rows into findings using the deterministic severity table.
+7. Deduplicate findings by matrix row id, root cause, affected file, and required fix.
+8. Preserve the highest severity assigned by any reviewer only when it matches the deterministic severity table or the reviewer provides concrete evidence that raises impact.
+9. Add reviewer attribution to each merged finding.
+10. Include a dedicated "External Reviewer Findings" section in `epic_audit.md`.
+11. Include a dedicated "Exploratory Residual Review" section in `epic_audit.md`.
+12. If any `*-unavailable.md` file exists in the current attempt, disclose it in `epic_audit.md` under reviewer coverage. Do not fail the audit solely for unavailable reviewers.
+13. Update `audit-issue-ledger.yaml` with every major and critical finding.
 
 ---
 
@@ -1116,10 +1283,10 @@ All findings are classified by severity:
 
 | Severity | Definition | Examples |
 |----------|------------|----------|
-| **CRITICAL** | Breaks core functionality or violates key ADR | Missing acceptance criteria, ADR violations causing data loss, stubs in production code |
-| **MAJOR** | Significant deviation from design, or stale documentation | Partial ADR implementation, missing edge case handling, any story below 90% coverage without an approved exception, backend/data.md missing or stale, backend/services.md missing or stale, building-blocks.md not updated |
+| **CRITICAL** | Failed required/runtime matrix row that breaks core behavior, risks data loss/security, violates a hard contract, or leaves required runtime evidence as the only proof and absent | Core acceptance behavior broken, destructive side effect, security exposure, production stub/fake, runtime-required smoke absent when no other proof exists |
+| **MAJOR** | Failed or unverified required/high-risk matrix row, significant design drift, or stale documentation | Partial ADR implementation, missing important edge case, required row lacks test evidence, any story below 90% coverage without an approved exception, backend/data.md missing or stale |
 | **MEDIUM** | Documentation or tracking gaps | ADRs/PDRs not rolled up, context diagram outdated, missing external dependencies in docs |
-| **MINOR** | Cosmetic or consistency issues | Naming inconsistencies, missing glossary terms, pattern deviations |
+| **MINOR** | Optional/documentation row unverified, cosmetic issue, or low-risk consistency issue | Naming inconsistencies, missing glossary terms, small pattern deviations |
 | **ENHANCEMENT** | Improvements not in original design | Performance optimizations, additional features |
 
 ### Automatic Fix Classification
@@ -1204,6 +1371,7 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 |----------|------|--------|
 | Acceptance traceability | `docs/epics/{epic-dir}/acceptance-traceability.yaml` | {valid/invalid} |
 | Audit manifest | `docs/epics/{epic-dir}/audit-manifest.yaml` | {valid/invalid} |
+| Audit verification matrix | `docs/epics/{epic-dir}/audit-verification-matrix.yaml` | {valid/invalid} |
 | Issue ledger | `docs/epics/{epic-dir}/audit-issue-ledger.yaml` | {updated/not updated} |
 | Attempt reviews | `docs/epics/{epic-dir}/reviews/{audit-NNN}/` | {complete/incomplete} |
 
@@ -1214,6 +1382,14 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 | AC1.1 | {requirement} | {file:line or missing} | {test assertion or missing} | {command/result or n/a} | {verified/blocked/fail} |
 
 Rows without implementation evidence, test evidence, or required runtime evidence are findings. Do not mark acceptance criteria passed by relying on summaries.
+
+### Verification Matrix Result
+
+| Row ID | Priority | Risk | Final Status | Reviewer Status | Finding |
+|--------|----------|------|--------------|-----------------|---------|
+| AC2.2-P10-REPROCESS-SERVICE | required | high | {pass/fail/unverified/blocked/not_applicable} | Codex: {status}; Claude: {status}; Gemini: {status} | {none/finding id} |
+
+Rows marked `fail`, required rows marked `unverified`, and blocked rows must appear in the finding list or human-question list. Rows marked `pass` require cited implementation, test, or runtime evidence.
 
 ### Scripted Gate Results
 
@@ -1238,6 +1414,12 @@ Rows without implementation evidence, test evidence, or required runtime evidenc
 | Codex | gpt-5.5-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Claude | Opus 4.7 | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Gemini | gemini-3.1-pro-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+
+### Exploratory Residual Review
+
+| Reviewer | Output | Critical | Major | Minor |
+|----------|--------|----------|-------|-------|
+| {Codex or Claude orchestrator} | `reviews/{audit-NNN}/exploratory-residual-review.md` | {N} | {N} | {N} |
 
 ### Critical Issues (Blocking)
 
@@ -1393,7 +1575,7 @@ After implementing fixes:
 /audit_epic {epic-id}
 ```
 
-The audit writes a new `reviews/audit-NNN/` directory, updates `audit-manifest.yaml`, updates `audit-issue-ledger.yaml`, and updates the existing `epic_audit.md` with new findings and progress:
+The audit writes a new `reviews/audit-NNN/` directory, updates `audit-manifest.yaml`, updates `audit-verification-matrix.yaml`, updates `audit-issue-ledger.yaml`, writes `exploratory-residual-review.md`, and updates the existing `epic_audit.md` with new findings and progress:
 
 ```markdown
 ## Audit History
