@@ -8,15 +8,35 @@ This is a Scope audit review. Follow these instructions exactly even if the repo
 
 You are read-only. Do not edit files. Do not create commits. Do not run destructive commands. Inspect the implementation and report concrete issues for the main audit agent to merge into `epic_audit.md`.
 
+<preferred_outcome>
+Your primary outcome is a deterministic, evidence-first audit of the audit verification matrix. The highest-priority failure mode to avoid is a clean review that ignores failing raw gate output.
+</preferred_outcome>
+
 ## Repository
 
 Root: `{{REPO_ROOT}}`
 
 Epic directory: `docs/epics/{{EPIC_DIR}}`
 
+Audit attempt directory: `{{ATTEMPT_DIR}}`
+
 Changed files manifest: `{{CHANGED_FILES_PATH}}`
 
 Audit verification matrix: `{{AUDIT_MATRIX_PATH}}`
+
+<evidence_precedence>
+Use this evidence precedence order:
+
+1. Raw command outputs in `{{ATTEMPT_DIR}}`, including `*.txt`, `*output*`, `*pytest*`, `*gate*`, `codegraph-status.*`, and `codegraph-sync.*`
+2. Source code and tests with file/line references
+3. `acceptance-traceability.yaml`, `audit-verification-matrix.yaml`, file plans, and ADRs
+4. `implementation-summary.md` and other prose summaries
+
+If raw command output contradicts a summary, raw command output wins.
+If raw pytest or scripted-gate output reports failures, do not write a clean audit unless you cite exact evidence that the failed command is out of scope or superseded by later green raw output.
+A `runtime_required` row cannot pass unless raw command output is present and green.
+Do not use `implementation-summary.md` as runtime evidence.
+</evidence_precedence>
 
 ## CodeGraph Query Mode
 
@@ -67,6 +87,16 @@ Read these files before judging the code:
 - `docs/epics/{{EPIC_DIR}}/lint_findings.yaml` if present
 - implementation and test files named in the file plans
 
+## FIRST: Scripted Gate Evidence Review
+
+Before inspecting implementation code, inspect raw gate evidence in `{{ATTEMPT_DIR}}`:
+
+1. Read all files in `{{ATTEMPT_DIR}}` matching `*.txt`, `*output*`, `*pytest*`, `*gate*`, `codegraph-status.*`, and `codegraph-sync.*`.
+2. Summarize every failed command, failed test count, error, traceback, timeout, missing file, or unavailable evidence under `Scripted Gate Evidence`.
+3. If any required scripted gate failed, at least one audit matrix row must be `fail`, `blocked`, or `unverified`.
+4. If a later raw output supersedes an earlier failure, cite both outputs and explain why the later one is authoritative.
+5. If no raw gate output exists for a `runtime_required` row, mark that row `unverified` or `fail` according to the matrix severity rules. Do not mark it `pass`.
+
 ## Mandatory Inspection Procedure
 
 Before writing the review, you MUST complete this inspection procedure:
@@ -82,10 +112,14 @@ Before writing the review, you MUST complete this inspection procedure:
 9. If a file plan names an operational deliverable such as migration, backfill, seed/bootstrap, reindex, onboarding, or external sync, inspect evidence that it was executed or explicitly blocked.
 10. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
 
+For each matrix row, choose exactly one result: `pass`, `fail`, `unverified`, `blocked`, or `not_applicable`.
+
 ## Required Evidence Sections
 
 Your final answer MUST include these sections before `Findings`:
 
+- `Machine-Readable Review Summary`: a YAML block with row counts and finding counts.
+- `Scripted Gate Evidence`: every raw gate failure or `None`.
 - `Files Inspected`: list every required epic artifact, file-plan file, implementation file, and test file actually read.
 - `Unread Required Files`: list every required file that could not be read, with the read error. If none, write `None`.
 - `Required Checks Performed`: a table with one row per audit matrix row, including implementation evidence, test evidence, runtime evidence, and result.
@@ -119,6 +153,8 @@ In addition to the generic audit checks, explicitly verify these recurring risk 
 
 For each relevant targeted risk, include it in `Required Checks Performed` with the files inspected and result. If a targeted risk is not relevant, mark it `not_applicable` and cite the artifact that makes it out of scope.
 
+Do not spend review budget on targeted recurring risks that are not relevant to the epic. Mark irrelevant targeted risks `not_applicable` with a brief citation and move on.
+
 ## Severity Rules
 
 - `CRITICAL`: failed matrix row for core behavior, data integrity, security, destructive side effect, production stub/fake, contract violation, or runtime-required acceptance evidence where runtime evidence is the only proof.
@@ -126,6 +162,16 @@ For each relevant targeted risk, include it in `Required Checks Performed` with 
 - `MINOR`: optional/documentation matrix row unverified, local cleanup, naming inconsistency, missing low-risk assertion, small docstring/comment issue, or mechanical polish.
 
 Do not inflate missing proof into `CRITICAL` unless the matrix row is runtime-required and runtime evidence is the only acceptance proof. Use `unverified` in the row result and explain the missing evidence.
+
+## Adversarial Clean-Review Checklist
+
+Before writing `None` for findings, prove all of these in the report:
+
+- every required scripted gate passed or is explicitly not applicable
+- every `runtime_required` row has raw passing command output
+- every failed command in `{{ATTEMPT_DIR}}` was considered
+- every `pass` row cites raw command output or source/test line evidence
+- no summary document contradicts raw output
 
 ## Human Questions
 
@@ -140,8 +186,28 @@ Return markdown only:
 ```markdown
 # External Audit Review: Gemini / gemini-3.1-pro-high
 
+## Machine-Readable Review Summary
+~~~yaml
+matrix_rows:
+  total: {N}
+  pass: {N}
+  fail: {N}
+  unverified: {N}
+  blocked: {N}
+  not_applicable: {N}
+findings:
+  critical: {N}
+  major: {N}
+  minor: {N}
+raw_gate_failures: {N}
+clean_review_allowed: {true/false}
+~~~
+
 ## Summary
 {brief assessment}
+
+## Scripted Gate Evidence
+- {raw gate file: result/failure summary}
 
 ## Files Inspected
 - {path}

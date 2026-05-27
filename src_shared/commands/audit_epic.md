@@ -13,6 +13,37 @@ Audit an epic's implementation to detect divergence from original architecture, 
 
 **Output:** `docs/epics/{epic-dir}/epic_audit.md`
 
+## Definition of Done
+
+`/audit_epic` is not complete when `epic_audit.md` is written.
+
+The command is complete only when one of these conditions is true:
+
+1. The latest audit attempt has no open `CRITICAL` findings, no open `MAJOR` findings, and no easy/local `MINOR` auto-fix findings.
+2. All remaining findings are classified as `ASK USER`, `DEFERRED DOC DECISION`, or `DO NOT FIX` with evidence.
+3. The audit has reached 3 total attempts and remaining `CRITICAL` or `MAJOR` findings are documented as an unresolved audit failure.
+4. Remediation is blocked by an external dependency, credential, destructive migration decision, product/architecture/security decision, or repeated tool failure, and the blocker is documented in `epic_audit.md`.
+
+If any `AUTO-FIX` finding exists, the responsible implementation agent must immediately remediate it, run the relevant focused tests, and run `/audit_epic {epic-id}` again. Do not stop after producing a failing audit report.
+
+`AUTO-FIX` means:
+
+- all `CRITICAL` findings
+- all `MAJOR` findings
+- `MINOR` findings that are easy, local, mechanical, and low-risk
+
+Maximum audit attempts: 3 total.
+Maximum remediation cycles: 2.
+
+The audit loop is:
+
+1. Run deterministic matrix review, external reviewers, and same-agent exploratory residual review.
+2. Classify findings and update `epic_audit.md`, `audit-verification-matrix.yaml`, and `audit-issue-ledger.yaml`.
+3. If `AUTO-FIX` findings exist and fewer than 3 total audit attempts have run, remediate immediately, run focused tests, and start the next audit attempt.
+4. If attempt 3 still has open `CRITICAL` or `MAJOR` findings, stop and mark the audit as failed with unresolved issues.
+
+The final response to the user must report the latest audit status after remediation, not the first failing audit status.
+
 ## Preferred Multi-Model Review
 
 Every audit should gather independent reviewer feedback before the final audit report is classified when the relevant tools are available:
@@ -443,7 +474,7 @@ Gemini should use the direct CLI/headless invocation.
 - On Claude timeout, terminate the process and retry once.
 - If `pexpect`, `python3`, `claude`, or the wrapper is unavailable, record
   `claude-unavailable.md` and continue.
-- Gemini runs headless with `gemini --model gemini-3.1-pro-high --approval-mode plan --skip-trust --prompt ""`.
+- Gemini runs headless with `gemini --model gemini-3.1-pro-high --approval-mode plan --skip-trust --output-format json --prompt ""`; raw JSON is saved beside the extracted markdown review.
 - Write timing/status data for every reviewer into `review-metadata.yaml`.
 
 ```bash
@@ -500,6 +531,7 @@ build_review_prompt_file() {
   sed \
     -e "s|{{EPIC_ID}}|${EPIC_ID}|g" \
     -e "s|{{EPIC_DIR}}|${EPIC_DIR}|g" \
+    -e "s|{{ATTEMPT_DIR}}|${ATTEMPT_DIR}|g" \
     -e "s|{{CHANGED_FILES_PATH}}|${CHANGED_FILES_FILE}|g" \
     -e "s|{{AUDIT_MATRIX_PATH}}|${VERIFICATION_MATRIX_FILE}|g" \
     -e "s|{{REPO_ROOT}}|$(pwd)|g" \
@@ -586,6 +618,7 @@ run_claude_review() {
 run_gemini_review() {
   local prompt_file="${ATTEMPT_DIR}/reviewer-gemini-prompt.md"
   local output_file="${ATTEMPT_DIR}/${GEMINI_REVIEW_MODEL}.md"
+  local raw_output_file="${ATTEMPT_DIR}/${GEMINI_REVIEW_MODEL}.json"
   local started_epoch started_at completed_at duration_seconds
 
   if ! command -v gemini >/dev/null 2>&1; then
@@ -601,16 +634,36 @@ run_gemini_review() {
       --model "$GEMINI_REVIEW_MODEL" \
       --approval-mode plan \
       --skip-trust \
+      --output-format json \
       --prompt "" \
       < "$prompt_file" \
-      > "$output_file"; then
+      > "$raw_output_file"; then
+    if ! python3 - "$raw_output_file" "$output_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+raw_path = Path(sys.argv[1])
+output_path = Path(sys.argv[2])
+data = json.loads(raw_path.read_text(encoding="utf-8"))
+response = data.get("response")
+if not isinstance(response, str) or not response.strip():
+    raise SystemExit("Gemini JSON output did not contain a non-empty response field")
+output_path.write_text(response.strip() + "\n", encoding="utf-8")
+PY
+    then
+      completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+      duration_seconds="$(( $(date +%s) - started_epoch ))"
+      append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec-json" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$raw_output_file" "Gemini JSON response extraction failed"
+      return 1
+    fi
     completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     duration_seconds="$(( $(date +%s) - started_epoch ))"
-    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" ""
+    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec-json" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" ""
   else
     completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     duration_seconds="$(( $(date +%s) - started_epoch ))"
-    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" "Gemini reviewer command failed"
+    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec-json" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$raw_output_file" "Gemini reviewer command failed"
     rm -f "$output_file"
     return 1
   fi
@@ -1413,7 +1466,7 @@ Rows marked `fail`, required rows marked `unverified`, and blocked rows must app
 |----------|-------|-----------|---------|--------|----------|---------|-------------------|
 | Codex | gpt-5.5-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Claude | Opus 4.7 | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
-| Gemini | gemini-3.1-pro-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Gemini | gemini-3.1-pro-high | exec-json | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 
 ### Exploratory Residual Review
 
@@ -1522,10 +1575,11 @@ The responsible implementation agent must automatically fix all `AUTO-FIX` items
 
 After reviewing this audit:
 
-1. Implement all AUTO-FIX findings
-2. Ask the user only for findings marked ASK USER or DEFERRED DOC DECISION
-3. Run `/audit_epic {epic-id}` again after fixes to verify
-4. Mark epic as "audit-passed" only when the final audit passes
+1. Implement all AUTO-FIX findings immediately.
+2. Run focused tests that prove the remediated matrix rows and sibling-risk rows.
+3. If fewer than 3 total audit attempts have run, run `/audit_epic {epic-id}` again after fixes to verify.
+4. Ask the user only for findings marked ASK USER or DEFERRED DOC DECISION.
+5. Mark epic as "audit-passed" only when the latest audit satisfies the Definition of Done.
 
 ---
 
@@ -1563,7 +1617,7 @@ Fix Plan Summary:
 Proceeding with automatic remediation for all critical, major, and easy minor findings.
 ```
 
-Do not ask whether to implement critical or major fixes. Start remediation immediately unless the fix requires a user decision as defined in Automatic Fix Classification.
+Do not ask whether to implement critical or major fixes. Start remediation immediately unless the fix requires a user decision as defined in Automatic Fix Classification. Do not stop after writing a failing audit report.
 
 ---
 
@@ -1594,7 +1648,9 @@ Major: 4
 Minor: 6
 ```
 
-For large epics, require two clean consecutive audits before merge. A large epic is one with 8 or more implementation stories, more than 30 changed implementation/test files, runtime evidence requirements, or prior audits that found new major/critical issues. A clean audit means zero critical findings, zero major findings, and zero new major/critical findings in the issue ledger.
+The command may run at most 3 total audit attempts for one invocation: the initial audit plus up to 2 remediation cycles. If attempt 3 still has open critical or major findings, stop, mark the audit failed, and document the unresolved findings and blockers in `epic_audit.md`.
+
+For large epics, require two clean consecutive audits before merge when feasible within the 3-attempt cap. A large epic is one with 8 or more implementation stories, more than 30 changed implementation/test files, runtime evidence requirements, or prior audits that found new major/critical issues. A clean audit means zero critical findings, zero major findings, and zero new major/critical findings in the issue ledger. If two clean audits are not reached within the 3-attempt cap, the final status is determined by the latest attempt and unresolved issue list.
 
 ---
 
