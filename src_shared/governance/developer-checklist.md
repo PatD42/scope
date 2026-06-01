@@ -7,6 +7,20 @@ Do NOT rely on memory. Do NOT summarize. READ THE FILE every time.
 
 ## Before Marking Complete, Verify ALL Items:
 
+### Story Completion Proof
+
+- [ ] **Acceptance-proof summary complete** — For every affected acceptance criterion and file-plan promise, your completion summary maps the promise to concrete evidence:
+  - Promise verified
+  - Traceability row ID(s), when `acceptance-traceability.yaml` exists
+  - Verification method
+  - Real runtime path used: yes/no
+  - Representative data used: yes/no
+  - Observable result
+  - Remaining unproven work, if any
+- [ ] **Runtime path proven for integration work** — If the story adds or changes an adapter, mapper, importer, writer, parser, service call, queue/worker path, scheduled job, backfill, migration, CLI, dashboard/API integration, or any side-effecting component, unit tests alone are insufficient. Prove the intended entrypoint calls the component, upstream inputs are available there, and downstream output/state is produced.
+- [ ] **Promised outputs observed** — If the story promises new output, persisted rows, generated files, extracted items, metrics, events, or side effects, provide a representative run showing the output exists. If an acceptance criterion names a threshold, measure it. If zero output is valid, the acceptance criterion or file plan must explicitly say zero is valid.
+- [ ] **Precise completion status used** — Do not use `complete` unless promised value was observed through the intended path. Use a non-complete status such as `implementation_complete_unverified`, `unit_verified`, `integration_verified`, `runtime_verified`, or `blocked_missing_runtime_input` when proof is partial.
+
 ### Code Quality (see production-code-rules.md for details)
 
 - [ ] **Intent match** — Re-read the file plan intent. Does the code do what it describes, not just what tests check?

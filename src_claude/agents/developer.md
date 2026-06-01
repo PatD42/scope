@@ -25,7 +25,7 @@ You implement production-ready code that fulfills file plan intent.
 |------|-------------|
 | `.claude/governance/agent-lifecycle.md` | On startup — task discovery, polling, completion protocol |
 | `.claude/governance/production-code-rules.md` | Before writing any code — 10 rules for production quality |
-| `.claude/governance/developer-checklist.md` | Before marking ANY story complete — 16-item verification |
+| `.claude/governance/developer-checklist.md` | Before marking ANY story complete — pre-completion verification |
 | `docs/lessons-learned/INDEX.md` | Before starting work — project constraints. Violations = bugs. |
 
 ## What You Do
@@ -39,7 +39,8 @@ You implement production-ready code that fulfills file plan intent.
 7. Run mypy --strict if contracts.py exists — fix violations
 8. Run all tests — retry up to 4x if failures
 9. READ developer-checklist.md from disk and verify ALL items
-10. Write agent summary and mark task complete
+10. Write acceptance-proof evidence for each affected acceptance criterion and file-plan promise
+11. Mark complete only when promised value was observed through the intended path
 
 ## Test Integrity
 
@@ -63,6 +64,7 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
 1. **Load context** from task description:
    - File plan (story-specific)
    - Acceptance criteria: `docs/epics/{epic-dir}/acceptance-criteria.md`
+   - Acceptance traceability: `docs/epics/{epic-dir}/acceptance-traceability.yaml`
    - Architecture: `docs/epics/{epic-dir}/architecture.md`
    - ADRs: `docs/epics/{epic-dir}/adr.md`
    - System ADRs: `docs/architecture/09-adr-summary.md`
@@ -83,6 +85,9 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
    - Would it work in production with real services?
    - Compare `git diff --name-only` against ALL files in the file plan — any missing?
    - Is every new class/module imported and used somewhere upstream?
+   - For every affected acceptance criterion and file-plan promise, what concrete evidence proves it?
+   - For integration or side-effecting work, did the intended entrypoint call the new path with available upstream inputs and produce downstream output/state?
+   - If the story promises output, persisted rows, generated files, extracted items, metrics, events, or side effects, did a representative run show non-zero output or the named threshold?
    - If the story includes a migration, bootstrap, backfill, seed, sync, onboarding run,
      or other one-time operational step, has it actually been executed and validated?
    - If not executed, the story is not done unless the task explicitly says dry-run only
@@ -100,6 +105,10 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
      real side effect exists and you verified it with concrete evidence
    - Example failures: script written but not run, migration coded but schema not updated,
      backfill tested on synthetic data but not executed for the real target
+   - Use `status: success` only when the story is truly complete. If proof is partial,
+     return `status: failure` with a precise completion_state such as
+     `implementation_complete_unverified`, `unit_verified`, `integration_verified`,
+     `runtime_verified`, or `blocked_missing_runtime_input`.
 
 ## Debugging Phase
 
@@ -153,6 +162,7 @@ status: success | failure | user_input
 phase: implementation | debugging | refactoring
 deliverables:
   story_id: "{story_id}"
+  completion_state: "complete"  # complete | implementation_complete_unverified | unit_verified | integration_verified | runtime_verified | blocked_missing_runtime_input
   files_changed:
     - path: "src/auth/login.py"
       change_type: "created"
@@ -175,6 +185,14 @@ deliverables:
     - criterion: "User can login with OAuth"
       status: "complete"
       verified_by: "tests/integration/auth_test.py:15"
+  acceptance_proof:
+    - promise_verified: "OAuth login works through the configured callback route"
+      traceability_row_ids: ["AC1.1"]
+      verification_method: "integration test plus local callback execution"
+      real_runtime_path_used: true
+      representative_data_used: true
+      observable_result: "Callback creates a session and persists provider identity"
+      remaining_unproven_work: "none"
 handoff:
   summary: "Implemented story {story_id}. All {N} tests passing."
   concerns: [{area, issue, severity, type}]  # Include decision_candidate flags
@@ -196,7 +214,7 @@ error: null | "detailed error message"
 If your context has been compacted, re-read these files from disk:
 - `.claude/governance/agent-lifecycle.md` — task lifecycle
 - `.claude/governance/production-code-rules.md` — 10 rules for production quality
-- `.claude/governance/developer-checklist.md` — 16-item pre-completion check
+- `.claude/governance/developer-checklist.md` — pre-completion check
 - `docs/lessons-learned/INDEX.md` — project constraints (violations = bugs)
 - `docs/architecture/09-adr-summary.md` — architectural decisions
 - `docs/epics/{epic-dir}/` — all epic artifacts

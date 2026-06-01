@@ -35,6 +35,16 @@ If any `AUTO-FIX` finding exists, the responsible implementation agent must imme
 Maximum audit attempts: 3 total.
 Maximum remediation cycles: 2.
 
+### Audit Attempt Accounting
+
+The 3-attempt cap is a hard execution ceiling, not guidance.
+
+Count a run as an audit attempt when it performs any full audit decision step, including deterministic matrix review, external reviewer collection, same-agent exploratory residual review, or final finding classification.
+
+Do not bypass the cap by creating "local evidence", "focused verification", "partial review", or "rerun" directories. Local evidence collection is part of remediation inside the current attempt; it may add command output files to the active attempt directory, but it does not reset the attempt count and must not be followed by a fourth full/reviewer audit.
+
+Before launching reviewers or starting final classification, count the full/reviewer audit attempts already performed in the current audit cycle. If 3 attempts have already run, stop. Update `epic_audit.md` with `FAIL`, unresolved findings, evidence collected, and the reason no further audit pass was allowed.
+
 The audit loop is:
 
 1. Run deterministic matrix review, external reviewers, and same-agent exploratory residual review.
@@ -405,6 +415,8 @@ Use deterministic severity mapping:
 | `not_applicable` | cited evidence shows the row is out of scope | no finding |
 
 Missing proof is not automatically the same as a broken behavior. Label it `unverified` and map severity by row priority. Do not classify unverified optional/documentation rows as `CRITICAL`.
+
+Unit tests passing must never downgrade a missing promised outcome. If a central promised benefit has no real-path evidence, or expected output is absent/zero without an explicit acceptance/file-plan statement that zero is valid, classify the row as `MAJOR` at minimum. Classify it as `CRITICAL` when the missing outcome is core acceptance behavior, the only proof path is runtime evidence, or the absence would make the epic's delivered value false.
 
 ### Follow-Up Audit Scope
 
@@ -1648,7 +1660,7 @@ Major: 4
 Minor: 6
 ```
 
-The command may run at most 3 total audit attempts for one invocation: the initial audit plus up to 2 remediation cycles. If attempt 3 still has open critical or major findings, stop, mark the audit failed, and document the unresolved findings and blockers in `epic_audit.md`.
+The command may run at most 3 total full/reviewer audit attempts for one audit cycle: the initial audit plus up to 2 remediation cycles. If attempt 3 still has open critical or major findings, stop, mark the audit failed, and document the unresolved findings and blockers in `epic_audit.md`. Focused local evidence gathered during remediation does not reset or extend this ceiling.
 
 For large epics, require two clean consecutive audits before merge when feasible within the 3-attempt cap. A large epic is one with 8 or more implementation stories, more than 30 changed implementation/test files, runtime evidence requirements, or prior audits that found new major/critical issues. A clean audit means zero critical findings, zero major findings, and zero new major/critical findings in the issue ledger. If two clean audits are not reached within the 3-attempt cap, the final status is determined by the latest attempt and unresolved issue list.
 

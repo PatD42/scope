@@ -358,6 +358,24 @@ Instructions:
   add actual implementation files, actual test functions/classes, runtime
   evidence commands/results, and set each affected row to implemented, tested,
   verified, blocked, or deferred.
+- Before marking the story complete, write an acceptance-proof summary for every
+  affected acceptance criterion and file-plan promise. Include:
+  promise verified, traceability row ID(s), verification method, real runtime path
+  used yes/no, representative data used yes/no, observable result, and any
+  remaining unproven work.
+- If the story adds or changes an adapter, mapper, importer, writer, parser,
+  service call, queue/worker path, scheduled job, backfill, migration, CLI,
+  dashboard/API integration, or other side-effecting component, unit tests are
+  not enough. Prove the intended entrypoint calls it, upstream inputs are
+  available there, and downstream output/state is produced.
+- If the story promises output, persisted rows, generated files, extracted
+  items, metrics, events, or side effects, run a representative check showing
+  non-zero output unless the acceptance criteria or file plan explicitly says
+  zero is valid. If a threshold is named, measure it.
+- Use `complete` only when the promised value is observed through the intended
+  path. If proof is partial, use a non-complete status such as
+  `implementation_complete_unverified`, `unit_verified`, `integration_verified`,
+  `runtime_verified`, or `blocked_missing_runtime_input`.
 - If the story/file plan includes an operational deliverable (migration, bootstrap,
   backfill, seed, sync, onboarding run, reindex, CLI execution), execute it and
   validate the resulting system state unless the file plan explicitly says dry-run only
@@ -381,7 +399,9 @@ Decision tracking:
 Pre-completion review (MANDATORY before marking story done):
 READ the full checklist from .claude/governance/developer-checklist.md before marking complete.
 Do NOT rely on memory of the checklist. Do NOT summarize it. READ THE FILE from disk.
-The checklist includes 16 items: intent match, no dead code, pattern consistency,
+The checklist includes: acceptance-proof summary, runtime-path proof,
+non-zero/threshold proof for promised outputs, intent match, no dead code,
+pattern consistency,
 lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
 values, LIVE SMOKE TEST for new services, operational deliverables executed,
 value-path verified, no redundant tests, documentation/follow-up captured.
@@ -439,18 +459,23 @@ Task(
     5. Execute any operational deliverables required by the story/file plan and verify the real side effects
     6. Run all tests — all must pass
     7. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
-       Look for it at: .claude/governance/developer-checklist.md (or src/governance/developer-checklist.md in the SCOPE repo)
+       Look for it at: .claude/governance/developer-checklist.md (or src_shared/governance/developer-checklist.md in the SCOPE repo)
        Do NOT skip this step. Do NOT rely on memory of the checklist. READ THE FILE.
-    8. Mark completed
+    8. Only mark completed if the promised value is observed through the intended path.
+       If proof is partial, leave the story non-complete and report one of:
+       implementation_complete_unverified, unit_verified, integration_verified,
+       runtime_verified, or blocked_missing_runtime_input.
     9. Check TaskList again for next unblocked dev task
     10. Repeat until no more dev tasks available
 
     CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
     You are responsible for BOTH implementation AND tests — there is no SDET.
-    The checklist in step 6 includes: intent match, no dead code, pattern consistency,
-    lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
-    values, LIVE SMOKE TEST for new services, operational deliverables executed,
-    value-path verified, no redundant tests, documentation/follow-up captured.""",
+    The checklist includes: acceptance-proof summary, runtime-path proof for
+    integration work, non-zero/threshold proof for promised outputs, intent match,
+    no dead code, pattern consistency, lesson compliance, unplanned changes,
+    contract compliance, scope check, no hardcoded values, LIVE SMOKE TEST for
+    new services, operational deliverables executed, value-path verified,
+    no redundant tests, documentation/follow-up captured.""",
     subagent_type="general-purpose",
     description="Developer: implement",
     run_in_background=True
@@ -651,6 +676,17 @@ Instructions:
 - Write tests that verify the audit finding is fixed
 - Update docs/epics/{epic_dir}/acceptance-traceability.yaml for every affected
   row with actual files, actual tests, runtime evidence, and status changes.
+- Before marking the fix story complete, write an acceptance-proof summary for
+  every affected acceptance criterion, matrix row, audit finding, and file-plan
+  promise. Include promise verified, traceability row ID(s), verification method,
+  real runtime path used yes/no, representative data used yes/no, observable
+  result, and any remaining unproven work.
+- If the fix affects integration or side effects, prove the intended entrypoint
+  calls the fixed path, upstream inputs are available there, and downstream
+  output/state is produced. Unit tests alone are insufficient for integration work.
+- If the fix promises output, persisted rows, generated files, extracted items,
+  metrics, events, or side effects, provide representative non-zero or threshold
+  evidence unless zero is explicitly valid.
 - If contracts.py exists, include tests that assert Protocol compliance for
   interfaces affected by the fix
 - Run all tests after implementation — all must pass
@@ -685,7 +721,10 @@ Do NOT rely on memory. READ THE FILE.
             2. If none available, STOP — you will be re-launched when tasks unblock
             3. Implement it AND write tests
             4. Run all tests — all must pass
-            5. Mark completed
+            5. Only mark completed if the promised value is observed through the intended path.
+               If proof is partial, leave the story non-complete and report one of:
+               implementation_complete_unverified, unit_verified, integration_verified,
+               runtime_verified, or blocked_missing_runtime_input.
             6. Check TaskList again for next unblocked dev task
             7. Repeat until no more dev tasks available
 
@@ -789,6 +828,12 @@ Before declaring the epic complete:
 
 1. Update `docs/epics/{epic-dir}/implementation-summary.md`
    - stories implemented
+   - per-story completion state: `complete`, `implementation_complete_unverified`,
+     `unit_verified`, `integration_verified`, `runtime_verified`, or
+     `blocked_missing_runtime_input`
+   - per-story acceptance-proof summary mapping each acceptance criterion and
+     file-plan promise to verification method, runtime-path yes/no,
+     representative-data yes/no, observable result, and remaining unproven work
    - tests run and results
    - operational deliverables executed
    - value delivered and proof
