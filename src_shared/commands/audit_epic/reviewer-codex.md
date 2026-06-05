@@ -90,7 +90,7 @@ Do not inflate missing proof into `CRITICAL` unless the matrix row is runtime-re
 Return markdown only:
 
 ```markdown
-# External Audit Review: Codex / gpt-5.5-high
+# External Audit Review: Codex / gpt-5.5 / high reasoning
 
 ## Summary
 {brief assessment}

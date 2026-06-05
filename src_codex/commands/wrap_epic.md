@@ -189,6 +189,36 @@ Execute `/lesson` in auto-detect mode (no args):
 **Context to provide:**
 - Same epic scope as Step 2
 - `/lesson` determines its own time window from tracking markers (same fallback: full epic history if no markers exist)
+- Do not rely only on the current agent/session context. Lessons must be derived
+  from durable evidence in the worktree.
+
+**Mandatory lesson evidence scan:**
+- `.scope/{EPIC_DIR}/agent_summaries.jsonl`: failed attempts, retries,
+  blocked states, unplanned modifications, workaround notes, completion-state gaps.
+- `{EPIC_DOC_DIR}/epic_audit.md`: critical/major findings, repeated misses,
+  false-complete stories, severity corrections.
+- `{EPIC_DOC_DIR}/audit-issue-ledger.yaml`: `missed_previous_audit`,
+  `introduced_by_fix`, repeated root causes, and false positives with evidence.
+- `{EPIC_DOC_DIR}/audit-verification-matrix.yaml`: rows that were `fail`,
+  `unverified`, `blocked`, or required runtime proof late.
+- `{EPIC_DOC_DIR}/acceptance-traceability.yaml`: acceptance criteria where
+  proof was missing, runtime evidence was blocked, or implementation/test mapping changed.
+- `{EPIC_DOC_DIR}/implementation-summary.md`: delivery gaps, operational issues,
+  rollout/backfill/test evidence, and residual risks.
+- `{EPIC_DOC_DIR}/reviews/**`: Codex, Claude, and Antigravity reviewer findings,
+  disagreements, unavailable reviewers, and repeated findings across audit attempts.
+- Raw outputs in `{EPIC_DOC_DIR}/reviews/audit-NNN/`: failing tests, lint,
+  mypy, vulture, smoke-test failures, CodeGraph failures, and missing evidence.
+- Git history and diff for the epic branch: fix-after-fix patterns, reverted
+  approaches, files repeatedly touched, and late architecture drift.
+- User corrections captured in the conversation or summaries: anything the user
+  had to point out more than once is a strong lesson candidate.
+
+Filter candidates against `docs/lessons-learned/INDEX.md` and existing lesson
+files before presenting them. Only keep lessons that can be written as concrete
+detection rules. "Be more careful" is not a lesson; "When an acceptance
+criterion promises persisted output, require non-zero runtime evidence before
+story completion" is.
 
 ```
 Capturing lessons learned for {EPIC_ID}...
@@ -198,7 +228,9 @@ anti-patterns, and hard-won knowledge from this epic.
 ```
 
 Follow the full `/lesson` auto-detect flow:
-1. Scan agent summaries for failures/retries, git for fix patterns, audit findings
+1. Scan the mandatory lesson evidence sources for failures, retries,
+   fix-after-fix patterns, audit misses, blocked runtime proof, user corrections,
+   and repeated reviewer findings
 2. Present candidates
 3. User reviews, edits, approves
 4. Save approved lessons

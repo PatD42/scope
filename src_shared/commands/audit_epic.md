@@ -62,11 +62,13 @@ Every audit should gather independent reviewer feedback before the final audit r
 |----------|----------------|---------------|--------|
 | Codex | `gpt-5.5` with high reasoning | `commands/audit_epic/reviewer-codex.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/codex-gpt-5.5-high.md` |
 | Claude | Opus 4.7 | `commands/audit_epic/reviewer-claude.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/claude-opus-4.7.md` |
-| Gemini | `gemini-3.1-pro-high` | `commands/audit_epic/reviewer-gemini.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/gemini-3.1-pro-high.md` |
+| Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/audit_epic/reviewer-agy.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
+
+Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
 
 These reviewers are read-only auditors. They do not edit files and do not decide what to fix. The orchestrating audit command merges their findings, removes duplicates, assigns severities, and produces the fix plan for the responsible implementation agent.
 
-Reviewer tools are optional. If Codex, Claude, Gemini, or a required model is unavailable or not configured in the user's environment, record the failure in the current audit attempt directory as `{reviewer}-unavailable.md` and continue with the reviewers that are available. Do not mark the audit as `FAIL` solely because an external reviewer tool is missing. The audit report must disclose which reviewers completed and which were unavailable.
+Reviewer tools are optional. If Codex, Claude, Antigravity, or a required model is unavailable or not configured in the user's environment, record the failure in the current audit attempt directory as `{reviewer}-unavailable.md` and continue with the reviewers that are available. Do not mark the audit as `FAIL` solely because an external reviewer tool is missing. The audit report must disclose which reviewers completed and which were unavailable.
 
 Model reviews are never overwritten. Each audit run writes to a new `reviews/audit-NNN/` directory.
 
@@ -109,7 +111,7 @@ SOURCES:
 ├── Issue ledger: docs/epics/{epic-id}/audit-issue-ledger.yaml
 ├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
 ├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
-├── Gemini review if available: docs/epics/{epic-id}/reviews/audit-NNN/gemini-3.1-pro-high.md
+├── Antigravity review if available: docs/epics/{epic-id}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md
 ├── Reviewer metadata: docs/epics/{epic-id}/reviews/audit-NNN/review-metadata.yaml
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
 └── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
@@ -374,7 +376,7 @@ rows:
     reviewer_status:
       codex: pending
       claude: pending
-      gemini: pending
+      agy: pending
     final_status: pending
     audit_notes: ""
 ```
@@ -473,7 +475,7 @@ Claude should be run through the `pexpect` one-shot file-output wrapper when
 available because Claude CLI headless mode can be token-only or restricted in
 some subscription environments. Do not use tmux pane scraping for Claude review
 output.
-Gemini should use the direct CLI/headless invocation.
+Antigravity should use the direct `agy --print` invocation.
 
 - Claude receives a short one-shot instruction that points to the reviewer
   prompt file, repository/worktree path, and required output file.
@@ -486,7 +488,7 @@ Gemini should use the direct CLI/headless invocation.
 - On Claude timeout, terminate the process and retry once.
 - If `pexpect`, `python3`, `claude`, or the wrapper is unavailable, record
   `claude-unavailable.md` and continue.
-- Gemini runs headless with `gemini --model gemini-3.1-pro-high --approval-mode plan --skip-trust --output-format json --prompt ""`; raw JSON is saved beside the extracted markdown review.
+- Antigravity runs headless with `agy --model "Gemini 3.1 Pro (High)" --print --sandbox --dangerously-skip-permissions --print-timeout "$SCOPE_AGY_PRINT_TIMEOUT"`. If the primary model is rate-limited, retry once with `Gemini 3.5 Flash (High)`.
 - Write timing/status data for every reviewer into `review-metadata.yaml`.
 
 ```bash
@@ -494,9 +496,16 @@ REVIEWER_PROMPT_DIR=$(find ./plugins/scope/commands/audit_epic ./.claude/command
 REVIEWER_CLAUDE_PEXPECT_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-claude-pexpect.py" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
-GEMINI_REVIEW_MODEL="${SCOPE_GEMINI_MODEL:-gemini-3.1-pro-high}"
+CODEX_MODEL_ID="${SCOPE_CODEX_MODEL_ID:-gpt-5.5}"
+CODEX_REASONING_EFFORT="${SCOPE_CODEX_REASONING_EFFORT:-high}"
+CODEX_REVIEW_LABEL="${SCOPE_CODEX_REVIEW_LABEL:-${CODEX_MODEL_ID}-${CODEX_REASONING_EFFORT}}"
+AGY_REVIEW_MODEL="${SCOPE_AGY_MODEL:-Gemini 3.1 Pro (High)}"
+AGY_FALLBACK_MODEL="${SCOPE_AGY_FALLBACK_MODEL:-Gemini 3.5 Flash (High)}"
+AGY_REVIEW_OUTPUT_ID="${SCOPE_AGY_OUTPUT_ID:-agy-gemini-3.1-pro-high}"
+AGY_FALLBACK_OUTPUT_ID="${SCOPE_AGY_FALLBACK_OUTPUT_ID:-agy-gemini-3.5-flash}"
+AGY_PRINT_TIMEOUT="${SCOPE_AGY_PRINT_TIMEOUT:-60m}"
 SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
-CLAUDE_AUDIT_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write"
+CLAUDE_AUDIT_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(python3 -c:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write"
 
 if [ -z "$REVIEWER_PROMPT_DIR" ]; then
   echo "Audit reviewer prompts not found"
@@ -520,10 +529,15 @@ append_review_metadata() {
   local retry_count="${10}"
   local output_file="${11}"
   local error_message="${12:-}"
+  local reasoning_effort="${13:-}"
+  local review_label="${14:-}"
 
   {
     printf '  - reviewer: %s\n' "$(json_quote "$reviewer")"
     printf '    model: %s\n' "$(json_quote "$model")"
+    printf '    model_id: %s\n' "$(json_quote "$model")"
+    printf '    reasoning_effort: %s\n' "$(json_quote "$reasoning_effort")"
+    printf '    review_label: %s\n' "$(json_quote "$review_label")"
     printf '    transport: %s\n' "$(json_quote "$transport")"
     printf '    session: %s\n' "$(json_quote "$session")"
     printf '    status: %s\n' "$(json_quote "$status")"
@@ -552,12 +566,19 @@ build_review_prompt_file() {
 
 run_codex_review() {
   local prompt_file="${ATTEMPT_DIR}/reviewer-codex-prompt.md"
-  local output_file="${ATTEMPT_DIR}/codex-gpt-5.5-high.md"
+  local output_file="${ATTEMPT_DIR}/codex-${CODEX_REVIEW_LABEL}.md"
   local started_epoch started_at completed_at duration_seconds
+
+  if [[ "$CODEX_MODEL_ID" =~ -(low|medium|high)$ ]]; then
+    echo "Codex model id appears to include a reasoning suffix: ${CODEX_MODEL_ID}" > "${ATTEMPT_DIR}/codex-unavailable.md"
+    echo "Use CODEX_MODEL_ID=gpt-5.5 and CODEX_REASONING_EFFORT=high." >> "${ATTEMPT_DIR}/codex-unavailable.md"
+    append_review_metadata "codex" "$CODEX_MODEL_ID" "exec" "" "failed" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/codex-unavailable.md" "Codex model id includes reasoning suffix; use separate model id and reasoning effort" "$CODEX_REASONING_EFFORT" "$CODEX_REVIEW_LABEL"
+    return 1
+  fi
 
   if ! command -v codex >/dev/null 2>&1; then
     echo "Codex CLI not found. Skipped Codex external review." > "${ATTEMPT_DIR}/codex-unavailable.md"
-    append_review_metadata "codex" "gpt-5.5-high" "exec" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/codex-unavailable.md" "Codex CLI not found"
+    append_review_metadata "codex" "$CODEX_MODEL_ID" "exec" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/codex-unavailable.md" "Codex CLI not found" "$CODEX_REASONING_EFFORT" "$CODEX_REVIEW_LABEL"
     return 0
   fi
 
@@ -566,19 +587,19 @@ run_codex_review() {
   started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   if codex exec \
       --cd "$(pwd)" \
-      --model gpt-5.5 \
-      -c model_reasoning_effort='"high"' \
+      --model "$CODEX_MODEL_ID" \
+      -c model_reasoning_effort="\"$CODEX_REASONING_EFFORT\"" \
       --sandbox read-only \
       --ask-for-approval never \
       --output-last-message "$output_file" \
       - < "$prompt_file"; then
     completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     duration_seconds="$(( $(date +%s) - started_epoch ))"
-    append_review_metadata "codex" "gpt-5.5-high" "exec" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" ""
+    append_review_metadata "codex" "$CODEX_MODEL_ID" "exec" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" "" "$CODEX_REASONING_EFFORT" "$CODEX_REVIEW_LABEL"
   else
     completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     duration_seconds="$(( $(date +%s) - started_epoch ))"
-    append_review_metadata "codex" "gpt-5.5-high" "exec" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" "Codex reviewer command failed"
+    append_review_metadata "codex" "$CODEX_MODEL_ID" "exec" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" "Codex reviewer command failed" "$CODEX_REASONING_EFFORT" "$CODEX_REVIEW_LABEL"
     return 1
   fi
 }
@@ -627,63 +648,87 @@ run_claude_review() {
     }
 }
 
-run_gemini_review() {
-  local prompt_file="${ATTEMPT_DIR}/reviewer-gemini-prompt.md"
-  local output_file="${ATTEMPT_DIR}/${GEMINI_REVIEW_MODEL}.md"
-  local raw_output_file="${ATTEMPT_DIR}/${GEMINI_REVIEW_MODEL}.json"
-  local started_epoch started_at completed_at duration_seconds
+is_agy_rate_limit_error() {
+  local error_file="$1"
+  grep -Eiq 'rate.?limit|quota|429|resource.?exhausted|too many requests|try again later' "$error_file"
+}
 
-  if ! command -v gemini >/dev/null 2>&1; then
-    echo "Gemini CLI not found. Skipped Gemini external review." > "${ATTEMPT_DIR}/gemini-unavailable.md"
-    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/gemini-unavailable.md" "Gemini CLI not found"
+run_agy_model_review() {
+  local model="$1"
+  local output_id="$2"
+  local prompt_file="$3"
+  local output_file="${ATTEMPT_DIR}/${output_id}.md"
+  local error_file="${ATTEMPT_DIR}/${output_id}.stderr.txt"
+
+  agy \
+    --model "$model" \
+    --print \
+    --sandbox \
+    --dangerously-skip-permissions \
+    --print-timeout "$AGY_PRINT_TIMEOUT" \
+    < "$prompt_file" \
+    > "$output_file" \
+    2> "$error_file"
+}
+
+run_agy_review() {
+  local prompt_file="${ATTEMPT_DIR}/reviewer-agy-prompt.md"
+  local output_file="${ATTEMPT_DIR}/${AGY_REVIEW_OUTPUT_ID}.md"
+  local fallback_output_file="${ATTEMPT_DIR}/${AGY_FALLBACK_OUTPUT_ID}.md"
+  local error_file="${ATTEMPT_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"
+  local started_epoch started_at completed_at duration_seconds
+  local final_model final_output_file final_transport
+
+  if ! command -v agy >/dev/null 2>&1; then
+    echo "Antigravity agy CLI not found. Skipped Antigravity external review." > "${ATTEMPT_DIR}/agy-unavailable.md"
+    append_review_metadata "agy" "$AGY_REVIEW_MODEL" "agy-print" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/agy-unavailable.md" "agy CLI not found"
     return 0
   fi
 
-  build_review_prompt_file "reviewer-gemini.md" "$prompt_file"
+  build_review_prompt_file "reviewer-agy.md" "$prompt_file"
   started_epoch="$(date +%s)"
   started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  if gemini \
-      --model "$GEMINI_REVIEW_MODEL" \
-      --approval-mode plan \
-      --skip-trust \
-      --output-format json \
-      --prompt "" \
-      < "$prompt_file" \
-      > "$raw_output_file"; then
-    if ! python3 - "$raw_output_file" "$output_file" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-raw_path = Path(sys.argv[1])
-output_path = Path(sys.argv[2])
-data = json.loads(raw_path.read_text(encoding="utf-8"))
-response = data.get("response")
-if not isinstance(response, str) or not response.strip():
-    raise SystemExit("Gemini JSON output did not contain a non-empty response field")
-output_path.write_text(response.strip() + "\n", encoding="utf-8")
-PY
-    then
+  if run_agy_model_review "$AGY_REVIEW_MODEL" "$AGY_REVIEW_OUTPUT_ID" "$prompt_file"; then
+    final_model="$AGY_REVIEW_MODEL"
+    final_output_file="$output_file"
+    final_transport="agy-print"
+  elif is_agy_rate_limit_error "$error_file"; then
+    echo "Primary Antigravity model rate-limited; retrying with ${AGY_FALLBACK_MODEL}." > "${ATTEMPT_DIR}/agy-fallback-used.txt"
+    if run_agy_model_review "$AGY_FALLBACK_MODEL" "$AGY_FALLBACK_OUTPUT_ID" "$prompt_file"; then
+      final_model="$AGY_FALLBACK_MODEL"
+      final_output_file="$fallback_output_file"
+      final_transport="agy-print-fallback"
+    else
       completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
       duration_seconds="$(( $(date +%s) - started_epoch ))"
-      append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec-json" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$raw_output_file" "Gemini JSON response extraction failed"
+      append_review_metadata "agy" "$AGY_FALLBACK_MODEL" "agy-print-fallback" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/${AGY_FALLBACK_OUTPUT_ID}.stderr.txt" "Antigravity fallback reviewer command failed"
+      rm -f "$fallback_output_file"
       return 1
     fi
-    completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    duration_seconds="$(( $(date +%s) - started_epoch ))"
-    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec-json" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" ""
   else
     completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     duration_seconds="$(( $(date +%s) - started_epoch ))"
-    append_review_metadata "gemini" "$GEMINI_REVIEW_MODEL" "exec-json" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$raw_output_file" "Gemini reviewer command failed"
+    append_review_metadata "agy" "$AGY_REVIEW_MODEL" "agy-print" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$error_file" "Antigravity reviewer command failed"
     rm -f "$output_file"
     return 1
   fi
+
+  if [ ! -s "$final_output_file" ]; then
+    completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    duration_seconds="$(( $(date +%s) - started_epoch ))"
+    append_review_metadata "agy" "$final_model" "$final_transport" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$final_output_file" "Antigravity reviewer produced empty output"
+    rm -f "$final_output_file"
+    return 1
+  fi
+
+  completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  duration_seconds="$(( $(date +%s) - started_epoch ))"
+  append_review_metadata "agy" "$final_model" "$final_transport" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$final_output_file" ""
 }
 
 run_codex_review || echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
 run_claude_review || echo "Claude reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/claude-unavailable.md"
-run_gemini_review || echo "Gemini reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/gemini-unavailable.md"
+run_agy_review || echo "Antigravity reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/agy-unavailable.md"
 ```
 
 Claude CLI model aliases vary by installation. The required model is Claude
@@ -789,7 +834,7 @@ Residual findings must still be evidence-backed. Do not use the residual review 
 
 After reviewer execution finishes:
 
-1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/gemini-3.1-pro-high.md`, but any of them may be absent when the local tool is unavailable.
+1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `reviews/audit-NNN/agy-gemini-3.5-flash.md`, but any of them may be absent when the local tool is unavailable.
 2. Read `reviews/audit-NNN/review-metadata.yaml` and use it to report reviewer duration, timeout, retry count, transport, and status.
 3. Read `reviews/audit-NNN/exploratory-residual-review.md` if it exists.
 4. Merge reviewer row statuses into `audit-verification-matrix.yaml` under `reviewer_status`.
@@ -1410,7 +1455,7 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 **Date**: {date}
 **Auditor**: Scope audit command
 **Audit Attempt**: {audit-NNN}
-**External Reviewers**: Codex `gpt-5.5-high`, Claude Opus 4.7, Gemini `gemini-3.1-pro-high`
+**External Reviewers**: Codex `gpt-5.5` with high reasoning, Claude Opus 4.7, Antigravity `Gemini 3.1 Pro (High)` or fallback `Gemini 3.5 Flash (High)`
 **Status**: {PASS / FAIL / PASS WITH CONDITIONS}
 
 ---
@@ -1452,7 +1497,7 @@ Rows without implementation evidence, test evidence, or required runtime evidenc
 
 | Row ID | Priority | Risk | Final Status | Reviewer Status | Finding |
 |--------|----------|------|--------------|-----------------|---------|
-| AC2.2-P10-REPROCESS-SERVICE | required | high | {pass/fail/unverified/blocked/not_applicable} | Codex: {status}; Claude: {status}; Gemini: {status} | {none/finding id} |
+| AC2.2-P10-REPROCESS-SERVICE | required | high | {pass/fail/unverified/blocked/not_applicable} | Codex: {status}; Claude: {status}; Antigravity: {status} | {none/finding id} |
 
 Rows marked `fail`, required rows marked `unverified`, and blocked rows must appear in the finding list or human-question list. Rows marked `pass` require cited implementation, test, or runtime evidence.
 
@@ -1476,9 +1521,9 @@ Rows marked `fail`, required rows marked `unverified`, and blocked rows must app
 
 | Reviewer | Model | Transport | Session | Status | Duration | Retries | Findings Imported |
 |----------|-------|-----------|---------|--------|----------|---------|-------------------|
-| Codex | gpt-5.5-high | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Codex | gpt-5.5 / high reasoning | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Claude | Opus 4.7 | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
-| Gemini | gemini-3.1-pro-high | exec-json | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Antigravity | {Gemini 3.1 Pro (High) / Gemini 3.5 Flash (High)} | agy-print | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 
 ### Exploratory Residual Review
 

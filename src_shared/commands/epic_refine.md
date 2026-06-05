@@ -344,7 +344,7 @@ and spec gaps before tactical planning begins.
 **Required reviewer set:**
 
 Phase 3.5 review must be performed by all three reviewer perspectives: Codex,
-Claude, and Gemini. Do not choose only one reviewer and do not treat one
+Claude, and Antigravity. Do not choose only one reviewer and do not treat one
 reviewer's approval as sufficient.
 
 Each reviewer must be attempted for every Phase 3.5 review. If a local tool,
@@ -355,7 +355,7 @@ silently skip a reviewer.
 
 Unavailable reviewer tooling is not, by itself, a refinement failure. However,
 Gate #3 must still include the three-reviewer coverage table and must clearly
-state which of Codex, Claude, and Gemini completed or were unavailable.
+state which of Codex, Claude, and Antigravity completed or were unavailable.
 
 ### Phase 3.5 Autonomous Review Loop
 
@@ -363,7 +363,7 @@ Phase 3.5 runs autonomously unless a reviewer finding requires user input.
 
 Required loop:
 
-1. Run the initial Codex, Claude, and Gemini reviews.
+1. Run the initial Codex, Claude, and Antigravity reviews.
 2. Merge reviewer findings and classify every issue as `BLOCKING`,
    `NON-BLOCKING`, or `QUESTION_FOR_USER`.
 3. If there are no blocking findings, create `refinement-review.md` with
@@ -399,7 +399,9 @@ unresolved issues if the loop stopped.
 |----------|----------------|---------------|--------|
 | Codex | `gpt-5.5` with high reasoning | `commands/epic_refine/reviewer-architecture-codex.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/codex-gpt-5.5-high.md` |
 | Claude | Opus 4.7 | `commands/epic_refine/reviewer-architecture-claude.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/claude-opus-4.7.md` |
-| Gemini | `gemini-3.1-pro-high` | `commands/epic_refine/reviewer-architecture-gemini.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/gemini-3.1-pro-high.md` |
+| Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/epic_refine/reviewer-architecture-agy.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
+
+Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
 
 Use the transport appropriate to each reviewer:
 
@@ -409,8 +411,7 @@ Use the transport appropriate to each reviewer:
   paths to the reviewer prompt, repository/worktree, and output file. Claude
   writes the report file directly; the wrapper validates it with sentinels,
   strips the sentinels, and retries once on timeout.
-- Gemini uses the direct CLI/headless invocation. Do not route Gemini through
-  `scope_gemini` for Phase 3.5 unless the direct Gemini CLI becomes unusable.
+- Antigravity uses the direct `agy --print` invocation.
 
 Reviewer execution skeleton:
 
@@ -442,8 +443,16 @@ REFINE_REVIEW_PROMPT_DIR=$(find ./plugins/scope/commands/epic_refine ./.claude/c
 REVIEWER_CLAUDE_PEXPECT_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-claude-pexpect.py" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
-GEMINI_REVIEW_MODEL="${SCOPE_GEMINI_MODEL:-gemini-3.1-pro-high}"
+CODEX_MODEL_ID="${SCOPE_CODEX_MODEL_ID:-gpt-5.5}"
+CODEX_REASONING_EFFORT="${SCOPE_CODEX_REASONING_EFFORT:-high}"
+CODEX_REVIEW_LABEL="${SCOPE_CODEX_REVIEW_LABEL:-${CODEX_MODEL_ID}-${CODEX_REASONING_EFFORT}}"
+AGY_REVIEW_MODEL="${SCOPE_AGY_MODEL:-Gemini 3.1 Pro (High)}"
+AGY_FALLBACK_MODEL="${SCOPE_AGY_FALLBACK_MODEL:-Gemini 3.5 Flash (High)}"
+AGY_REVIEW_OUTPUT_ID="${SCOPE_AGY_OUTPUT_ID:-agy-gemini-3.1-pro-high}"
+AGY_FALLBACK_OUTPUT_ID="${SCOPE_AGY_FALLBACK_OUTPUT_ID:-agy-gemini-3.5-flash}"
+AGY_PRINT_TIMEOUT="${SCOPE_AGY_PRINT_TIMEOUT:-60m}"
 SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
+CLAUDE_REFINE_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(python3 -c:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Write"
 
 build_refine_review_prompt_file() {
   local reviewer_file="$1"
@@ -456,24 +465,61 @@ build_refine_review_prompt_file() {
 }
 
 # Attempt all three reviewers every time:
-# - Codex directly when `codex` is available, otherwise codex-unavailable.md
+# - Codex directly when `codex` is available, otherwise codex-unavailable.md.
+#   Use --model "$CODEX_MODEL_ID" and
+#   -c model_reasoning_effort="\"$CODEX_REASONING_EFFORT\"".
+#   Do not pass "$CODEX_REVIEW_LABEL" as the model id.
+#   If "$CODEX_MODEL_ID" ends in -low, -medium, or -high, stop and write
+#   codex-unavailable.md because the reasoning suffix belongs in
+#   CODEX_REASONING_EFFORT, not CODEX_MODEL_ID.
 # - Claude through scope-reviewer-claude-pexpect.py when helper + `claude` +
 #   Python pexpect are available, otherwise claude-unavailable.md
-# - Gemini directly with:
-#     gemini --model "$GEMINI_REVIEW_MODEL" --approval-mode plan --skip-trust --prompt ""
-#   otherwise gemini-unavailable.md
+# - Antigravity directly with:
+#     agy --model "$AGY_REVIEW_MODEL" --print --sandbox --dangerously-skip-permissions --print-timeout "$AGY_PRINT_TIMEOUT"
+#   If the primary model is rate-limited, retry once with "$AGY_FALLBACK_MODEL".
+#   Otherwise write agy-unavailable.md.
 #
 # Claude invocation shape for each refine attempt:
 #   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
 #     --reviewer "claude" \
 #     --model "Claude Opus 4.7" \
-#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools 'Read,Glob,Grep,Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Write' --no-chrome}" \
+#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools ${CLAUDE_REFINE_ALLOWED_TOOLS} --no-chrome}" \
 #     --prompt-file "${REFINE_REVIEW_DIR}/reviewer-architecture-claude-prompt.md" \
 #     --output-file "${REFINE_REVIEW_DIR}/claude-opus-4.7.md" \
 #     --metadata-file "$REFINE_REVIEW_METADATA_FILE" \
 #     --cwd "$(pwd)" \
 #     --timeout-seconds "$REVIEW_TIMEOUT_SECONDS" \
 #     --retries "$REVIEW_RETRIES"
+#
+# Antigravity invocation shape for each refine attempt:
+#   build_refine_review_prompt_file \
+#     "reviewer-architecture-agy.md" \
+#     "${REFINE_REVIEW_DIR}/reviewer-architecture-agy-prompt.md"
+#   if ! agy \
+#       --model "$AGY_REVIEW_MODEL" \
+#       --print \
+#       --sandbox \
+#       --dangerously-skip-permissions \
+#       --print-timeout "$AGY_PRINT_TIMEOUT" \
+#       < "${REFINE_REVIEW_DIR}/reviewer-architecture-agy-prompt.md" \
+#       > "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.md" \
+#       2> "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"; then
+#     if grep -Eiq 'rate.?limit|quota|429|resource.?exhausted|too many requests|try again later' \
+#         "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"; then
+#       agy \
+#         --model "$AGY_FALLBACK_MODEL" \
+#         --print \
+#         --sandbox \
+#         --dangerously-skip-permissions \
+#         --print-timeout "$AGY_PRINT_TIMEOUT" \
+#         < "${REFINE_REVIEW_DIR}/reviewer-architecture-agy-prompt.md" \
+#         > "${REFINE_REVIEW_DIR}/${AGY_FALLBACK_OUTPUT_ID}.md" \
+#         2> "${REFINE_REVIEW_DIR}/${AGY_FALLBACK_OUTPUT_ID}.stderr.txt" \
+#         || echo "Antigravity fallback failed." > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#     else
+#       echo "Antigravity failed." > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#     fi
+#   fi
 ```
 
 **Review questions:**
@@ -500,7 +546,7 @@ build_refine_review_prompt_file() {
 |----------|--------|-------------------|
 | Codex | {completed/unavailable/not run} | {N} |
 | Claude | {completed/unavailable/not run} | {N} |
-| Gemini | {completed/unavailable/not run} | {N} |
+| Antigravity | {completed/unavailable/not run} | {N} |
 
 ## Review Cycle Summary
 | Cycle | Review directory | Blockers found | Corrections applied | Result |

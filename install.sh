@@ -95,6 +95,10 @@ echo "  Created ${CODEX_DIR}/"
 # helper behind makes installed Scope trees ambiguous after upgrades.
 rm -f "${CLAUDE_DIR}/commands/scripts/scope-reviewer-tmux.sh"
 rm -f "${CODEX_DIR}/scripts/scope-reviewer-tmux.sh"
+rm -f "${CLAUDE_DIR}/commands/audit_epic/reviewer-gemini.md"
+rm -f "${CODEX_DIR}/commands/audit_epic/reviewer-gemini.md"
+rm -f "${CLAUDE_DIR}/commands/epic_refine/reviewer-architecture-gemini.md"
+rm -f "${CODEX_DIR}/commands/epic_refine/reviewer-architecture-gemini.md"
 
 echo ""
 echo -e "${YELLOW}Installing Claude Files${NC}"

@@ -53,7 +53,7 @@ Use `NON-BLOCKING` for useful improvements that do not prevent Gate #3.
 
 Return plain text using these exact labels:
 
-REVIEWER: Codex / gpt-5.5-high
+REVIEWER: Codex / gpt-5.5 / high reasoning
 DECISION: Approved for Gate #3 | Not approved for Gate #3
 
 SUMMARY:
