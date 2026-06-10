@@ -126,6 +126,6 @@ jobs:
             test -f "src_codex/commands/${command}.md"
           done
 
-          for reviewer in reviewer-codex reviewer-claude reviewer-gemini; do
+          for reviewer in reviewer-codex reviewer-claude reviewer-agy; do
             test -f "src_shared/commands/audit_epic/${reviewer}.md"
           done
