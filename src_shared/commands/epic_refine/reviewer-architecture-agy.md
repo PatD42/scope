@@ -26,11 +26,14 @@ Before writing the review, inspect these artifacts if they exist:
 - `docs/epics/{{EPIC_DIR}}/adr.md`
 - `docs/epics/{{EPIC_DIR}}/pdr.md`
 - `docs/epics/{{EPIC_DIR}}/test-strategy.md`
+- `docs/epics/{{EPIC_DIR}}/architecture-readiness-matrix.yaml`
 - `docs/architecture/13-specs/api/{{EPIC_ID}}-*.yaml`
 - `docs/architecture/13-specs/schemas/domain/{{EPIC_ID}}-*.json`
 - `docs/architecture/13-specs/database/postgresql/{{EPIC_ID}}-*.sql`
 - `docs/architecture/13-specs/errors/by-domain/{{EPIC_ID}}.yaml`
 - `docs/architecture/13-specs/errors/taxonomy.yaml`
+- latest `docs/epics/{{EPIC_DIR}}/reviews/refine-architecture-*/readiness-preflight.md`
+- latest `docs/epics/{{EPIC_DIR}}/reviews/refine-architecture-*/pre-review-hardening.md`
 
 List missing required inputs under `Unread Or Missing Required Files`.
 
@@ -39,6 +42,14 @@ List missing required inputs under `Unread Or Missing Required Files`.
 Be constructively adversarial. Your goal is not to summarize the epic or reward
 well-written documentation. Your goal is to find the smallest concrete
 architecture/spec mismatch that would force Phase 4 to invent behavior.
+
+Start from `architecture-readiness-matrix.yaml`, the latest
+`readiness-preflight.md`, and the latest `pre-review-hardening.md`. Validate
+whether the matrix rows are complete, whether the cited evidence actually
+supports each row, whether the preflight missed a contract gap, and whether
+hardening searched sibling surfaces for repeated versions of the same defect
+pattern. Do not spend review budget reconstructing a matrix the orchestrator
+already generated.
 
 Avoid noise:
 
@@ -76,6 +87,18 @@ Before writing the review, explicitly try to disprove each of these claims:
    is auditable after the fact.
 7. Any inherited schema or DDL from regAssist-049 through regAssist-052 that is
    extended by this epic is compatible with the new contract.
+8. Every matrix row with `requires.api`, `requires.json_schema`,
+   `requires.sql`, `requires.error_contract`, `requires.test_strategy`, or
+   `requires.file_plan_owner` has cited evidence that exists and matches the
+   requirement.
+9. Every destructive cleanup, replay, idempotency, supersession, or attempt
+   ownership promise has ownership-matrix evidence.
+10. The latest `readiness-preflight.md` has no unresolved required-artifact,
+   parse, matrix, or obvious contract failures.
+11. The latest `pre-review-hardening.md` proves the orchestrator checked for
+    sibling failures across AC/API/schema/DDL/tests, destructive ownership,
+    current-state derivation, promised endpoints, existing data families, and
+    implementer-invention risk.
 
 If a mandatory adversarial check passes, cite the files that proved it. If you
 did not inspect enough evidence, mark the related required check `Unverified`,
@@ -127,6 +150,9 @@ REQUIRED CHECKS PERFORMED:
 | Architecture complete | Pass/Fail/Unverified | {file/section evidence} |
 | Specs match architecture | Pass/Fail/Unverified | {file/section evidence} |
 | Test strategy sufficient | Pass/Fail/Unverified | {file/section evidence} |
+| Readiness matrix complete | Pass/Fail/Unverified | {file/section evidence} |
+| Preflight checks clean | Pass/Fail/Unverified | {file/section evidence} |
+| Pre-review hardening complete | Pass/Fail/Unverified | {file/section evidence} |
 | Ready for Phase 4 | Pass/Fail/Unverified | {file/section evidence} |
 
 ADVERSARIAL CHECKS PERFORMED:
@@ -139,6 +165,10 @@ ADVERSARIAL CHECKS PERFORMED:
 | Fail-closed rules have error/API/persistence behavior | Pass/Fail/Unverified | {file/section evidence} |
 | Routing/corpus/review-required paths are auditable | Pass/Fail/Unverified | {file/section evidence} |
 | Inherited 049-052 contracts remain compatible | Pass/Fail/Unverified | {file/section evidence} |
+| Matrix rows have required evidence | Pass/Fail/Unverified | {file/section evidence} |
+| Destructive/replay ownership specified | Pass/Fail/Unverified | {file/section evidence} |
+| Preflight failures resolved | Pass/Fail/Unverified | {file/section evidence} |
+| Sibling defect patterns expanded | Pass/Fail/Unverified | {file/section evidence} |
 
 BLOCKING FINDINGS:
 - Title:

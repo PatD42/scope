@@ -18,6 +18,7 @@ REQUIRED_FILES=(
     "details.md"
     "acceptance-criteria.md"
     "acceptance-traceability.yaml"
+    "architecture-readiness-matrix.yaml"
     "system-context.md"
     "architecture.md"
     "adr.md"
@@ -140,6 +141,30 @@ validate_acceptance_traceability() {
     rg -F -q "runtime_evidence:" "$traceability_file" || fail "acceptance-traceability.yaml missing runtime_evidence"
 }
 
+validate_architecture_readiness_matrix() {
+    local matrix_file="$1"
+
+    rg -F -q "rows:" "$matrix_file" || fail "architecture-readiness-matrix.yaml missing rows"
+    rg -F -q "requires:" "$matrix_file" || fail "architecture-readiness-matrix.yaml missing requires"
+    rg -F -q "evidence:" "$matrix_file" || fail "architecture-readiness-matrix.yaml missing evidence"
+    rg -F -q "blocker_when_missing:" "$matrix_file" || fail "architecture-readiness-matrix.yaml missing blocker_when_missing"
+    rg -F -q "status:" "$matrix_file" || fail "architecture-readiness-matrix.yaml missing status"
+
+    python3 - "$matrix_file" <<'PY' || fail "architecture-readiness-matrix.yaml has rows requiring file-plan ownership with empty evidence.file_plan_owner"
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+rows = re.split(r"(?m)^\s*-\s+id:\s*", text)
+for row in rows[1:]:
+    requires_owner = re.search(r"(?m)^\s*file_plan_owner:\s*true\s*$", row)
+    empty_owner = re.search(r"(?m)^\s*file_plan_owner:\s*\[\]\s*$", row)
+    if requires_owner and empty_owner:
+        raise SystemExit(1)
+PY
+}
+
 for file_name in "${REQUIRED_FILES[@]}"; do
     require_file "${EPIC_DIR}/${file_name}"
 done
@@ -150,5 +175,6 @@ validate_folder_hygiene
 validate_details_frontmatter "${EPIC_DIR}/details.md"
 validate_adr "${EPIC_DIR}/adr.md"
 validate_acceptance_traceability "${EPIC_DIR}/acceptance-traceability.yaml"
+validate_architecture_readiness_matrix "${EPIC_DIR}/architecture-readiness-matrix.yaml"
 
 echo "Epic documentation validation passed: ${EPIC_DIR}"

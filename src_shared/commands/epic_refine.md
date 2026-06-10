@@ -336,8 +336,10 @@ and spec gaps before tactical planning begins.
 - `docs/epics/{epic-dir}/adr.md`
 - `docs/epics/{epic-dir}/pdr.md`
 - `docs/epics/{epic-dir}/test-strategy.md`
+- `docs/epics/{epic-dir}/architecture-readiness-matrix.yaml`
 - `docs/architecture/13-specs/api/{epic-id}-*.yaml`
 - `docs/architecture/13-specs/schemas/domain/{epic-id}-*.json`
+- `docs/architecture/13-specs/database/postgresql/{epic-id}-*.sql`
 - `docs/architecture/13-specs/errors/by-domain/{epic-id}.yaml`
 - `docs/architecture/13-specs/errors/taxonomy.yaml`
 
@@ -347,15 +349,210 @@ Phase 3.5 review must be performed by all three reviewer perspectives: Codex,
 Claude, and Antigravity. Do not choose only one reviewer and do not treat one
 reviewer's approval as sufficient.
 
-Each reviewer must be attempted for every Phase 3.5 review. If a local tool,
-credential, model, or CLI mode is unavailable, write an explicit
+Each reviewer must be attempted for the initial full review and the final
+approval review. Targeted correction reruns may use only the reviewer(s)
+required by the rerun policy below, but `refinement-review.md` must document why
+the rerun was targeted. If a local tool, credential, model, or CLI mode is
+unavailable during a required attempt, write an explicit
 `{reviewer}-unavailable.md` file in the current `refine-architecture-NNN`
 directory and disclose that coverage gap in `refinement-review.md`. Do not
-silently skip a reviewer.
+silently skip a required reviewer.
 
 Unavailable reviewer tooling is not, by itself, a refinement failure. However,
 Gate #3 must still include the three-reviewer coverage table and must clearly
 state which of Codex, Claude, and Antigravity completed or were unavailable.
+
+Bad Scope-owned reviewer command syntax is not normal reviewer unavailability.
+Before creating a review attempt, run the reviewer CLI preflight below. If a
+reviewer would fail because Scope is passing an invalid flag, malformed
+`allowedTools`, an invalid model id, or an invocation shape not supported by the
+local CLI, stop with `SCOPE TOOLING ERROR`, fix the command/configuration, and
+do not count or create a reviewer attempt. Examples: `codex exec` rejects a
+Scope-provided flag, Claude exits with `unknown option`, or `agy` rejects the
+configured model/flags.
+
+### Phase 3.5a: Deterministic Readiness Preflight
+
+Run this preflight before the first model review and before each full-review
+rerun. The preflight is orchestrator-owned; do not ask external reviewers to
+rediscover these basics.
+
+#### Reviewer CLI Preflight
+
+Validate reviewer command syntax before spending a review attempt:
+
+- Codex:
+  - `command -v codex`
+  - `codex exec --help`
+  - verify `CODEX_MODEL_ID` does not end in `-low`, `-medium`, or `-high`
+  - verify Scope will call `codex exec --model "$CODEX_MODEL_ID" -c model_reasoning_effort="\"$CODEX_REASONING_EFFORT\""`
+  - if the local `codex exec --help` does not support a Scope-specified flag, stop as `SCOPE TOOLING ERROR`
+- Claude:
+  - `command -v claude`
+  - `claude --help`
+  - verify `scope-reviewer-claude-pexpect.py` exists
+  - verify `python3 -c 'import pexpect'`
+  - verify the final `--allowedTools` value is quoted as one shell argument
+    because entries such as `Bash(python3 -c:*)` contain spaces
+  - if Claude exits with `unknown option` before reading the prompt, stop as
+    `SCOPE TOOLING ERROR`
+- Antigravity:
+  - `command -v agy`
+  - `agy --help`
+  - `agy models`
+  - verify the configured primary and fallback model names appear in `agy models`
+  - verify Scope will call `agy --print --sandbox --dangerously-skip-permissions`
+  - if `agy` rejects Scope-provided flags or model names, stop as `SCOPE TOOLING ERROR`
+
+Local tool absence, expired credentials, quota, or unavailable local models can
+still be recorded as reviewer unavailable. Bad Scope invocation syntax cannot.
+
+#### Architecture Readiness Matrix
+
+Create or update `docs/epics/{epic-dir}/architecture-readiness-matrix.yaml`
+before model review. This matrix is a compact checklist for reviewers; it is not
+approval evidence by itself.
+
+Required shape:
+
+```yaml
+epic_id: "{epic-id}"
+generated_at: "{ISO-8601}"
+status: draft
+rows:
+  - id: "AC1-PERSISTENCE"
+    source:
+      artifact: "acceptance-criteria.md"
+      anchor: "AC1"
+    requirement: "Concrete behavior promised by the AC/PDR/ADR"
+    risk: "low | medium | high | destructive | security | data_integrity"
+    requires:
+      business: true
+      architecture: true
+      adr_or_pdr: true
+      api: false
+      json_schema: false
+      sql: true
+      error_contract: false
+      test_strategy: true
+      file_plan_owner: true
+      ownership_matrix: false
+    evidence:
+      business: ["docs/epics/{epic-dir}/acceptance-criteria.md#AC1"]
+      architecture: []
+      adr_or_pdr: []
+      api: []
+      json_schema: []
+      sql: []
+      error_contract: []
+      test_strategy: []
+      file_plan_owner: []
+      ownership_matrix: []
+    status: "pass | fail | unverified | not_applicable"
+    blocker_when_missing: true
+    notes: ""
+```
+
+Create rows for:
+
+- every acceptance criterion
+- every accepted PDR/ADR decision that changes behavior, persistence, API,
+  schema, error handling, cleanup, replay, migration, security, rollout, or
+  operator workflow
+- every destructive, idempotency, replay, cleanup, backfill, queue, external
+  integration, or data-integrity behavior
+- every generated API/schema/SQL/error contract introduced by the epic
+- every file-plan story owner once file plans exist
+
+For cross-cutting resilience, replay, cleanup, or idempotency epics, also
+require a phase/table/output ownership row for each affected data family. If the
+epic includes destructive cleanup, replay, supersession, or attempt ownership,
+missing ownership matrix evidence is `BLOCKING` before reviewer launch.
+
+#### Scripted Readiness Checks
+
+Run lightweight scripted checks and write results to
+`docs/epics/{epic-dir}/reviews/refine-architecture-NNN/readiness-preflight.md`
+before launching reviewers:
+
+- required epic artifacts exist
+- `architecture-readiness-matrix.yaml` exists and has at least one row per AC
+- every matrix row has a stable id, source, requirement, risk, requires,
+  evidence, status, and blocker flag
+- every `requires.*: true` has evidence or the row is `fail`/`unverified`
+- API, JSON, and error specs parse
+- SQL specs exist when any AC/PDR/ADR promises persistence or migrations
+- every API/schema/error/SQL file expected by the matrix exists
+- every accepted PDR/ADR has at least one matrix row
+- every high-risk row has test-strategy evidence
+- every row that requires implementation has a planned file-plan owner before
+  Gate #4
+- destructive cleanup/replay/idempotency rows have ownership-matrix evidence
+
+If scripted checks find missing artifacts, empty evidence, parse failures, stale
+open questions, or obvious contract gaps that can be fixed from existing
+approved requirements, fix those artifacts before running external reviewers.
+Do not spend a full reviewer cycle on missing required files or mechanically
+detectable omissions.
+
+#### Pre-Review Hardening
+
+Before launching external reviewers, create
+`docs/epics/{epic-dir}/reviews/refine-architecture-NNN/pre-review-hardening.md`.
+This is the orchestrator's adversarial self-check. It should be concise and
+file-backed; do not turn it into another narrative architecture document.
+
+Required checks:
+
+- every acceptance criterion maps to API, schema, SQL/DDL, error contract, and
+  test-strategy evidence where applicable, or has an explicit not-applicable
+  rationale
+- every persistence claim has matching DDL/migration evidence or an explicit
+  no-DDL decision with rationale
+- every destructive, cleanup, replay, backfill, or migration action has a
+  phase-owned table/key/record ownership matrix
+- every "current state" or "latest state" claim has persisted ownership columns
+  or deterministic derivation rules
+- every endpoint or API payload promised by acceptance criteria, PDRs, or ADRs
+  appears in the OpenAPI/API contract, or has an explicit no-endpoint decision
+- every existing table, data family, side table, or generated output family
+  named in architecture, ADRs, PDRs, file plans, previous audits, or reviewer
+  feedback is covered by the new contract or explicitly deferred
+- every observer, dashboard, monitor, report, export, or operator workflow can
+  get the promised state from an API payload, database query, artifact, or
+  documented derivation rule
+- answer: "What would an implementer still have to invent?" If the answer is
+  product behavior, architecture, persistence, API shape, error handling,
+  ownership, ordering, state transition, or acceptance policy, the epic is not
+  ready for external review
+
+Recommended format:
+
+```markdown
+# Pre-Review Hardening: {epic-id}
+
+## Result
+{pass / changes required}
+
+## Checks
+| Check | Status | Evidence | Correction |
+|---|---|---|---|
+| AC to contract/test coverage | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Persistence DDL/no-DDL decisions | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Destructive/replay ownership matrix | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Current-state ownership/derivation | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Promised endpoints/API payloads | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Existing table/data/output families | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Observer/operator state availability | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Implementer invention scan | {pass/fail} | {files/sections} | {none or fix made} |
+
+## Open Hardening Failures
+- {None, or concrete blocker}
+```
+
+If pre-review hardening finds a failure that can be fixed from existing approved
+requirements, fix it before external review. If it requires user input, return
+to the appropriate earlier phase instead of launching reviewers.
 
 ### Phase 3.5 Autonomous Review Loop
 
@@ -363,21 +560,59 @@ Phase 3.5 runs autonomously unless a reviewer finding requires user input.
 
 Required loop:
 
-1. Run the initial Codex, Claude, and Antigravity reviews.
-2. Merge reviewer findings and classify every issue as `BLOCKING`,
+1. Run deterministic readiness preflight and fix mechanical gaps.
+2. Run pre-review hardening and fix self-detected gaps.
+3. Run the initial Codex, Claude, and Antigravity reviews.
+4. Merge reviewer findings and classify every issue as `BLOCKING`,
    `NON-BLOCKING`, or `QUESTION_FOR_USER`.
-3. If there are no blocking findings, create `refinement-review.md` with
+5. If there are no blocking findings, create `refinement-review.md` with
    `Approved for Gate #3`.
-4. If there are blocking findings that can be fixed from existing product,
+6. If there are blocking findings that can be fixed from existing product,
    architecture, and documentation context, fix them autonomously in the Phase
    1-3 artifacts and specs.
-5. Rerun all three reviewers after each correction batch.
-6. Repeat correction batches up to `MAX_PHASE_35_CORRECTION_CYCLES=3`.
+7. Run blocker pattern expansion before rerunning reviewers.
+8. Rerun targeted scripted checks and pre-review hardening for the changed
+   matrix rows, changed files, and sibling surfaces.
+9. Rerun reviewers according to the rerun policy below.
+10. Repeat correction batches up to `MAX_PHASE_35_CORRECTION_CYCLES=3`.
+
+Rerun policy:
+
+- Initial review: run all available reviewers after readiness preflight passes.
+- Mechanical correction with no changed architecture decision: rerun scripted
+  checks and only the reviewer(s) that found the blocker, plus any reviewer
+  whose required evidence rows changed.
+- New or materially changed architecture/spec artifact: rerun all available
+  reviewers because new evidence can expose second-order contradictions.
+- Final approval: run all available reviewers once unless the user explicitly
+  instructs not to rerun.
+- Do not rerun reviewers for missing required artifacts that scripted preflight
+  should have caught; fix the artifact and rerun preflight first.
+
+Blocker pattern expansion:
+
+- Missing DDL or migration evidence means audit every persistence claim and
+  every touched table/data family, not only the named table.
+- Missing API field, endpoint, or payload evidence means audit every
+  acceptance-facing API contract, schema, and observer/operator consumer.
+- Missing ownership rule means audit every phase, side table, derived output,
+  generated artifact, and cleanup/replay/backfill target.
+- Missing current-state rule means audit every place that reads, writes,
+  derives, caches, displays, or exports that state.
+- Missing force/override/admin behavior means audit request fields, persisted
+  rationale fields, authorization/policy rules, indexes, auditability, and test
+  strategy together.
+- Missing error behavior means audit API status, error taxonomy, retryability,
+  persistence state, operator visibility, and tests together.
+- Missing test-strategy evidence means audit every matrix row with the same
+  risk category or runtime path.
+- Record the sibling surfaces checked and fixes made in
+  `pre-review-hardening.md` and `refinement-review.md`.
 
 Cycle counting:
 
 - The initial review does not count as a correction cycle.
-- Each "fix blockers + rerun all three reviewers" batch counts as one
+- Each "fix blockers + rerun required reviewers" batch counts as one
   correction cycle.
 - The default and maximum correction cycle limit is 3.
 
@@ -464,7 +699,10 @@ build_refine_review_prompt_file() {
     "${REFINE_REVIEW_PROMPT_DIR}/${reviewer_file}" > "$output_file"
 }
 
-# Attempt all three reviewers every time:
+# Attempt reviewers according to the rerun policy:
+# - Initial and final approval reviews use all available reviewers.
+# - Mechanical correction reviews may be targeted to the reviewer(s) that found
+#   the blocker plus reviewers whose required evidence rows changed.
 # - Codex directly when `codex` is available, otherwise codex-unavailable.md.
 #   Use --model "$CODEX_MODEL_ID" and
 #   -c model_reasoning_effort="\"$CODEX_REASONING_EFFORT\"".
@@ -483,7 +721,7 @@ build_refine_review_prompt_file() {
 #   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
 #     --reviewer "claude" \
 #     --model "Claude Opus 4.7" \
-#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools ${CLAUDE_REFINE_ALLOWED_TOOLS} --no-chrome}" \
+#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools '${CLAUDE_REFINE_ALLOWED_TOOLS}' --no-chrome}" \
 #     --prompt-file "${REFINE_REVIEW_DIR}/reviewer-architecture-claude-prompt.md" \
 #     --output-file "${REFINE_REVIEW_DIR}/claude-opus-4.7.md" \
 #     --metadata-file "$REFINE_REVIEW_METADATA_FILE" \
@@ -548,11 +786,22 @@ build_refine_review_prompt_file() {
 | Claude | {completed/unavailable/not run} | {N} |
 | Antigravity | {completed/unavailable/not run} | {N} |
 
+## Readiness Preflight
+| Check | Status | Evidence |
+|---|---|---|
+| Reviewer CLI preflight | {pass/fail} | {readiness-preflight.md section} |
+| Architecture readiness matrix | {pass/fail} | `architecture-readiness-matrix.yaml` |
+| Pre-review hardening | {pass/fail} | `pre-review-hardening.md` |
+| Required artifacts | {pass/fail} | {missing/present list} |
+| API/schema/error/SQL parse | {pass/fail/not applicable} | {output} |
+| AC/PDR/ADR coverage | {pass/fail} | {matrix row counts} |
+| High-risk ownership/test coverage | {pass/fail/not applicable} | {matrix row counts} |
+
 ## Review Cycle Summary
-| Cycle | Review directory | Blockers found | Corrections applied | Result |
-|-------|------------------|----------------|---------------------|--------|
-| Initial | reviews/refine-architecture-001 | {N} | n/a | {approved / corrections needed} |
-| 1 | reviews/refine-architecture-002 | {N} | {summary} | {approved / corrections needed / stopped} |
+| Cycle | Review directory | Review scope | Trigger | Blockers found | Corrections applied | Result |
+|-------|------------------|--------------|---------|----------------|---------------------|--------|
+| Initial | reviews/refine-architecture-001 | full | readiness preflight passed | {N} | n/a | {approved / corrections needed} |
+| 1 | reviews/refine-architecture-002 | {targeted/full} | {blocking findings / changed architecture artifact / final approval} | {N} | {summary} | {approved / corrections needed / stopped} |
 
 ## Strategic Findings
 
@@ -573,6 +822,11 @@ build_refine_review_prompt_file() {
 
 Gate #3 cannot be shown if any reviewer or the orchestrator finds:
 
+- `SCOPE TOOLING ERROR` from reviewer CLI preflight
+- missing or failing `architecture-readiness-matrix.yaml`
+- missing or failing `pre-review-hardening.md`
+- unresolved readiness preflight failures for required artifacts, parse checks,
+  AC/PDR/ADR coverage, or high-risk ownership/test coverage
 - unresolved business ambiguity that would require Architect or Developer product decisions
 - missing or contradictory architecture decisions
 - generated specs that do not match architecture or ADRs
@@ -589,7 +843,10 @@ explicit stop conditions applies.
 ### Approval Gate #3
 
 Before presenting this gate, confirm `docs/epics/{epic-dir}/refinement-review.md`
-exists and its decision is `Approved for Gate #3`.
+exists and its decision is `Approved for Gate #3`. Also confirm
+`docs/epics/{epic-dir}/architecture-readiness-matrix.yaml` exists and the latest
+`readiness-preflight.md` and `pre-review-hardening.md` have no unresolved
+blocking failures.
 
 **If user approves**: Write summary entry and proceed to Phase 4
 
@@ -784,6 +1041,15 @@ Create `docs/epics/{epic-dir}/acceptance-traceability.yaml` during Phase 4, alon
 
 The initial matrix is generated from `acceptance-criteria.md`, `architecture.md`, `adr.md`, `test-strategy.md`, and `file-plan-story-*.yaml`.
 
+Also update `docs/epics/{epic-dir}/architecture-readiness-matrix.yaml` after
+file plans are written:
+
+- fill `evidence.file_plan_owner` for every row with `requires.file_plan_owner: true`
+- mark rows `fail` if they still lack a story/file-plan owner
+- add rows for any new implementation obligation discovered during file planning
+- ensure every high-risk or runtime/operational row has both test-strategy and
+  file-plan ownership evidence before Gate #4
+
 Required format:
 
 ```yaml
@@ -844,6 +1110,8 @@ The final approval gate cannot be shown until validation passes. Validation must
 - `details.md` frontmatter is present and contains at least `epic_id`, `title`, and `status`
 - `adr.md` uses global ADR numbering and includes the required template fields
 - `acceptance-traceability.yaml` exists and contains `acceptance_items`
+- `architecture-readiness-matrix.yaml` exists and every row requiring
+  file-plan ownership has `evidence.file_plan_owner`
 - at least one `file-plan-story-*.yaml` exists
 
 ### Phase 4 Checklist

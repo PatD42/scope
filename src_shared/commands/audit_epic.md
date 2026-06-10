@@ -633,7 +633,7 @@ run_claude_review() {
   fi
 
   build_review_prompt_file "reviewer-claude.md" "$prompt_file"
-  local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools ${CLAUDE_AUDIT_ALLOWED_TOOLS} --no-chrome}"
+  local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools '${CLAUDE_AUDIT_ALLOWED_TOOLS}' --no-chrome}"
   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
     --reviewer "claude" \
     --model "Claude Opus 4.7" \
