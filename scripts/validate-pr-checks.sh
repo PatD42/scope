@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+section() {
+  printf '\n==> %s\n' "$1"
+}
+
+fail() {
+  echo "Validation failed: $1" >&2
+  exit 1
+}
+
+diff_range() {
+  if [[ -n "${1:-}" ]]; then
+    printf '%s\n' "$1"
+  elif [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+    printf 'origin/%s...HEAD\n' "$GITHUB_BASE_REF"
+  elif git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+    printf 'HEAD~1...HEAD\n'
+  fi
+}
+
+changed_files() {
+  local range="$1"
+
+  {
+    if [[ -n "$range" ]]; then
+      git diff --name-only "$range"
+    fi
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+  } | sed '/^$/d' | sort -u
+}
+
+is_text_file() {
+  local file="$1"
+  local mime
+
+  mime="$(file -b --mime-type "$file" 2>/dev/null || true)"
+  case "$mime" in
+    text/*|application/json|application/xml|application/x-yaml|application/yaml|application/x-shellscript)
+      return 0
+      ;;
+  esac
+
+  case "$file" in
+    *.md|*.yaml|*.yml|*.json|*.toml|*.sh|*.py|*.txt|*.sql|*.html|*.css|*.js|*.ts|*.tsx)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+check_whitespace() {
+  local range="$1"
+  local failed=0
+  local file
+  local output
+
+  section "Check whitespace"
+
+  if [[ -n "$range" ]]; then
+    git diff --check "$range" || failed=1
+  fi
+
+  git diff --check || failed=1
+  git diff --cached --check || failed=1
+
+  while IFS= read -r file; do
+    [[ -f "$file" ]] || continue
+    is_text_file "$file" || continue
+
+    output="$(git diff --check --no-index /dev/null "$file" 2>/dev/null || true)"
+    if [[ -n "$output" ]]; then
+      echo "$output"
+      failed=1
+    fi
+  done < <(git ls-files --others --exclude-standard)
+
+  [[ "$failed" -eq 0 ]] || fail "whitespace check failed"
+}
+
+check_generated_files() {
+  local failed=0
+  local file
+
+  section "Reject local/generated files"
+
+  while IFS= read -r file; do
+    case "$file" in
+      .DS_Store|*/.DS_Store|*.pyc|*/__pycache__/*|*/.pytest_cache/*|.claude/*|plugins/*)
+        echo "Forbidden local/generated file: $file"
+        failed=1
+        ;;
+    esac
+  done < <({
+    git ls-files
+    git ls-files --others --exclude-standard
+  } | sort -u)
+
+  [[ "$failed" -eq 0 ]] || fail "forbidden local/generated files found"
+}
+
+check_mirrors() {
+  local range="$1"
+  local missing=""
+  local changed_file_list
+  local file
+  local counterpart
+
+  section "Check mirrored Claude/Codex changes"
+
+  changed_file_list="$(mktemp)"
+  changed_files "$range" > "$changed_file_list"
+
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+
+    case "$file" in
+      src_claude/*)
+        counterpart="src_codex/${file#src_claude/}"
+        ;;
+      src_codex/*)
+        counterpart="src_claude/${file#src_codex/}"
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    if [[ -f "$counterpart" ]] && ! grep -F -x -q "$counterpart" "$changed_file_list"; then
+      missing="${missing}\n${file} changed, but matching ${counterpart} was not changed."
+    fi
+  done < "$changed_file_list"
+
+  rm -f "$changed_file_list"
+
+  if [[ -n "$missing" ]]; then
+    echo "Claude/Codex mirrored files must be updated together when a counterpart exists."
+    printf '%b\n' "$missing"
+    fail "mirrored file check failed"
+  fi
+}
+
+check_install() {
+  local tmpdir
+
+  section "Install smoke test"
+
+  tmpdir="$(mktemp -d)"
+  ./install.sh "$tmpdir" >/tmp/scope-install-smoke.log
+
+  test -f "$tmpdir/.claude/commands/wrap_epic.md"
+  test -f "$tmpdir/.claude/commands/implement.md"
+  test -f "$tmpdir/.claude/commands/audit_epic.md"
+
+  test -f "$tmpdir/plugins/scope/commands/wrap_epic.md"
+  test -f "$tmpdir/plugins/scope/commands/implement.md"
+  test -f "$tmpdir/plugins/scope/commands/audit_epic.md"
+  test -f "$tmpdir/plugins/scope/.codex-plugin/plugin.json"
+
+  test -d "$tmpdir/.claude/commands/audit_epic"
+  test -d "$tmpdir/plugins/scope/commands/audit_epic"
+
+  test -f "$tmpdir/.claude/skills/project-documentation/SKILL.md"
+  test -f "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
+  grep -n "Path selection rule" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
+  grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
+  grep -n "Path selection rule" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
+  grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
+
+  rm -rf "$tmpdir"
+}
+
+check_codex_plugin_naming() {
+  section "Check Codex plugin naming"
+
+  if grep -R -n -E "scope-for-codex|scope_for_codex" src_codex src_shared install.sh README.md CONTRIBUTING.md; then
+    fail "found stale Codex plugin naming; use 'scope'"
+  fi
+
+  grep -n -E '"name"[[:space:]]*:[[:space:]]*"scope"' src_codex/.codex-plugin/plugin.json
+}
+
+check_codegraph_guidance() {
+  section "Check CodeGraph guidance"
+
+  if grep -R -n -E 'Do not use CodeGraph MCP|CodeGraph MCP is intentionally disabled|not MCP' src_shared/commands src_claude/commands src_codex/commands src_codex/skills; then
+    fail "found stale CodeGraph MCP prohibition"
+  fi
+
+  grep -n "Prefer CodeGraph MCP" src_shared/commands/epic_refine.md
+  grep -n "Prefer CodeGraph MCP" src_claude/commands/implement.md
+  grep -n "Prefer CodeGraph MCP" src_codex/commands/implement.md
+}
+
+check_command_expectations() {
+  local command
+  local reviewer
+
+  section "Check mirrored command expectations"
+
+  for command in implement wrap_epic; do
+    test -f "src_claude/commands/${command}.md"
+    test -f "src_codex/commands/${command}.md"
+  done
+
+  for reviewer in reviewer-codex reviewer-claude reviewer-agy; do
+    test -f "src_shared/commands/audit_epic/${reviewer}.md"
+  done
+}
+
+main() {
+  local range
+
+  range="$(diff_range "${1:-}")"
+
+  check_whitespace "$range"
+  check_generated_files
+  check_mirrors "$range"
+  check_install
+  check_codex_plugin_naming
+  check_codegraph_guidance
+  check_command_expectations
+
+  section "All PR checks passed"
+}
+
+main "$@"

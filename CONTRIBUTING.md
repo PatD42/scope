@@ -47,10 +47,15 @@ Do not edit generated install output as the source of truth. Update the files un
 Before opening a PR, run:
 
 ```bash
-git diff --check
+./scripts/validate-pr-checks.sh
 ```
 
-For installable Scope changes, also verify that installation propagates the files correctly:
+This runs the same checks as GitHub Actions, including whitespace checks for
+staged and untracked files, mirrored Claude/Codex file changes, generated-file
+rejection, and the install smoke test.
+
+For quick manual install checks, you can also verify that installation propagates
+the files correctly:
 
 ```bash
 tmpdir=$(mktemp -d)
