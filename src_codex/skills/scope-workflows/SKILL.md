@@ -11,10 +11,10 @@ Use this skill when the user asks for Scope-like workflows in Codex, invokes `sc
 
 Resolve paths from the current checkout only.
 
-- Primary Codex plugin root: `./plugins/scope/`
-- Optional project overrides: `./.claude/`
+- Codex plugin root: `./plugins/scope/`
 
 When running inside `./wip/{epic-id}`, use the `plugins/scope/` directory from that worktree checkout. Do not fall back to the main repo copy or any other checkout.
+Do not read `.claude/` as a Codex command, role, governance, skill, template, or override source. `.claude/` belongs to the Claude installation only.
 
 Within the current checkout:
 
@@ -24,7 +24,7 @@ Within the current checkout:
 - Documentation templates and tracking adapters: `skills/`
 - Scope reference docs: `docs/`
 
-If the same artifact exists in the project `.claude/` directory, prefer the project copy because it may contain project-specific edits. That override must still come from the current checkout.
+If the same artifact exists in the current checkout's `plugins/scope/` directory, prefer that project copy because it may contain project-specific edits.
 
 ## Command Invocation
 
@@ -90,4 +90,4 @@ CodeGraph is scoped to the current working directory.
 
 ## Quality Bar
 
-For this IntelAgent project, also follow the repository instructions in `.claude/CLAUDE.md` when present. Generated intelligence outputs must be read and judged as a product, not just mechanically produced files.
+Follow repository instructions in `AGENTS.md` when present. Generated intelligence outputs must be read and judged as a product, not just mechanically produced files.

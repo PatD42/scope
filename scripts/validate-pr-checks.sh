@@ -197,6 +197,17 @@ check_codegraph_guidance() {
   grep -n "Prefer CodeGraph MCP" src_codex/commands/implement.md
 }
 
+check_codex_override_sources() {
+  section "Check Codex override sources"
+
+  if grep -R -n -E 'prefer[^[:cntrl:]]*\.claude|fallback[^[:cntrl:]]*\.claude|\.claude[^[:cntrl:]]*project-specific|CLAUDE\.md' src_codex; then
+    fail "Codex files must use plugins/scope and AGENTS.md, not .claude overrides or CLAUDE.md"
+  fi
+
+  grep -n "Do not read \`.claude/\`" src_codex/skills/scope-workflows/SKILL.md
+  grep -n "Follow repository instructions in \`AGENTS.md\`" src_codex/skills/scope-workflows/SKILL.md
+}
+
 check_command_expectations() {
   local command
   local reviewer
@@ -224,6 +235,7 @@ main() {
   check_install
   check_codex_plugin_naming
   check_codegraph_guidance
+  check_codex_override_sources
   check_command_expectations
 
   section "All PR checks passed"
