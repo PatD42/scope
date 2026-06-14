@@ -67,4 +67,3 @@ graph LR
 |         | REST API | JSON        | TLS 1.3  |
 
 ---
-

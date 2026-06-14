@@ -101,4 +101,3 @@ stateDiagram-v2
 - timeout(): Handle timeout from suspended state
 
 ---
-

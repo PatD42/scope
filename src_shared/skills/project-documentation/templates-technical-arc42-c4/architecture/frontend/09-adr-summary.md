@@ -8,9 +8,9 @@
 
 ## Active Decisions
 
-<!-- 
+<!--
 Decisions currently in effect, grouped by category. "Reference" in the tables below should use markdown syntax and standard naming as follow:
-- if source is an EPIC ADR: [{epic-id}-ADR-{epic-ADR-id}](https://link-to-epic-adr-page#specific-adr-number) 
+- if source is an EPIC ADR: [{epic-id}-ADR-{epic-ADR-id}](https://link-to-epic-adr-page#specific-adr-number)
 - if source is not epic related: [SYSTEM-ADR-{system-ADR-id}](https://link-to-detailed-adr)
 -->
 
