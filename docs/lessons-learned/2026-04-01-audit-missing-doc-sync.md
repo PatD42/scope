@@ -25,7 +25,7 @@ Three-part fix across the pipeline:
 
 **1. /epic_refine (prevention):** Architect now produces a "Documentation Update Plan" during Phase 2 — a list of which architecture docs must be updated and what changes are needed. This is reviewed and approved by the user before implementation starts.
 
-**2. /implement Story 0 (execution):** The architect's scaffolding story now includes executing the documentation update plan — updating product-level architecture docs (backend/data.md, 05-building-blocks.md, etc.) to reflect the DESIGNED architecture, BEFORE developer implementation begins. The developer must NOT update these docs to avoid laundering divergence.
+**2. /implement Story 0 (execution):** The architect's scaffolding story now includes executing the documentation update plan — updating product-level architecture docs (`backend/13-specs/`, `backend/05-building-blocks.md`, etc.) to reflect the DESIGNED architecture, BEFORE developer implementation begins. The developer must NOT update these docs to avoid laundering divergence.
 
 **3. /audit_epic Phase 8 (detection):** New "Documentation Sync" audit phase checks if docs match code. But critically, it only produces RECOMMENDATIONS — it does NOT auto-fix docs. The user must decide for each finding:
 - "update docs" — implementation is correct, docs should change

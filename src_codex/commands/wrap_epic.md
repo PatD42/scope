@@ -378,14 +378,19 @@ Verification before leaving Step 5.2:
 
 Check if the epic's implementation changed architecture-level components:
 
+Read legacy backend/frontend docs as context if present, but write updates to
+the new architecture tree only. Do not create or extend
+`backend/overview.md`, `backend/services.md`, `backend/data.md`,
+`frontend/overview.md`, `frontend/structure.md`, or `frontend/patterns.md`.
+
 ```python
 # Did the epic add new services?
 if new_service_added:
-    print("Epic added new service(s). Update docs/architecture/backend/services.md? [yes/no]")
+    print("Epic added new service(s). Update docs/architecture/backend/05-building-blocks.md and/or backend/06-runtime.md? [yes/no]")
 
 # Did schema change?
 if schema_changed:
-    print("Database schema changed. Update docs/architecture/backend/data.md? [yes/no]")
+    print("Database schema changed. Update docs/architecture/backend/13-specs/database/ and related schemas? [yes/no]")
 
 # Did deployment change?
 if deployment_changed:

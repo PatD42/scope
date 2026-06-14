@@ -51,14 +51,24 @@ if not templates_product or not templates_arch:
 existing_product = Glob("docs/product/**/*.md")
 existing_arch_system = Glob("docs/architecture/*.md")
 existing_arch_crosscut = Glob("docs/architecture/08-cross-cutting/*.md")
-existing_backend = Glob("docs/architecture/backend/*.md")
-existing_frontend = Glob("docs/architecture/frontend/*.md")
+existing_backend = Glob("docs/architecture/backend/[0-9][0-9]-*.md")
+existing_frontend = Glob("docs/architecture/frontend/[0-9][0-9]-*.md")
+legacy_backend = (
+    Glob("docs/architecture/backend/overview.md")
+    + Glob("docs/architecture/backend/services.md")
+    + Glob("docs/architecture/backend/data.md")
+)
+legacy_frontend = (
+    Glob("docs/architecture/frontend/overview.md")
+    + Glob("docs/architecture/frontend/structure.md")
+    + Glob("docs/architecture/frontend/patterns.md")
+)
 
 has_product = len(existing_product) >= 5
 has_system_arch = len(existing_arch_system) >= 10
 has_crosscut = len(existing_arch_crosscut) >= 3
-has_backend = len(existing_backend) >= 3
-has_frontend = len(existing_frontend) >= 3
+has_backend = len(existing_backend) >= 10
+has_frontend = len(existing_frontend) >= 10
 
 # Determine what needs to be done
 if has_product and has_system_arch and has_crosscut and has_backend and has_frontend:
@@ -71,8 +81,10 @@ print("Documentation gap analysis:")
 print(f"  Product docs:        {'COMPLETE' if has_product else 'MISSING'} ({len(existing_product)} files)")
 print(f"  System architecture: {'COMPLETE' if has_system_arch else 'MISSING'} ({len(existing_arch_system)} files)")
 print(f"  Cross-cutting:       {'COMPLETE' if has_crosscut else 'MISSING'} ({len(existing_arch_crosscut)} files)")
-print(f"  Backend component:   {'COMPLETE' if has_backend else 'MISSING'} ({len(existing_backend)} files)")
-print(f"  Frontend component:  {'COMPLETE' if has_frontend else 'MISSING'} ({len(existing_frontend)} files)")
+print(f"  Backend architecture: {'COMPLETE' if has_backend else 'MISSING'} ({len(existing_backend)} new-format files)")
+print(f"  Frontend architecture:{'COMPLETE' if has_frontend else 'MISSING'} ({len(existing_frontend)} new-format files)")
+print(f"  Legacy backend docs: {len(legacy_backend)} files to read as context, not target format")
+print(f"  Legacy frontend docs:{len(legacy_frontend)} files to read as context, not target format")
 print("")
 
 if existing_product or existing_arch_system:
@@ -83,6 +95,11 @@ if existing_product or existing_arch_system:
     # Wait for user choice — default is option 1
 ```
 
+Legacy backend/frontend docs are valid input context only. If present, read
+them before generating new documentation, but create or update the new
+component `01-intro.md` through `13-specs/` tree. Do not create or extend legacy
+`overview.md`, `services.md`, `data.md`, `structure.md`, or `patterns.md`.
+
 ### Step 1: Create Output Directories
 
 ```bash
@@ -90,6 +107,8 @@ mkdir -p docs/product/reference
 mkdir -p docs/architecture/08-cross-cutting
 mkdir -p docs/architecture/backend/adr
 mkdir -p docs/architecture/frontend/adr
+mkdir -p docs/architecture/backend/13-specs
+mkdir -p docs/architecture/frontend/13-specs
 ```
 
 ---
@@ -193,7 +212,7 @@ Follow the full process defined in the `reverse-engineer-architect` agent:
 
 1. **Phase 1 (Autonomous)**: Tech stack, system structure, components, integration points, backend services & data, frontend structure, cross-cutting concerns, deployment, quality attributes
 2. **Phase 2 (Interview)**: Up to 11 sections — Tech Rationale, Architecture, Components, Backend Services & Data, Frontend Architecture, Runtime, Deployment, Cross-cutting, Quality, Constraints, Decisions (sections skipped if docs already exist)
-3. **Phase 3 (Generate)**: Create Arc42 12-chapter documentation + backend/frontend component docs with C4 diagrams
+3. **Phase 3 (Generate)**: Create system Arc42 01-13 documentation plus backend/frontend 01-13 component architecture trees with C4 diagrams where applicable
 4. **Phase 4 (Review)**: Present to user, iterate until approved
 
 **Important**: The Architect agent should read the product documentation from Phase 1 as input — it provides context about the product's purpose, use cases, and domain model.
@@ -218,15 +237,36 @@ docs/architecture/
 ├── 10-quality.md
 ├── 11-risks.md
 ├── 12-glossary.md
+├── 13-specs/
 ├── backend/              ← if project has backend
-│   ├── overview.md
-│   ├── services.md
-│   ├── data.md
+│   ├── 01-intro.md
+│   ├── 02-constraints.md
+│   ├── 03-context.md
+│   ├── 04-strategy.md
+│   ├── 05-building-blocks.md
+│   ├── 06-runtime.md
+│   ├── 07-deployment.md
+│   ├── 08-cross-cutting/
+│   ├── 09-adr-summary.md
+│   ├── 10-quality.md
+│   ├── 11-risks.md
+│   ├── 12-glossary.md
+│   ├── 13-specs/
 │   └── adr/
 └── frontend/             ← if project has frontend
-    ├── overview.md
-    ├── structure.md
-    ├── patterns.md
+    ├── 01-intro.md
+    ├── 02-constraints.md
+    ├── 03-context.md
+    ├── 04-strategy.md
+    ├── 05-building-blocks.md
+    ├── 06-runtime.md
+    ├── 07-deployment.md
+    ├── 08-cross-cutting/
+    ├── 09-adr-summary.md
+    ├── 10-quality.md
+    ├── 11-risks.md
+    ├── 12-glossary.md
+    ├── 13-specs/
     └── adr/
 ```
 
@@ -236,9 +276,9 @@ docs/architecture/
 Phase 2 Complete: Architecture Documentation
 
 Created files in docs/architecture/:
-  - System (arc42):  15 files (or skipped if already existed)
-  - Backend:          3 files (if applicable)
-  - Frontend:         3 files (if applicable)
+  - System:           Arc42/spec sections 01-13 (or skipped if already existed)
+  - Backend:          Arc42/spec sections 01-13 (if applicable)
+  - Frontend:         Arc42/spec sections 01-13 (if applicable)
 
 Please review the documents and C4 diagrams.
   - Are the diagrams accurate?
@@ -256,9 +296,9 @@ Please review the documents and C4 diagrams.
 Reverse Engineering Complete
 
 Product Documentation:  9 files in docs/product/
-System Architecture:   15 files in docs/architecture/
-Backend Component:      3 files in docs/architecture/backend/  (if applicable)
-Frontend Component:     3 files in docs/architecture/frontend/ (if applicable)
+System Architecture:   Arc42/spec sections 01-13 in docs/architecture/
+Backend Architecture:  Arc42/spec sections 01-13 in docs/architecture/backend/  (if applicable)
+Frontend Architecture: Arc42/spec sections 01-13 in docs/architecture/frontend/ (if applicable)
 
 Total: up to 30 documentation files generated from code analysis + interview.
 

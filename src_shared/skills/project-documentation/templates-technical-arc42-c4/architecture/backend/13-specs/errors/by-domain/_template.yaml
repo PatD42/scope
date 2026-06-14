@@ -1,0 +1,39 @@
+# Domain Error Codes Template
+# Copy to {domain}.yaml (e.g., auth.yaml, users.yaml)
+
+domain: "{DOMAIN}"
+prefix: "{DOM}"
+description: "{Domain description}"
+
+errors:
+  - code: "{DOM}_001"
+    name: "{error_name}"
+    http_status: 400
+    message: "{Human readable message}"
+    description: |
+      {Detailed description of when this error occurs}
+    retry: false
+    # retry_after: 5           # seconds, if retry: true
+    # action: "..."            # What client should do
+    added_by: "SCOPE-XXX"
+
+  # - code: "{DOM}_002"
+  #   name: "{another_error}"
+  #   http_status: 404
+  #   message: "{Message}"
+  #   retry: false
+  #   added_by: "SCOPE-XXX"
+
+# Edge cases specific to this domain
+edge_cases:
+  - scenario: "{Description of edge case}"
+    detection: "{How to detect this situation}"
+    error_code: "{DOM}_001"
+    handling: |
+      {How the system should handle this}
+    added_by: "SCOPE-XXX"
+
+# Changelog
+# | Epic | Date | Changes |
+# |------|------|---------|
+# | SCOPE-XXX | YYYY-MM-DD | Initial creation |

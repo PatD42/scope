@@ -8,7 +8,7 @@ Procedures for database administration including backups, restores, migrations, 
 
 - Required access/permissions: {DBA role, cloud database admin}
 - Required tools: {psql/mysql/mongosh CLI, migration tool, cloud CLI}
-- Related docs: [Backend Data Architecture](../../architecture/backend/data.md)
+- Related docs: [Backend Database Specs](../../architecture/backend/13-specs/database/)
 
 ## Database Inventory
 

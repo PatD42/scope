@@ -1,0 +1,130 @@
+# Graph Database Schema Template
+# Supports: Neo4j, Amazon Neptune, ArangoDB, TigerGraph
+# Copy to {domain}.yaml
+
+domain: "{domain_name}"
+description: "{Description of this graph domain}"
+epic: "SCOPE-XXX"
+
+# Node Labels (Vertices)
+nodes:
+  - label: "{NodeLabel}"
+    description: "{Description}"
+    properties:
+      - name: "id"
+        type: "string"
+        required: true
+        unique: true
+        indexed: true
+      # - name: "name"
+      #   type: "string"
+      #   required: true
+      #   indexed: true
+      # - name: "status"
+      #   type: "string"
+      #   enum: ["active", "inactive"]
+      # - name: "metadata"
+      #   type: "map"
+      - name: "created_at"
+        type: "datetime"
+        required: true
+      - name: "updated_at"
+        type: "datetime"
+
+  # - label: "AnotherNode"
+  #   description: "..."
+  #   properties:
+  #     ...
+
+# Relationship Types (Edges)
+relationships:
+  - type: "{RELATIONSHIP_TYPE}"
+    description: "{Description of relationship}"
+    from: "{StartNodeLabel}"
+    to: "{EndNodeLabel}"
+    cardinality: "many-to-many"  # one-to-one, one-to-many, many-to-many
+    properties:
+      # - name: "weight"
+      #   type: "float"
+      # - name: "since"
+      #   type: "datetime"
+      - name: "created_at"
+        type: "datetime"
+
+  # - type: "BELONGS_TO"
+  #   from: "Item"
+  #   to: "Category"
+  #   cardinality: "many-to-one"
+
+# Indexes
+indexes:
+  # Node property indexes
+  - type: "node_property"
+    label: "{NodeLabel}"
+    properties: ["id"]
+    unique: true
+
+  # - type: "node_property"
+  #   label: "{NodeLabel}"
+  #   properties: ["name"]
+  #   unique: false
+
+  # Full-text search indexes (Neo4j)
+  # - type: "fulltext"
+  #   name: "search_index"
+  #   labels: ["{NodeLabel}"]
+  #   properties: ["name", "description"]
+
+  # Composite indexes
+  # - type: "composite"
+  #   label: "{NodeLabel}"
+  #   properties: ["status", "created_at"]
+
+# Constraints
+constraints:
+  - type: "unique"
+    label: "{NodeLabel}"
+    property: "id"
+
+  # - type: "exists"
+  #   label: "{NodeLabel}"
+  #   property: "name"
+
+  # - type: "node_key"
+  #   label: "{NodeLabel}"
+  #   properties: ["tenant_id", "external_id"]
+
+# Common Query Patterns (Cypher for Neo4j)
+queries:
+  - name: "find_by_id"
+    description: "Find node by ID"
+    cypher: |
+      MATCH (n:{NodeLabel} {id: $id})
+      RETURN n
+
+  - name: "find_related"
+    description: "Find related nodes"
+    cypher: |
+      MATCH (n:{NodeLabel} {id: $id})-[r:{RELATIONSHIP_TYPE}]->(m)
+      RETURN n, r, m
+
+  # - name: "shortest_path"
+  #   description: "Find shortest path between nodes"
+  #   cypher: |
+  #     MATCH path = shortestPath(
+  #       (a:{NodeLabel} {id: $from_id})-[*]-(b:{NodeLabel} {id: $to_id})
+  #     )
+  #     RETURN path
+
+# Gremlin equivalent (for Neptune/TinkerPop)
+gremlin_queries:
+  - name: "find_by_id"
+    query: "g.V().has('{NodeLabel}', 'id', id)"
+
+  - name: "find_related"
+    query: "g.V().has('{NodeLabel}', 'id', id).out('{RELATIONSHIP_TYPE}')"
+
+# Changelog
+# | Epic | Date | Changes |
+# |------|------|---------|
+# | SCOPE-XXX | YYYY-MM-DD | Initial creation |

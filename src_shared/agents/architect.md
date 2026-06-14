@@ -137,6 +137,9 @@ Use `project-documentation` skill's `ai_search()` to load context token-efficien
 - Update `01-intro.md` if epic adds system goals
 - Update `03-context.md` if epic adds external dependencies
 - Create/update `backend/` and `frontend/` docs as applicable
+- Read legacy backend/frontend files if present, but do not create or extend
+  them. Migrate relevant content into the new backend/frontend `01-intro.md`
+  through `13-specs/` trees when related docs are updated.
 
 ### Documentation Update Plan
 
@@ -152,7 +155,7 @@ This epic requires updates to {N} architecture docs and creation of {M} new docs
 
 | # | Document | Action | What Changes | Why |
 |---|----------|--------|-------------|-----|
-| 1 | `backend/data.md` | Create | New tables: {list} | Epic introduces {schema} |
+| 1 | `backend/13-specs/database/sql/{epic-id}.sql` | Create | New tables: {list} | Epic introduces {schema} |
 | 2 | `05-building-blocks.md` | Update | Add {component} to diagram | New building block |
 
 ### Not Required (with justification)
@@ -168,9 +171,10 @@ This epic requires updates to {N} architecture docs and creation of {M} new docs
 
 | Category | Document |
 |----------|----------|
-| Schema | `backend/data.md` |
-| Services | `backend/services.md`, `backend/overview.md` |
-| Frontend | `frontend/overview.md`, `structure.md`, `patterns.md` |
+| Backend specs | `backend/13-specs/` |
+| Backend architecture | `backend/01-intro.md` through `backend/12-glossary.md` |
+| Frontend specs | `frontend/13-specs/` |
+| Frontend architecture | `frontend/01-intro.md` through `frontend/12-glossary.md` |
 | Building blocks | `05-building-blocks.md` |
 | Context | `03-context.md` |
 | Strategy | `04-strategy.md` |
@@ -189,11 +193,17 @@ This epic requires updates to {N} architecture docs and creation of {M} new docs
 ### Root Architecture Page Creation (First Epic Only)
 
 If `docs/architecture/` doesn't exist yet (first epic on a new project):
-1. Create 12 Arc42 chapter files (01-intro through 12-glossary)
+1. Create 13 system Arc42/spec sections (`01-intro.md` through `13-specs/`)
 2. Create `08-cross-cutting/` with 4 children (domain, security, operations, testing)
-3. Create `backend/` (overview, services, data, adr/) if project has backend
-4. Create `frontend/` (overview, structure, patterns, adr/) if project has frontend
+3. Create `backend/` with its own `01-intro.md` through `13-specs/` tree and `adr/` if project has backend
+4. Create `frontend/` with its own `01-intro.md` through `13-specs/` tree and `adr/` if project has frontend
 5. Use templates from `.claude/skills/project-documentation/templates-technical-arc42-c4/architecture/`
+
+If legacy files already exist in `backend/overview.md`, `backend/services.md`,
+`backend/data.md`, `frontend/overview.md`, `frontend/structure.md`, or
+`frontend/patterns.md`, read them as context. They do not satisfy the new
+component architecture format, and new documentation must be created in the
+component `01-intro.md` through `13-specs/` tree.
 
 ---
 
@@ -230,6 +240,11 @@ Generate machine-readable specs in `docs/architecture/13-specs/`:
 4. **Error Codes** (`errors/by-domain/{domain}.yaml`) — from PO's error scenarios
 
 Use templates from `templates-technical-arc42-c4/architecture/13-specs/`.
+
+If a contract is owned by a specific component, place it under that component's
+spec tree instead: `docs/architecture/backend/13-specs/` or
+`docs/architecture/frontend/13-specs/`. Do not create `14-schema`; schemas live
+under `13-specs/schemas/`.
 
 ---
 
@@ -306,7 +321,7 @@ files_to_modify:
 **Story 0 file plan** includes documentation update files (from the Doc Update Plan):
 ```yaml
 files_to_modify:
-  - path: "docs/architecture/backend/data.md"
+  - path: "docs/architecture/backend/13-specs/database/sql/{epic-id}.sql"
     intent: "Update with new schema tables as specified in Doc Update Plan"
   - path: "docs/architecture/05-building-blocks.md"
     intent: "Add new components to C4 L2 diagram as specified in Doc Update Plan"

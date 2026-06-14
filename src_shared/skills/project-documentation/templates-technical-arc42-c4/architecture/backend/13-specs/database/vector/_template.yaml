@@ -1,0 +1,142 @@
+# Vector Database Schema Template
+# Supports: pgvector, Pinecone, Weaviate, Milvus, Qdrant, ChromaDB
+# Copy to {index-name}.yaml
+
+index: "{index_name}"
+description: "{Description - what embeddings are stored and why}"
+epic: "SCOPE-XXX"
+
+# Embedding Configuration
+embedding:
+  model: "text-embedding-3-small"  # or ada-002, sentence-transformers, etc.
+  dimensions: 1536                  # Must match model output
+  source: "{what text/data is embedded}"
+  chunking:
+    strategy: "recursive"           # fixed, recursive, semantic, sentence
+    chunk_size: 512                 # tokens or characters depending on strategy
+    chunk_overlap: 50
+    # separators: ["\n\n", "\n", " "]
+
+# Distance Metric
+similarity:
+  metric: "cosine"                  # cosine, euclidean, dot_product
+  # For cosine: higher = more similar (0 to 1)
+  # For euclidean: lower = more similar (0 to inf)
+  # For dot_product: higher = more similar (-inf to inf)
+
+# Vector Index Configuration
+index_config:
+  # pgvector
+  pgvector:
+    index_type: "ivfflat"           # ivfflat, hnsw
+    lists: 100                      # For ivfflat: sqrt(n) to n/1000
+    # m: 16                         # For hnsw: connections per layer
+    # ef_construction: 64           # For hnsw: build-time neighbors
+
+  # Pinecone
+  pinecone:
+    metric: "cosine"
+    pods: 1
+    replicas: 1
+    pod_type: "p1.x1"
+    # metadata_config:
+    #   indexed: ["category", "source"]
+
+  # Weaviate
+  weaviate:
+    vectorizer: "text2vec-openai"
+    index_type: "hnsw"
+    ef: 100
+    maxConnections: 64
+
+  # Qdrant
+  qdrant:
+    on_disk: false
+    hnsw_config:
+      m: 16
+      ef_construct: 100
+
+# Document/Record Schema
+schema:
+  # ID field
+  id:
+    type: "string"
+    description: "Unique identifier for the vector"
+
+  # Vector field (auto-generated from content)
+  embedding:
+    type: "vector"
+    dimensions: 1536
+
+  # Source content (what was embedded)
+  content:
+    type: "text"
+    description: "Original text that was embedded"
+    indexed: false                  # Usually not indexed, just stored
+
+  # Metadata fields (filterable)
+  metadata:
+    source_id:
+      type: "string"
+      description: "Reference to source document"
+      indexed: true
+      filterable: true
+
+    source_type:
+      type: "string"
+      description: "Type of source (document, webpage, etc.)"
+      indexed: true
+      filterable: true
+
+    # chunk_index:
+    #   type: "integer"
+    #   description: "Position in chunked document"
+
+    # category:
+    #   type: "string"
+    #   indexed: true
+    #   filterable: true
+
+    # created_at:
+    #   type: "datetime"
+    #   indexed: true
+
+# Hybrid Search Configuration (if supported)
+hybrid_search:
+  enabled: false
+  # sparse_model: "bm25"            # For keyword matching
+  # alpha: 0.5                      # Balance: 0=sparse, 1=dense
+
+# Query Patterns
+queries:
+  - name: "similarity_search"
+    description: "Find similar vectors"
+    parameters:
+      query_vector: "vector"
+      top_k: 10
+      min_score: 0.7
+    example: |
+      # pgvector
+      SELECT id, content, 1 - (embedding <=> $query_vector) as similarity
+      FROM {index_name}
+      ORDER BY embedding <=> $query_vector
+      LIMIT $top_k;
+
+  - name: "filtered_search"
+    description: "Find similar vectors with metadata filter"
+    parameters:
+      query_vector: "vector"
+      filter: "metadata filter"
+      top_k: 10
+    example: |
+      # pgvector
+      SELECT id, content, 1 - (embedding <=> $query_vector) as similarity
+      FROM {index_name}
+      WHERE source_type = $source_type
+      ORDER BY embedding <=> $query_vector
+      LIMIT $top_k;
+
+# Changelog
+# | Epic | Date | Changes |
+# |------|------|---------|
+# | SCOPE-XXX | YYYY-MM-DD | Initial creation |

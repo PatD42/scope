@@ -505,7 +505,7 @@ docs/product/
 
 ```
 docs/architecture/
-├── 01-intro.md               # Purpose, stakeholders, quality goals
+├── 01-intro.md               # System purpose, stakeholders, quality goals
 ├── 02-constraints.md         # Technical, organizational constraints
 ├── 03-context.md             # C4 L1 context diagram
 ├── 04-strategy.md            # Solution approach, technology decisions
@@ -517,8 +517,53 @@ docs/architecture/
 ├── 10-quality.md             # Quality requirements
 ├── 11-risks.md               # Risks, technical debt
 ├── 12-glossary.md            # Architecture terms
-└── 13-specs/                 # API contracts, schemas, database specs
+├── 13-specs/                 # System API contracts, schemas, database specs
+│   ├── api/
+│   ├── schemas/              # Schemas live here; do not create 14-schema
+│   ├── database/
+│   └── errors/
+├── backend/                  # Backend-specific Arc42 01-13 tree
+│   ├── 01-intro.md
+│   ├── 02-constraints.md
+│   ├── 03-context.md
+│   ├── 04-strategy.md
+│   ├── 05-building-blocks.md
+│   ├── 06-runtime.md
+│   ├── 07-deployment.md
+│   ├── 08-cross-cutting/
+│   ├── 09-adr-summary.md
+│   ├── 10-quality.md
+│   ├── 11-risks.md
+│   ├── 12-glossary.md
+│   ├── 13-specs/
+│   └── adr/
+└── frontend/                 # Frontend-specific Arc42 01-13 tree
+    ├── 01-intro.md
+    ├── 02-constraints.md
+    ├── 03-context.md
+    ├── 04-strategy.md
+    ├── 05-building-blocks.md
+    ├── 06-runtime.md
+    ├── 07-deployment.md
+    ├── 08-cross-cutting/
+    ├── 09-adr-summary.md
+    ├── 10-quality.md
+    ├── 11-risks.md
+    ├── 12-glossary.md
+    ├── 13-specs/
+    └── adr/
 ```
+
+`13-specs/` is the canonical location for machine-readable contracts: OpenAPI,
+JSON/YAML schemas, database specs, queue/message specs, and error contracts.
+Do not create a separate `14-schema`; schemas belong in `13-specs/schemas/`.
+
+Legacy component docs may exist in older projects:
+`backend/overview.md`, `backend/services.md`, `backend/data.md`,
+`frontend/overview.md`, `frontend/structure.md`, and `frontend/patterns.md`.
+Read them as context when present, but do not create or extend them. New or
+updated backend/frontend documentation uses the component `01-intro.md` through
+`13-specs/` tree.
 
 ### Epic Documentation
 

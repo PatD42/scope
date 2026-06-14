@@ -1,0 +1,224 @@
+# OpenAPI Template for Service APIs
+# Copy this file to {service-name}.yaml and fill in
+
+openapi: 3.0.3
+info:
+  title: "{Service Name} API"
+  description: |
+    API specification for {Service Name}.
+
+    ## Changelog
+    | Epic | Date | Changes |
+    |------|------|---------|
+    | SCOPE-XXX | YYYY-MM-DD | Initial creation |
+  version: "1.0.0"
+  contact:
+    name: API Team
+
+servers:
+  - url: /api/v1/{service-base}
+    description: API base path
+
+tags:
+  - name: "{resource}"
+    description: "{Resource description}"
+
+paths:
+  /{resource}:
+    get:
+      tags: ["{resource}"]
+      summary: "List {resources}"
+      operationId: "list{Resources}"
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '../schemas/domain/{resource}.yaml'
+                  pagination:
+                    $ref: '../schemas/common/pagination.yaml'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: ["{resource}"]
+      summary: "Create {resource}"
+      operationId: "create{Resource}"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/domain/{resource}-create.yaml'
+      responses:
+        '201':
+          description: Created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/domain/{resource}.yaml'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /{resource}/{id}:
+    get:
+      tags: ["{resource}"]
+      summary: "Get {resource} by ID"
+      operationId: "get{Resource}"
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/domain/{resource}.yaml'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: ["{resource}"]
+      summary: "Update {resource}"
+      operationId: "update{Resource}"
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/domain/{resource}-update.yaml'
+      responses:
+        '200':
+          description: Updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/domain/{resource}.yaml'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: ["{resource}"]
+      summary: "Delete {resource}"
+      operationId: "delete{Resource}"
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Resource identifier
+
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number
+
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Items per page
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/common/error.yaml'
+          example:
+            code: "VAL_001"
+            message: "Validation failed"
+            details:
+              field: "email"
+              reason: "Invalid email format"
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/common/error.yaml'
+          example:
+            code: "AUTH_001"
+            message: "Authentication required"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/common/error.yaml'
+          example:
+            code: "RES_001"
+            message: "Resource not found"
+
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/common/error.yaml'
+          example:
+            code: "RES_002"
+            message: "Resource already exists"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/common/error.yaml'
+          example:
+            code: "SYS_001"
+            message: "Internal server error"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []

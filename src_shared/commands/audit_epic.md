@@ -156,8 +156,10 @@ AUDIT CHECKS:
 │
 └── 8. Documentation Sync (Reverse Audit)
     ├── Do architecture docs reflect what was actually built?
-    ├── Check: backend/data.md matches implemented schema
-    ├── Check: backend/services.md matches implemented services
+    ├── Read legacy backend/frontend docs as context if present, but do not
+    │   treat them as satisfying the new documentation format
+    ├── Check: backend/13-specs/database/ and schemas match implemented schema
+    ├── Check: backend/05-building-blocks.md and backend/06-runtime.md match implemented services
     ├── Check: 05-building-blocks.md includes new components
     ├── Check: 03-context.md reflects new external dependencies
     ├── Check: 08-cross-cutting/domain.md includes new domain entities
@@ -1307,10 +1309,15 @@ if file_exists(lint_findings_path):
 
 For each category, compare what the code actually does against what the docs say:
 
+Read both new-format and legacy docs when present. Legacy docs are context, not
+the target format. If implementation matches only legacy docs, report a
+documentation-sync finding to migrate or summarize the legacy content into the
+new component `01-intro.md` through `13-specs/` tree.
+
 | Category | Document | Compare Against |
 |----------|----------|----------------|
-| Database schema | `backend/data.md` | Migration files, CREATE TABLE, schema.sql, Pydantic DB models |
-| Services | `backend/services.md` | FastAPI apps, CLI entry points, new routers, workers |
+| Database schema | `backend/13-specs/database/`, `backend/13-specs/schemas/` | Migration files, CREATE TABLE, schema.sql, Pydantic DB models |
+| Services | `backend/05-building-blocks.md`, `backend/06-runtime.md` | FastAPI apps, CLI entry points, new routers, workers |
 | Building blocks | `05-building-blocks.md` | New components from file plans vs. what's documented |
 | External dependencies | `03-context.md` | New cloud SDKs, API clients, DB drivers, Docker services |
 | Domain entities | `08-cross-cutting/domain.md` | New Pydantic models, dataclasses, named domain concepts |
@@ -1328,7 +1335,7 @@ for finding in doc_sync_findings:
     # Categories:
     # "planned_not_documented" — architect designed it, Story 0 should have updated docs but didn't
     # "implementation_drift"  — code diverged from design, unclear if intentional
-    # "missing_doc"           — doc file doesn't exist at all (e.g., backend/data.md never created)
+    # "missing_doc"           — doc file doesn't exist at all (e.g., backend/13-specs/database/ never created)
     # "rollup_pending"        — epic ADRs/PDRs not yet rolled up to system level
 ```
 
@@ -1344,7 +1351,7 @@ Phase 8 found {N} documentation gaps. Each requires your decision.
 ┌────┬──────────┬──────────────────────────────────────────────────────────┐
 │ #  │ Severity │ Finding                                                  │
 ├────┼──────────┼──────────────────────────────────────────────────────────┤
-│ 1  │ MAJOR    │ backend/data.md does not exist                           │
+│ 1  │ MAJOR    │ backend/13-specs/database/ does not exist                 │
 │    │          │ Code has 5 new tables (organizations, persons, etc.)     │
 │    │          │ Was this planned? Should docs be created to match code?  │
 │    │          │ Action: [create docs / code should be fixed / defer]     │
@@ -1394,7 +1401,7 @@ All findings are classified by severity:
 | Severity | Definition | Examples |
 |----------|------------|----------|
 | **CRITICAL** | Failed required/runtime matrix row that breaks core behavior, risks data loss/security, violates a hard contract, or leaves required runtime evidence as the only proof and absent | Core acceptance behavior broken, destructive side effect, security exposure, production stub/fake, runtime-required smoke absent when no other proof exists |
-| **MAJOR** | Failed or unverified required/high-risk matrix row, significant design drift, or stale documentation | Partial ADR implementation, missing important edge case, required row lacks test evidence, any story below 90% coverage without an approved exception, backend/data.md missing or stale |
+| **MAJOR** | Failed or unverified required/high-risk matrix row, significant design drift, or stale documentation | Partial ADR implementation, missing important edge case, required row lacks test evidence, any story below 90% coverage without an approved exception, backend/13-specs database/schema docs missing or stale |
 | **MEDIUM** | Documentation or tracking gaps | ADRs/PDRs not rolled up, context diagram outdated, missing external dependencies in docs |
 | **MINOR** | Optional/documentation row unverified, cosmetic issue, or low-risk consistency issue | Naming inconsistencies, missing glossary terms, small pattern deviations |
 | **ENHANCEMENT** | Improvements not in original design | Performance optimizations, additional features |

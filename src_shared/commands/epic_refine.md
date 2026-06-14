@@ -256,7 +256,7 @@ Phase 2: Architect - System Context & Architecture
 
 ✅ Documentation Update Plan (for Story 0)
    Docs to update: [list files that need changes]
-   Docs to create: [list new files, e.g., backend/data.md]
+   Docs to create: [list new files, e.g., backend/13-specs/database/sql/{epic-id}.sql]
    ADR roll-up needed: [Yes / No]
 
 Ready to proceed to spec generation? [yes / refine]
@@ -276,23 +276,24 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"architecture_
 
 ## Phase 3: Architect (spec_generation)
 
-**Instruction:** Continue as `architect` agent for the `spec_generation` phase. Create the `docs/architecture/13-specs/` subdirectories if they don't exist yet.
+**Instruction:** Continue as `architect` agent for the `spec_generation` phase. Create the applicable `13-specs/` subdirectories if they don't exist yet.
 
-**Goal:** Generate technical specifications in `docs/architecture/13-specs/`. This is the canonical location — all specs live under `docs/architecture/13-specs/`, not in the project root.
+**Goal:** Generate technical specifications in `docs/architecture/13-specs/`, `docs/architecture/backend/13-specs/`, or `docs/architecture/frontend/13-specs/` depending on ownership. These are the canonical locations — all specs live under an applicable `13-specs/`, not in the project root and not in `14-schema`.
 
 **Phase context to pass:**
 ```
 epic_id: {epic-id}
 phase: spec_generation
 agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
-specs_dir: docs/architecture/13-specs
+specs_dir: docs/architecture/{13-specs|backend/13-specs|frontend/13-specs}
 ```
 
 **Key deliverables:**
-- API contracts in `docs/architecture/13-specs/api/` (OpenAPI 3.0.3)
-- Domain schemas in `docs/architecture/13-specs/schemas/domain/` (JSON Schema)
-- Error codes in `docs/architecture/13-specs/errors/by-domain/`
-- Updated error taxonomy in `docs/architecture/13-specs/errors/taxonomy.yaml`
+- API contracts in the applicable `13-specs/api/` (OpenAPI 3.0.3)
+- Domain schemas in the applicable `13-specs/schemas/domain/` (JSON Schema)
+- Database specs in the applicable `13-specs/database/`
+- Error codes in the applicable `13-specs/errors/by-domain/`
+- Updated error taxonomy in the applicable `13-specs/errors/taxonomy.yaml`
 
 ### Phase 3 Checklist
 
@@ -301,15 +302,15 @@ Present to user:
 ```
 Phase 3: Architect - Spec Generation
 
-✅ API Contracts (docs/architecture/13-specs/api/)
+✅ API Contracts ({system|backend|frontend}/13-specs/api/)
    Endpoints defined: [N endpoints]
    Files created: [list]
 
-✅ Domain Schemas (docs/architecture/13-specs/schemas/domain/)
+✅ Domain Schemas ({system|backend|frontend}/13-specs/schemas/domain/)
    Entities defined: [N entities]
    Files created: [list]
 
-✅ Error Codes (docs/architecture/13-specs/errors/)
+✅ Error Codes ({system|backend|frontend}/13-specs/errors/)
    Error codes defined: [N codes]
    Taxonomy updated: [Yes / No]
 

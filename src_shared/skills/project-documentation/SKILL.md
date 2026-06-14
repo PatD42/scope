@@ -34,6 +34,39 @@ Template names match the documentation structure below.
 
 Make sure the content is in the right folder.
 
+Path selection rule:
+
+- System architecture documentation goes directly under `docs/architecture/`.
+  Example: `docs/architecture/01-intro.md`.
+- Backend architecture documentation goes under `docs/architecture/backend/`.
+  Example: `docs/architecture/backend/01-intro.md`.
+- Frontend architecture documentation goes under `docs/architecture/frontend/`.
+  Example: `docs/architecture/frontend/01-intro.md`.
+
+If the requested scope is backend, create or update
+`docs/architecture/backend/{01-intro.md ... 13-specs/}`. Do not answer with the
+system-level path unless the user asked for system architecture.
+
+If the requested scope is frontend, create or update
+`docs/architecture/frontend/{01-intro.md ... 13-specs/}`. Do not answer with the
+system-level path unless the user asked for system architecture.
+
+Compatibility rule: legacy backend/frontend files may exist in older projects.
+Always read them as source context when present:
+
+- `docs/architecture/backend/overview.md`
+- `docs/architecture/backend/services.md`
+- `docs/architecture/backend/data.md`
+- `docs/architecture/frontend/overview.md`
+- `docs/architecture/frontend/structure.md`
+- `docs/architecture/frontend/patterns.md`
+
+Do not create new legacy files and do not treat them as the target format.
+Going forward, new or updated backend/frontend architecture documentation uses
+the component-specific `01-intro.md` through `13-specs/` trees below. When
+touching legacy content, migrate or summarize it into the corresponding new
+section instead of extending the legacy file.
+
 ```
 docs/
 ├── product/
@@ -49,7 +82,7 @@ docs/
 │   │   └── apis-integrations.md 
 │   └── decisions.md
 ├── architecture/
-│   ├── 01-intro.md              # System-level (arc42)
+│   ├── 01-intro.md              # System-level Arc42
 │   ├── 02-constraints.md
 │   ├── 03-context.md
 │   ├── 04-strategy.md
@@ -65,20 +98,43 @@ docs/
 │   ├── 10-quality.md
 │   ├── 11-risks.md
 │   ├── 12-glossary.md
+│   ├── 13-specs/                # System-level machine-readable specs
+│   │   ├── api/                 # OpenAPI contracts
+│   │   ├── schemas/             # JSON/YAML schemas; no separate 14-schema
+│   │   ├── database/            # SQL/NoSQL/vector/graph specs
+│   │   └── errors/              # Error taxonomy and domain errors
 │   ├── adr/                      # System-level ADRs
 │   │   └── adr-template.md       # Shared template (all scopes)
-│   ├── backend/                  # Backend component architecture
-│   │   ├── overview.md
-│   │   ├── services.md
-│   │   ├── data.md
-│   │   ├── adr/                  # Backend-specific ADRs
-│   │   └── specs/                # Backend specs (detailed designs)
-│   └── frontend/                 # Frontend component architecture
-│       ├── overview.md
-│       ├── structure.md
-│       ├── patterns.md
-│       ├── adr/                  # Frontend-specific ADRs
-│       └── specs/                # Frontend specs (detailed designs)
+│   ├── backend/                  # Backend-specific Arc42 tree
+│   │   ├── 01-intro.md
+│   │   ├── 02-constraints.md
+│   │   ├── 03-context.md
+│   │   ├── 04-strategy.md
+│   │   ├── 05-building-blocks.md
+│   │   ├── 06-runtime.md
+│   │   ├── 07-deployment.md
+│   │   ├── 08-cross-cutting/
+│   │   ├── 09-adr-summary.md
+│   │   ├── 10-quality.md
+│   │   ├── 11-risks.md
+│   │   ├── 12-glossary.md
+│   │   ├── 13-specs/             # Backend API/schema/database/error specs
+│   │   └── adr/                  # Backend-specific ADRs
+│   └── frontend/                 # Frontend-specific Arc42 tree
+│       ├── 01-intro.md
+│       ├── 02-constraints.md
+│       ├── 03-context.md
+│       ├── 04-strategy.md
+│       ├── 05-building-blocks.md
+│       ├── 06-runtime.md
+│       ├── 07-deployment.md
+│       ├── 08-cross-cutting/
+│       ├── 09-adr-summary.md
+│       ├── 10-quality.md
+│       ├── 11-risks.md
+│       ├── 12-glossary.md
+│       ├── 13-specs/             # Frontend API/schema/state/error specs
+│       └── adr/                  # Frontend-specific ADRs
 ├── epics/{epic-id-with-filesafe-title}/
 │   ├── details.md
 │   ├── system-context.md
@@ -335,51 +391,69 @@ The existing `09-adr-summary.md` aggregates ADRs from **all scopes** with links 
 
 ## Component Architecture — Backend
 
-### backend/overview.md
-**Template:** `templates-technical-arc42-c4/architecture/backend/overview.md`
-**Content:** Service landscape, communication patterns, shared infrastructure, constraints
-**Owner:** Architect
-**Readers:** Developer, SDET
-**Trigger:** Service added or architectural pattern changes
+Backend architecture uses its own Arc42-style tree under `docs/architecture/backend/`.
+Use this for backend-specific runtime, service, data, integration, deployment,
+quality, and contract decisions that would make the system-level architecture
+too large or too implementation-specific.
 
-### backend/services.md
-**Template:** `templates-technical-arc42-c4/architecture/backend/services.md`
-**Content:** Detailed service catalog (responsibilities, interfaces, dependencies, config)
-**Owner:** Architect
-**Readers:** Developer, SDET
-**Trigger:** Service added, interfaces change
+If legacy backend files exist, read them first as context and migrate their
+content into the new tree when the related topic is updated:
 
-### backend/data.md
-**Template:** `templates-technical-arc42-c4/architecture/backend/data.md`
-**Content:** Database schemas, S3 storage layout, data flows, migration strategy
+- `backend/overview.md` → `backend/01-intro.md`, `backend/03-context.md`, `backend/04-strategy.md`
+- `backend/services.md` → `backend/05-building-blocks.md`, `backend/06-runtime.md`
+- `backend/data.md` → `backend/13-specs/database/`, `backend/13-specs/schemas/`, and backend runtime/data-flow sections
+
+### backend/01-intro.md through backend/12-glossary.md
+**Template:** Use the matching `templates-technical-arc42-c4/architecture/{NN}-*.md` system template as the baseline and scope the content to backend concerns.
+**Content:** Backend-specific purpose, constraints, context, strategy, building blocks, runtime, deployment, cross-cutting concerns, ADR summary, quality, risks, and glossary
 **Owner:** Architect
 **Readers:** Developer, SDET
-**Trigger:** Schema changes, new storage patterns
+**Trigger:** Backend service landscape, persistence, orchestration, integration, deployment, quality, or risk model changes
+
+### backend/13-specs/
+**Template:** `templates-technical-arc42-c4/architecture/13-specs/`
+**Content:** Backend-owned OpenAPI contracts, JSON/YAML schemas, database specs, migration contracts, queue/message contracts, and error codes
+**Owner:** Architect
+**Readers:** Developer, SDET
+**Trigger:** Backend API, schema, persistence, queue, integration, or error contract changes
+
+Schemas belong under `13-specs/schemas/`; do not create a separate `14-schema`
+folder. The `13-specs/` section is the canonical machine-readable contract
+location for API contracts, data schemas, database specs, and error contracts.
 
 ---
 
 ## Component Architecture — Frontend
 
-### frontend/overview.md
-**Template:** `templates-technical-arc42-c4/architecture/frontend/overview.md`
-**Content:** Tech stack, layout, design principles, auth flow, API communication
-**Owner:** Architect
-**Readers:** Developer (frontend), SDET
-**Trigger:** Tech stack or architectural pattern changes
+Frontend architecture uses its own Arc42-style tree under `docs/architecture/frontend/`.
+Use this for frontend-specific runtime, routing, state, component, API
+consumption, design-system, accessibility, performance, and testing decisions.
 
-### frontend/structure.md
-**Template:** `templates-technical-arc42-c4/architecture/frontend/structure.md`
-**Content:** Directory layout, component hierarchy, route map, key components
-**Owner:** Architect
-**Readers:** Developer (frontend), SDET
-**Trigger:** New pages, major component restructuring
+If legacy frontend files exist, read them first as context and migrate their
+content into the new tree when the related topic is updated:
 
-### frontend/patterns.md
-**Template:** `templates-technical-arc42-c4/architecture/frontend/patterns.md`
-**Content:** Data fetching, state management, error handling, styling, testing, a11y conventions
+- `frontend/overview.md` → `frontend/01-intro.md`, `frontend/03-context.md`, `frontend/04-strategy.md`
+- `frontend/structure.md` → `frontend/05-building-blocks.md`, `frontend/06-runtime.md`
+- `frontend/patterns.md` → `frontend/08-cross-cutting/`, `frontend/10-quality.md`, and frontend test/error sections
+
+### frontend/01-intro.md through frontend/12-glossary.md
+**Template:** Use the matching `templates-technical-arc42-c4/architecture/{NN}-*.md` system template as the baseline and scope the content to frontend concerns.
+**Content:** Frontend-specific purpose, constraints, context, strategy, building blocks, runtime, deployment, cross-cutting concerns, ADR summary, quality, risks, and glossary
 **Owner:** Architect
 **Readers:** Developer (frontend), SDET
-**Trigger:** New patterns established, conventions change
+**Trigger:** Frontend application structure, routing, state, rendering, deployment, quality, or risk model changes
+
+### frontend/13-specs/
+**Template:** `templates-technical-arc42-c4/architecture/13-specs/`
+**Content:** Frontend-owned API consumption contracts, view-model schemas, route/state contracts, component interface specs, design-token contracts, and frontend error contracts
+**Owner:** Architect
+**Readers:** Developer (frontend), SDET
+**Trigger:** Frontend API usage, state, route, component, design-token, validation, or error contract changes
+
+Schemas belong under `13-specs/schemas/`; do not create a separate `14-schema`
+folder. The `13-specs/` section is the canonical machine-readable contract
+location for frontend API payloads, state/view-model schemas, component
+contracts, and error contracts.
 
 ---
 
@@ -642,7 +716,7 @@ On conversation start, read docs/lessons-learned/INDEX.md for project-specific l
 | **Developer (frontend)** | - | architecture/frontend/*.md, architecture/frontend/adr/*.md, architecture/08-cross-cutting/*.md, epics/*/{test-strategy,adr}.md |
 | **Epic Housekeeping** | product/decisions.md (summaries), architecture/09-adr-summary.md (roll-up from all scopes), epics/*/implementation-summary.md | `.scope/*/agents_summaries.jsonl`, epics/*/{adr,pdr}.md, architecture/{adr,backend/adr,frontend/adr}/*.md |
 | **Security Reviewer** | epics/*/adr.md (security), architecture/08-cross-cutting/security.md | architecture/{03,04,08,10}*.md, architecture/{backend,frontend}/*.md, epics/*/{details,adr}.md |
-| **DevOps** | architecture/{07,08}/operations.md | architecture/{03,07,08}*.md, architecture/backend/overview.md |
+| **DevOps** | architecture/{07,08}/operations.md | architecture/{03,07,08}*.md, architecture/backend/{03-context,07-deployment}.md |
 | **Operations (RE)** | operations/* | architecture/{07,08-cross-cutting}*.md, architecture/backend/*.md |
 
 ---

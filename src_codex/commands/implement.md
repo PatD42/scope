@@ -292,9 +292,12 @@ Instructions:
 - DOCUMENTATION UPDATES: Read the epic's architecture.md for the documentation
   update plan. Update product-level architecture docs as specified by the architect
   during refinement. This includes:
-  - backend/data.md (if schema changes are planned)
-  - backend/services.md (if new services are planned)
-  - backend/overview.md (if service landscape changes)
+  - backend/13-specs/ (if backend API/schema/database/error contracts change)
+  - backend/05-building-blocks.md (if backend service landscape changes)
+  - backend/06-runtime.md (if backend runtime/orchestration changes)
+  - frontend/13-specs/ (if frontend API/state/view-model contracts change)
+  - frontend/05-building-blocks.md (if frontend component structure changes)
+  - frontend/06-runtime.md (if frontend routing/state/runtime behavior changes)
   - 05-building-blocks.md (if new components are planned)
   - 03-context.md (if new external dependencies)
   - 08-cross-cutting/domain.md (if new domain entities)
@@ -305,6 +308,12 @@ Instructions:
   These updates reflect the DESIGNED architecture — before implementation.
   The developer must NOT update these docs during implementation to avoid
   laundering divergence.
+  If legacy docs exist in backend/overview.md, backend/services.md,
+  backend/data.md, frontend/overview.md, frontend/structure.md, or
+  frontend/patterns.md, read them as context before updating architecture docs,
+  but do not create or extend those legacy files.
+  Do not create 14-schema; schemas belong under the applicable 13-specs/schemas/
+  directory.
 """,
         activeForm="Implementing scaffolding"
     )

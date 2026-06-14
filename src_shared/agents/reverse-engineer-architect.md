@@ -37,17 +37,27 @@ Before starting the full reverse engineering process, check what documentation a
 # Check for existing architecture docs
 existing_system = Glob("docs/architecture/*.md")
 existing_crosscut = Glob("docs/architecture/08-cross-cutting/*.md")
-existing_backend = Glob("docs/architecture/backend/*.md")
-existing_frontend = Glob("docs/architecture/frontend/*.md")
+existing_backend = Glob("docs/architecture/backend/[0-9][0-9]-*.md")
+existing_frontend = Glob("docs/architecture/frontend/[0-9][0-9]-*.md")
+legacy_backend = (
+    Glob("docs/architecture/backend/overview.md")
+    + Glob("docs/architecture/backend/services.md")
+    + Glob("docs/architecture/backend/data.md")
+)
+legacy_frontend = (
+    Glob("docs/architecture/frontend/overview.md")
+    + Glob("docs/architecture/frontend/structure.md")
+    + Glob("docs/architecture/frontend/patterns.md")
+)
 existing_adr = Glob("docs/architecture/adr/*.md")
 existing_backend_adr = Glob("docs/architecture/backend/adr/*.md")
 existing_frontend_adr = Glob("docs/architecture/frontend/adr/*.md")
 
 # Determine what's missing
-has_system_docs = len(existing_system) >= 10  # 12 arc42 chapters
+has_system_docs = len(existing_system) >= 10  # Arc42 chapters
 has_crosscut = len(existing_crosscut) >= 3
-has_backend = len(existing_backend) >= 3      # overview, services, data
-has_frontend = len(existing_frontend) >= 3    # overview, structure, patterns
+has_backend = len(existing_backend) >= 10     # New backend 01-12 docs
+has_frontend = len(existing_frontend) >= 10   # New frontend 01-12 docs
 ```
 
 **If system docs exist but component docs are missing:**
@@ -55,6 +65,9 @@ has_frontend = len(existing_frontend) >= 3    # overview, structure, patterns
 - Skip to Phase 1 for code exploration, but focus exploration on the missing component(s)
 - Skip interview sections already covered by existing docs
 - In Phase 3, only generate the missing documents
+- If legacy backend/frontend files exist, read them as input context and migrate
+  relevant content into the new component tree. Legacy files do not count as the
+  new format and must not be extended.
 
 **If everything exists:**
 - Tell the user: "Complete architecture documentation already exists. Use the architect agent during epic work to update it."
@@ -527,56 +540,39 @@ has_frontend = len(existing_frontend) >= 3    # overview, structure, patterns
 - Technical terms (from Phase 1 + interviews)
 - Cross-reference to product terminology
 
-#### 13. Backend Component Architecture (if applicable)
+#### 13. Backend Architecture Tree (if applicable)
 
 **Skip if backend docs already exist or project has no backend.**
 
-**13a. Backend Overview (`architecture/backend/overview.md`)**
-- Service landscape (from Phase 1.6 + Section 3b)
-- Communication patterns
-- Shared infrastructure
-- Key constraints
-- Template: `templates-technical-arc42-c4/architecture/backend/overview.md`
+Create `architecture/backend/01-intro.md` through
+`architecture/backend/12-glossary.md` plus `architecture/backend/13-specs/` and
+`architecture/backend/adr/`.
 
-**13b. Backend Services (`architecture/backend/services.md`)**
-- Detailed service catalog (from Phase 1.6 + Section 3b)
-- Per-service: responsibilities, interfaces, dependencies, config
-- Shared modules
-- Service interaction matrix
-- Template: `templates-technical-arc42-c4/architecture/backend/services.md`
+- Scope content to backend service landscape, APIs, persistence, queues,
+  integrations, runtime behavior, deployment, operations, quality, and risks.
+- Use the matching system Arc42 templates as the baseline.
+- Put OpenAPI, schemas, database specs, queue/message specs, and error contracts
+  in `architecture/backend/13-specs/`.
+- Do not create `architecture/backend/14-schema`; schemas belong under
+  `architecture/backend/13-specs/schemas/`.
 
-**13c. Backend Data Architecture (`architecture/backend/data.md`)**
-- Storage systems inventory (from Phase 1.6 + Section 3b)
-- Database schemas with key tables, columns, relationships
-- Object storage layout (if applicable)
-- Data flows between services/storage
-- Migration strategy
-- Template: `templates-technical-arc42-c4/architecture/backend/data.md`
-
-#### 14. Frontend Component Architecture (if applicable)
+#### 14. Frontend Architecture Tree (if applicable)
 
 **Skip if frontend docs already exist or project has no frontend.**
 
-**14a. Frontend Overview (`architecture/frontend/overview.md`)**
-- Tech stack (from Phase 1.7 + Section 3c)
-- Application layout
-- Design principles
-- Auth flow, API communication
-- Template: `templates-technical-arc42-c4/architecture/frontend/overview.md`
+Create `architecture/frontend/01-intro.md` through
+`architecture/frontend/12-glossary.md` plus `architecture/frontend/13-specs/`
+and `architecture/frontend/adr/`.
 
-**14b. Frontend Structure (`architecture/frontend/structure.md`)**
-- Directory layout (from Phase 1.7 + Section 3c)
-- Component hierarchy
-- Route map
-- Key components
-- Template: `templates-technical-arc42-c4/architecture/frontend/structure.md`
-
-**14c. Frontend Patterns (`architecture/frontend/patterns.md`)**
-- Data fetching, state management, error handling (from Section 3c)
-- Auth, styling, TypeScript conventions
-- Testing approach
-- Performance, accessibility
-- Template: `templates-technical-arc42-c4/architecture/frontend/patterns.md`
+- Scope content to frontend application structure, routing, rendering, state,
+  API consumption, design system, accessibility, performance, testing, quality,
+  and risks.
+- Use the matching system Arc42 templates as the baseline.
+- Put API consumption contracts, view-model schemas, route/state contracts,
+  component interface specs, design-token contracts, and frontend error
+  contracts in `architecture/frontend/13-specs/`.
+- Do not create `architecture/frontend/14-schema`; schemas belong under
+  `architecture/frontend/13-specs/schemas/`.
 
 ---
 
