@@ -43,6 +43,21 @@ Execution steps:
 5. Execute the command as a Codex workflow, preserving approval gates.
 6. Write or update project artifacts in `docs/`, `.scope/`, and `./wip/` as the command specifies.
 
+### Nested Scope Command Execution
+
+When a Scope command says to run another Scope command, Codex must execute the referenced command workflow from the current checkout's `plugins/scope/commands/{command}.md`.
+
+Do not satisfy a nested command by producing similarly named artifacts, writing a local summary, or performing an informal equivalent workflow unless the referenced command file explicitly allows that substitution.
+
+For every nested Scope command:
+
+1. Read the referenced command file from the current checkout.
+2. Execute its initialization, validation, artifact, reviewer, remediation, and output requirements as written.
+3. Preserve the referenced command's proof requirements, including attempt directories, metadata files, ledgers, matrices, and status outputs.
+4. Report the actual nested command evidence in the parent command result.
+
+If the nested command cannot be executed, the parent command is not delivery-complete. Report it as blocked or incomplete with the concrete reason instead of fabricating the nested command's artifacts.
+
 ## Role Mapping
 
 Codex should usually perform Scope roles sequentially in the main session:

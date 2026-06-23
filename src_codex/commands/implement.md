@@ -54,6 +54,24 @@ Until then, only report:
 - blocked
 - implementation-complete but not delivery-complete
 
+### Nested Audit Command Requirement
+
+`audit_epic` means the real Scope audit command workflow (`scope:audit_epic {epic-id}` / `/audit_epic {epic-id}`), not an informal audit, local summary, or hand-written `epic_audit.md`.
+
+When `/implement` reaches an audit step, it must load and execute `commands/audit_epic.md` from the current checkout or worktree and follow that command's phases, attempt accounting, reviewer collection or unavailable-recording, deterministic review, issue ledger, remediation loop, and output requirements.
+
+`/implement` must not write or overwrite `docs/epics/{epic-dir}/epic_audit.md` directly as a substitute for `audit_epic`; that file is produced or updated by the audit workflow.
+
+Implementation completion proof must include:
+- latest `reviews/audit-NNN/` attempt id created after implementation verification began
+- path to `reviews/audit-NNN/review-metadata.yaml`
+- path to `audit-verification-matrix.yaml`
+- path to `audit-issue-ledger.yaml`
+- reviewer coverage: completed or unavailable for Codex, Claude, and Antigravity
+- final audit status after remediation
+
+If no new `reviews/audit-NNN/` directory was created after implementation verification began, `/implement` must not report `delivery-complete`.
+
 ---
 
 ## Orchestration Model
@@ -555,8 +573,10 @@ If the epic changes no runtime state and is purely code-path work, record that e
 
 `audit_epic` initializes/syncs CodeGraph before launching external reviewers. Do not ask reviewers to run CodeGraph maintenance commands; they use query mode only.
 
+Execute the real Scope audit command workflow now. Load `commands/audit_epic.md` from the active checkout/worktree and follow its required initialization, attempt numbering, reviewer orchestration, deterministic review, remediation classification, and artifact rules.
+
 ```python
-# Run audit
+# Run the real nested audit command workflow, not an audit-like local substitute
 Skill(skill="audit_epic", args=epic_id)
 
 # Read audit results
@@ -805,6 +825,7 @@ If the answer is still "the code exists but the one-time rollout wasn't run", th
 
 Re-run audit to confirm all findings are resolved.
 This call happens after fix stories are implemented, so `audit_epic` must resync CodeGraph before launching reviewers. Reviewers remain query-only.
+This is again the real nested Scope audit command workflow, not a hand-written update to `epic_audit.md`.
 
 ```python
 Skill(skill="audit_epic", args=epic_id)

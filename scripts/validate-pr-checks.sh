@@ -239,6 +239,12 @@ check_command_expectations() {
   for reviewer in reviewer-codex reviewer-claude reviewer-agy; do
     test -f "src_shared/commands/audit_epic/${reviewer}.md"
   done
+
+  grep -n "Nested Scope Command Execution" src_codex/skills/scope-workflows/SKILL.md
+  grep -n "not an informal audit" src_claude/commands/implement.md
+  grep -n "not an informal audit" src_codex/commands/implement.md
+  grep -n "review-metadata.yaml" src_claude/commands/implement.md
+  grep -n "review-metadata.yaml" src_codex/commands/implement.md
 }
 
 main() {
