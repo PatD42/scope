@@ -245,6 +245,10 @@ check_command_expectations() {
   grep -n "not an informal audit" src_codex/commands/implement.md
   grep -n "review-metadata.yaml" src_claude/commands/implement.md
   grep -n "review-metadata.yaml" src_codex/commands/implement.md
+  grep -n "Audit Boundary and Artifact Policy" src_shared/commands/audit_epic.md
+  grep -n "Never delete, rename, compact, or rewrite" src_shared/commands/audit_epic.md
+  grep -n "tmp_debug/scope-audit" src_shared/commands/audit_epic.md
+  grep -n "tmp_debug.*scope-reviewer-logs" src_shared/scripts/scope-reviewer-claude-pexpect.py
 }
 
 main() {

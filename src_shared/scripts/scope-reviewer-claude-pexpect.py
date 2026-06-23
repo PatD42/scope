@@ -93,6 +93,11 @@ def terminate_child(child: Any) -> None:
         pass
 
 
+def default_log_file(cwd: Path, output_file: Path) -> Path:
+    relative_name = str(output_file).lstrip(os.sep).replace(os.sep, "__")
+    return cwd / "tmp_debug" / "scope-reviewer-logs" / f"{relative_name}.pty.log"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reviewer", default="claude")
@@ -110,7 +115,8 @@ def main() -> int:
     started_epoch = int(time.time())
     started_at = utc_now()
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
-    log_file = args.log_file or args.output_file.with_suffix(args.output_file.suffix + ".pty.log")
+    log_file = args.log_file or default_log_file(args.cwd, args.output_file)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         import pexpect  # type: ignore[import-not-found]

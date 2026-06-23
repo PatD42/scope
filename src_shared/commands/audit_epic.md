@@ -54,6 +54,31 @@ The audit loop is:
 
 The final response to the user must report the latest audit status after remediation, not the first failing audit status.
 
+### Audit Boundary and Artifact Policy
+
+`/audit_epic` may remediate `AUTO-FIX` findings only through the controlled loop above. Do not turn one audit attempt into repeated ad hoc reviewer passes.
+
+One audit attempt has one deterministic review, one external reviewer collection, one same-agent residual review, one merged classification, and one report update. If remediation changes code or tests and another full review is needed, create the next `reviews/audit-NNN/` attempt. Do not create `pre-final`, `rerun`, `focused-review`, or similar reviewer outputs inside the same attempt directory.
+
+Never delete, rename, compact, or rewrite an existing `reviews/audit-NNN/` directory. Superseded attempts remain audit evidence. If an attempt was noisy or failed, keep it and explain its status in `review-metadata.yaml`, `audit-issue-ledger.yaml`, and the next `epic_audit.md` update.
+
+Commit-worthy audit artifacts are concise evidence and decisions:
+
+- reviewer prompt files
+- final reviewer markdown files
+- reviewer unavailable/failure markdown summaries
+- `review-metadata.yaml`
+- `exploratory-residual-review.md`
+- concise scripted gate outputs that prove pass/fail status
+- `audit-manifest.yaml`
+- `audit-verification-matrix.yaml`
+- `audit-issue-ledger.yaml`
+- `epic_audit.md`
+
+Bulky runtime logs, PTY transcripts, CLI debug streams, repeated stderr dumps, and full console transcripts are not audit artifacts. Store them under `tmp_debug/scope-audit/{epic-id}/{audit-NNN}/` or `tmp_debug/scope-reviewer-logs/`, summarize the relevant lines in a markdown artifact, and do not commit the bulky raw files unless the user explicitly asks.
+
+If an audit attempt directory grows beyond 1 MB, inspect the largest files before committing. Move non-essential raw logs to `tmp_debug/`, replace them with concise summaries, and keep only evidence needed to explain pass/fail decisions.
+
 ## Preferred Multi-Model Review
 
 Every audit should gather independent reviewer feedback before the final audit report is classified when the relevant tools are available:
@@ -73,6 +98,8 @@ Reviewer tools are optional. If Codex, Claude, Antigravity, or a required model 
 Model reviews are never overwritten. Each audit run writes to a new `reviews/audit-NNN/` directory.
 
 Each audit attempt also writes `reviews/audit-NNN/review-metadata.yaml` with reviewer transport, session, start/end timestamps, duration, timeout, retry count, status, and output file.
+
+Reviewer markdown files are stable audit artifacts. Raw reviewer process logs are debugging artifacts and must stay outside the epic docs folder unless explicitly summarized.
 
 ## Remediation Policy
 
@@ -211,6 +238,8 @@ VERIFICATION_MATRIX_FILE="docs/epics/${EPIC_DIR}/audit-verification-matrix.yaml"
 ISSUE_LEDGER_FILE="docs/epics/${EPIC_DIR}/audit-issue-ledger.yaml"
 CHANGED_FILES_FILE="docs/epics/${EPIC_DIR}/changed-files.txt"
 REVIEW_METADATA_FILE="${ATTEMPT_DIR}/review-metadata.yaml"
+AUDIT_TMP_DIR="tmp_debug/scope-audit/${EPIC_ID}/${ATTEMPT_ID}"
+mkdir -p "$AUDIT_TMP_DIR"
 
 cat > "$REVIEW_METADATA_FILE" <<EOF
 epic_id: "${EPIC_ID}"
@@ -684,7 +713,7 @@ run_agy_model_review() {
   local output_id="$2"
   local prompt_file="$3"
   local output_file="${ATTEMPT_DIR}/${output_id}.md"
-  local error_file="${ATTEMPT_DIR}/${output_id}.stderr.txt"
+  local error_file="${AUDIT_TMP_DIR}/${output_id}.stderr.txt"
   local prompt_text
 
   prompt_text="$(cat "$prompt_file")"
@@ -703,7 +732,7 @@ run_agy_review() {
   local prompt_file="${ATTEMPT_DIR}/reviewer-agy-prompt.md"
   local output_file="${ATTEMPT_DIR}/${AGY_REVIEW_OUTPUT_ID}.md"
   local fallback_output_file="${ATTEMPT_DIR}/${AGY_FALLBACK_OUTPUT_ID}.md"
-  local error_file="${ATTEMPT_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"
+  local error_file="${AUDIT_TMP_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"
   local started_epoch started_at completed_at duration_seconds
   local final_model final_output_file final_transport
 
@@ -739,7 +768,7 @@ run_agy_review() {
     else
       completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
       duration_seconds="$(( $(date +%s) - started_epoch ))"
-      append_review_metadata "agy" "$AGY_FALLBACK_MODEL" "agy-print-fallback" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/${AGY_FALLBACK_OUTPUT_ID}.stderr.txt" "Antigravity fallback reviewer command failed"
+      append_review_metadata "agy" "$AGY_FALLBACK_MODEL" "agy-print-fallback" "" "failed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "${AUDIT_TMP_DIR}/${AGY_FALLBACK_OUTPUT_ID}.stderr.txt" "Antigravity fallback reviewer command failed"
       rm -f "$fallback_output_file"
       return 1
     fi
