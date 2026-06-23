@@ -634,10 +634,11 @@ unresolved issues if the loop stopped.
 | Reviewer | Required model | Prompt source | Output |
 |----------|----------------|---------------|--------|
 | Codex | `gpt-5.5` with high reasoning | `commands/epic_refine/reviewer-architecture-codex.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/codex-gpt-5.5-high.md` |
-| Claude | Opus 4.7 | `commands/epic_refine/reviewer-architecture-claude.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/claude-opus-4.7.md` |
+| Claude | Opus via local `opus` alias | `commands/epic_refine/reviewer-architecture-claude.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/claude-opus.md` |
 | Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/epic_refine/reviewer-architecture-agy.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
 
 Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
+Claude uses the local Claude CLI `opus` alias by default. This is not pinned to a specific Claude release. To pin a specific Claude model id, set `SCOPE_CLAUDE_PEXPECT_COMMAND`.
 
 Use the transport appropriate to each reviewer:
 
@@ -726,10 +727,10 @@ build_refine_review_prompt_file() {
 # Claude invocation shape for each refine attempt:
 #   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
 #     --reviewer "claude" \
-#     --model "Claude Opus 4.7" \
+#     --model "Claude Opus (local alias)" \
 #     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools '${CLAUDE_REFINE_ALLOWED_TOOLS}' --no-chrome}" \
 #     --prompt-file "${REFINE_REVIEW_DIR}/reviewer-architecture-claude-prompt.md" \
-#     --output-file "${REFINE_REVIEW_DIR}/claude-opus-4.7.md" \
+#     --output-file "${REFINE_REVIEW_DIR}/claude-opus.md" \
 #     --metadata-file "$REFINE_REVIEW_METADATA_FILE" \
 #     --cwd "$(pwd)" \
 #     --timeout-seconds "$REVIEW_TIMEOUT_SECONDS" \

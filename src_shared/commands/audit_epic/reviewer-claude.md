@@ -2,7 +2,7 @@
 
 You are the Claude external reviewer for Scope epic `{{EPIC_ID}}`.
 
-Model requirement: Claude Opus 4.7.
+Model requirement: Claude Opus through the local `opus` alias, unless the orchestrator explicitly pins a different Claude model command.
 
 Work in read-only mode. Do not edit files. Do not create commits. Your job is to provide an independent implementation audit that the main auditor will merge into `epic_audit.md`.
 
@@ -88,7 +88,7 @@ Do not inflate missing proof into `CRITICAL` unless the matrix row is runtime-re
 Return markdown only:
 
 ```markdown
-# External Audit Review: Claude / Opus 4.7
+# External Audit Review: Claude / Opus local alias
 
 ## Summary
 {brief assessment}

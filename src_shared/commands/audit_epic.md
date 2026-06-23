@@ -86,7 +86,7 @@ Every audit should gather independent reviewer feedback before the final audit r
 | Reviewer | Required model | Prompt source | Output |
 |----------|----------------|---------------|--------|
 | Codex | `gpt-5.5` with high reasoning | `commands/audit_epic/reviewer-codex.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/codex-gpt-5.5-high.md` |
-| Claude | Opus 4.7 | `commands/audit_epic/reviewer-claude.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/claude-opus-4.7.md` |
+| Claude | Opus via local `opus` alias | `commands/audit_epic/reviewer-claude.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/claude-opus.md` |
 | Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/audit_epic/reviewer-agy.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
 
 Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
@@ -137,7 +137,7 @@ SOURCES:
 ├── Audit verification matrix: docs/epics/{epic-id}/audit-verification-matrix.yaml
 ├── Issue ledger: docs/epics/{epic-id}/audit-issue-ledger.yaml
 ├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
-├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus-4.7.md
+├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus.md
 ├── Antigravity review if available: docs/epics/{epic-id}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md
 ├── Reviewer metadata: docs/epics/{epic-id}/reviews/audit-NNN/review-metadata.yaml
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
@@ -510,7 +510,7 @@ Antigravity should use the direct `agy --print "prompt"` invocation.
 
 - Claude receives a short one-shot instruction that points to the reviewer
   prompt file, repository/worktree path, and required output file.
-- Claude writes the review report to `claude-opus-4.7.md` with wrapper-managed
+- Claude writes the review report to `claude-opus.md` with wrapper-managed
   sentinels; the wrapper strips the sentinels before the file is consumed.
 - Claude's allowed tools include common read-only shell inspection commands used
   during audits, while still excluding mutating commands.
@@ -637,29 +637,29 @@ run_codex_review() {
 
 run_claude_review() {
   local prompt_file="${ATTEMPT_DIR}/reviewer-claude-prompt.md"
-  local output_file="${ATTEMPT_DIR}/claude-opus-4.7.md"
+  local output_file="${ATTEMPT_DIR}/claude-opus.md"
 
   if [ -z "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" ]; then
     echo "scope-reviewer-claude-pexpect.py not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
-    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "scope-reviewer-claude-pexpect.py not found"
+    append_review_metadata "claude" "Claude Opus (local alias)" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "scope-reviewer-claude-pexpect.py not found"
     return 0
   fi
 
   if ! command -v claude >/dev/null 2>&1; then
     echo "Claude CLI not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
-    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Claude CLI not found"
+    append_review_metadata "claude" "Claude Opus (local alias)" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Claude CLI not found"
     return 0
   fi
 
   if ! command -v "$SCOPE_REVIEW_PYTHON" >/dev/null 2>&1; then
     echo "Python not found: ${SCOPE_REVIEW_PYTHON}. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
-    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Python not found: ${SCOPE_REVIEW_PYTHON}"
+    append_review_metadata "claude" "Claude Opus (local alias)" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Python not found: ${SCOPE_REVIEW_PYTHON}"
     return 0
   fi
 
   if ! "$SCOPE_REVIEW_PYTHON" -c 'import pexpect' >/dev/null 2>&1; then
     echo "Python pexpect module not found. Skipped Claude external review." > "${ATTEMPT_DIR}/claude-unavailable.md"
-    append_review_metadata "claude" "Claude Opus 4.7" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Python pexpect module not found"
+    append_review_metadata "claude" "Claude Opus (local alias)" "pexpect" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/claude-unavailable.md" "Python pexpect module not found"
     return 0
   fi
 
@@ -667,7 +667,7 @@ run_claude_review() {
   local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools '${CLAUDE_AUDIT_ALLOWED_TOOLS}' --no-chrome}"
   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
     --reviewer "claude" \
-    --model "Claude Opus 4.7" \
+    --model "Claude Opus (local alias)" \
     --claude-command "$claude_command" \
     --prompt-file "$prompt_file" \
     --output-file "$output_file" \
@@ -798,10 +798,10 @@ run_claude_review || echo "Claude reviewer failed or model unavailable. Continui
 run_agy_review || echo "Antigravity reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/agy-unavailable.md"
 ```
 
-Claude CLI model aliases vary by installation. The required model is Claude
-Opus 4.7; use the local alias that maps to Opus 4.7. If `--model opus` is not
-Opus 4.7 in the local environment, set `SCOPE_CLAUDE_PEXPECT_COMMAND` to the
-exact installed Opus 4.7 command. The Claude wrapper requires Python with the
+Claude CLI model aliases vary by installation. By default Scope calls
+`claude --model opus`, which uses the local current Opus alias and is not pinned
+to a specific Claude release. To pin a specific Claude model id, set
+`SCOPE_CLAUDE_PEXPECT_COMMAND`. The Claude wrapper requires Python with the
 `pexpect` module available; set `SCOPE_REVIEW_PYTHON` to a Python executable
 that can import `pexpect` if needed.
 
@@ -901,7 +901,7 @@ Residual findings must still be evidence-backed. Do not use the residual review 
 
 After reviewer execution finishes:
 
-1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus-4.7.md`, and `reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `reviews/audit-NNN/agy-gemini-3.5-flash.md`, but any of them may be absent when the local tool is unavailable.
+1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus.md`, and `reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `reviews/audit-NNN/agy-gemini-3.5-flash.md`, but any of them may be absent when the local tool is unavailable. For legacy attempts, also read any additional `reviews/audit-NNN/claude-opus*.md` review file if present.
 2. Read `reviews/audit-NNN/review-metadata.yaml` and use it to report reviewer duration, timeout, retry count, transport, and status.
 3. Read `reviews/audit-NNN/exploratory-residual-review.md` if it exists.
 4. Merge reviewer row statuses into `audit-verification-matrix.yaml` under `reviewer_status`.
@@ -1527,7 +1527,7 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 **Date**: {date}
 **Auditor**: Scope audit command
 **Audit Attempt**: {audit-NNN}
-**External Reviewers**: Codex `gpt-5.5` with high reasoning, Claude Opus 4.7, Antigravity `Gemini 3.1 Pro (High)` or fallback `Gemini 3.5 Flash (High)`
+**External Reviewers**: Codex `gpt-5.5` with high reasoning, Claude Opus via local `opus` alias, Antigravity `Gemini 3.1 Pro (High)` or fallback `Gemini 3.5 Flash (High)`
 **Status**: {PASS / FAIL / PASS WITH CONDITIONS}
 
 ---
@@ -1594,7 +1594,7 @@ Rows marked `fail`, required rows marked `unverified`, and blocked rows must app
 | Reviewer | Model | Transport | Session | Status | Duration | Retries | Findings Imported |
 |----------|-------|-----------|---------|--------|----------|---------|-------------------|
 | Codex | gpt-5.5 / high reasoning | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
-| Claude | Opus 4.7 | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Claude | Opus via local alias | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Antigravity | {Gemini 3.1 Pro (High) / Gemini 3.5 Flash (High)} | agy-print | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 
 ### Exploratory Residual Review

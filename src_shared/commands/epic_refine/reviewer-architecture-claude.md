@@ -2,7 +2,7 @@
 
 You are the Claude external reviewer for Scope epic `{{EPIC_ID}}`.
 
-Model requirement: Claude Opus 4.7.
+Model requirement: Claude Opus through the local `opus` alias, unless the orchestrator explicitly pins a different Claude model command.
 
 ## Mission
 
@@ -97,7 +97,7 @@ Use `NON-BLOCKING` for useful improvements that do not prevent Gate #3.
 
 Return plain text using these exact labels:
 
-REVIEWER: Claude / Opus 4.7
+REVIEWER: Claude / Opus local alias
 DECISION: Approved for Gate #3 | Not approved for Gate #3
 
 SUMMARY:

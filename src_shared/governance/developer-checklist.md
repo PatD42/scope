@@ -32,7 +32,8 @@ Do NOT rely on memory. Do NOT summarize. READ THE FILE every time.
 
 ### Integration
 
-- [ ] **Live smoke test** — If this story introduces a new external service, verify it works live (not just mocked).
+- [ ] **Live smoke test wired and run** — If this story introduces a new external service, local/cloud dependency, runtime-required acceptance row, migration/backfill/bootstrap/onboarding/reindex flow, or end-to-end value path, create or update the smoke checker that exercises the real path. Run it before marking the story complete and record the command, environment, result, and evidence in `acceptance-traceability.yaml`.
+- [ ] **Runtime-required rows not deferred to audit** — Every affected `runtime_evidence.required: true` row must have a concrete command/checker and a passing result before implementation is considered complete. If credentials or infrastructure are missing, leave the story non-complete as `blocked_missing_runtime_input` and report the blocker; do not wait for `/audit_epic` to discover it.
 - [ ] **Contract compliance** — If `contracts.py` exists, `mypy --strict` passes on all files you touched.
 - [ ] **Coverage threshold met** — Story-level automated test coverage is 90%+ for the code you created or modified, unless the approved test strategy documents an explicit exception.
 

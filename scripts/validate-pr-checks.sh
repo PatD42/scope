@@ -225,6 +225,19 @@ check_agy_invocation() {
   grep -n -- '--print "$AGY_PROMPT_TEXT"' src_shared/commands/epic_refine.md
 }
 
+check_claude_invocation() {
+  section "Check Claude invocation"
+
+  if grep -R -n -E 'Claude Opus 4\.7|Opus 4\.7|claude-opus-4\.7' src_shared src_claude src_codex; then
+    fail "Claude reviewer must use local Opus alias naming, not a stale pinned Opus version label"
+  fi
+
+  grep -n "claude-opus.md" src_shared/commands/audit_epic.md
+  grep -n "claude-opus.md" src_shared/commands/epic_refine.md
+  grep -n "Claude Opus (local alias)" src_shared/commands/audit_epic.md
+  grep -n "Claude Opus (local alias)" src_shared/commands/epic_refine.md
+}
+
 check_command_expectations() {
   local command
   local reviewer
@@ -245,6 +258,11 @@ check_command_expectations() {
   grep -n "not an informal audit" src_codex/commands/implement.md
   grep -n "review-metadata.yaml" src_claude/commands/implement.md
   grep -n "review-metadata.yaml" src_codex/commands/implement.md
+  grep -n "runtime_evidence.required: true" src_claude/commands/implement.md
+  grep -n "runtime_evidence.required: true" src_codex/commands/implement.md
+  grep -n "Missing live smoke wiring is an implementation gap" src_claude/commands/implement.md
+  grep -n "Missing live smoke wiring is an implementation gap" src_codex/commands/implement.md
+  grep -n "Runtime-required rows not deferred to audit" src_shared/governance/developer-checklist.md
   grep -n "Audit Boundary and Artifact Policy" src_shared/commands/audit_epic.md
   grep -n "Never delete, rename, compact, or rewrite" src_shared/commands/audit_epic.md
   grep -n "tmp_debug/scope-audit" src_shared/commands/audit_epic.md
@@ -264,6 +282,7 @@ main() {
   check_codegraph_guidance
   check_codex_override_sources
   check_agy_invocation
+  check_claude_invocation
   check_command_expectations
 
   section "All PR checks passed"

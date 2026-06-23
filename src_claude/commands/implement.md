@@ -406,6 +406,11 @@ Instructions:
 - If the story/file plan includes an operational deliverable (migration, bootstrap,
   backfill, seed, sync, onboarding run, reindex, CLI execution), execute it and
   validate the resulting system state unless the file plan explicitly says dry-run only
+- If any affected `acceptance-traceability.yaml` row has
+  `runtime_evidence.required: true`, create or update the smoke checker that
+  exercises the real local/cloud dependency or end-to-end value path, run it,
+  and record command, environment, result, and evidence before marking the story
+  complete. Do not leave live smoke wiring for `/audit_epic`.
 - If contracts.py exists, include tests that verify implementations satisfy the
   Protocol interfaces. Import Protocol types and assert structural compatibility.
 - Run all tests after implementation — all must pass
@@ -484,16 +489,21 @@ Task(
     3. Read the task description — it contains file plan path, context to load, and constraints
     4. Implement production-ready code AND write tests
     5. Execute any operational deliverables required by the story/file plan and verify the real side effects
-    6. Run all tests — all must pass
-    7. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
+    6. For every affected acceptance-traceability row with runtime_evidence.required=true,
+       create/update the live smoke checker, run it against the intended local/cloud
+       dependency, and record command/result/evidence before marking the story complete.
+       If credentials or infrastructure are missing, leave the story non-complete as
+       blocked_missing_runtime_input and report the blocker.
+    7. Run all tests — all must pass
+    8. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
        Look for it at: .claude/governance/developer-checklist.md (or src_shared/governance/developer-checklist.md in the SCOPE repo)
        Do NOT skip this step. Do NOT rely on memory of the checklist. READ THE FILE.
-    8. Only mark completed if the promised value is observed through the intended path.
+    9. Only mark completed if the promised value is observed through the intended path.
        If proof is partial, leave the story non-complete and report one of:
        implementation_complete_unverified, unit_verified, integration_verified,
        runtime_verified, or blocked_missing_runtime_input.
-    9. Check TaskList again for next unblocked dev task
-    10. Repeat until no more dev tasks available
+    10. Check TaskList again for next unblocked dev task
+    11. Repeat until no more dev tasks available
 
     CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
     You are responsible for BOTH implementation AND tests — there is no SDET.
@@ -501,7 +511,7 @@ Task(
     integration work, non-zero/threshold proof for promised outputs, intent match,
     no dead code, pattern consistency, lesson compliance, unplanned changes,
     contract compliance, scope check, no hardcoded values, LIVE SMOKE TEST for
-    new services, operational deliverables executed, value-path verified,
+    new services and runtime-required rows, operational deliverables executed, value-path verified,
     no redundant tests, documentation/follow-up captured.""",
     subagent_type="general-purpose",
     description="Developer: implement",
@@ -552,22 +562,35 @@ Examples:
 - onboarding jobs
 - reindex/sync jobs
 - one-time CLI routines that produce the actual value of the epic
+- live smoke checkers for every `acceptance-traceability.yaml` row with
+  `runtime_evidence.required: true`
 
 Procedure:
 1. Scan all file plans for operational verbs: `bootstrap`, `backfill`, `migrate`, `seed`, `sync`, `reindex`, `onboard`, `rollout`
-2. Build an execution checklist of those deliverables
-3. Execute each deliverable in the intended environment unless the epic explicitly says dry-run only
-4. Validate the resulting state with concrete checks:
+2. Scan `acceptance-traceability.yaml` for all rows where `runtime_evidence.required: true`
+3. For every runtime-required row, verify a concrete smoke checker/command exists and is wired into the project test or smoke command structure
+4. Build an execution checklist of operational deliverables and runtime-required smoke checkers
+5. Execute each deliverable/checker in the intended local or cloud environment unless the epic explicitly says dry-run only
+6. Validate the resulting state with concrete checks:
    - DB rows/counts/columns
    - files/artifacts created
    - API/system behavior
    - log or status evidence
-5. If credentials, schema, or runtime dependencies are missing, stop calling the epic complete and report:
+7. Update `docs/epics/{epic-dir}/acceptance-traceability.yaml` so every runtime-required row has:
+   - command/checker path
+   - environment used
+   - result
+   - evidence path or concise output
+   - status `verified` or `blocked`
+8. If credentials, schema, or runtime dependencies are missing, stop before `audit_epic`; do not let audit be the first place this is discovered. Report:
    - what was implemented in code
    - what value-delivery step is still blocked
    - what concrete prerequisite is missing
+   - which runtime-required traceability rows remain blocked
 
 If the epic changes no runtime state and is purely code-path work, record that explicitly and continue.
+
+`/implement` must not start Step 5 while any runtime-required row lacks a wired checker/command and a passing result, unless the row is blocked by a concrete external dependency that has been reported to the user. Missing live smoke wiring is an implementation gap, not an audit finding.
 
 ### Step 5: Audit
 
@@ -716,6 +739,10 @@ Instructions:
 - If the fix promises output, persisted rows, generated files, extracted items,
   metrics, events, or side effects, provide representative non-zero or threshold
   evidence unless zero is explicitly valid.
+- If the fix affects a row with `runtime_evidence.required: true`, create or
+  update the live smoke checker, run it against the intended local/cloud
+  dependency, and record command/result/evidence before marking the fix story
+  complete.
 - If contracts.py exists, include tests that assert Protocol compliance for
   interfaces affected by the fix
 - Run all tests after implementation — all must pass
