@@ -208,6 +208,23 @@ check_codex_override_sources() {
   grep -n "Follow repository instructions in \`AGENTS.md\`" src_codex/skills/scope-workflows/SKILL.md
 }
 
+check_agy_invocation() {
+  section "Check Antigravity invocation"
+
+  if grep -R -n -E 'SCOPE_AGY_MODEL:-gemini-|SCOPE_AGY_FALLBACK_MODEL:-gemini-|AGY_REVIEW_MODEL=.*gemini-|AGY_FALLBACK_MODEL=.*gemini-' src_shared src_claude src_codex; then
+    fail "Antigravity model defaults must use exact display labels from agy models"
+  fi
+
+  if grep -R -n -E 'agy[[:space:]]+--print[[:space:]]+--' src_shared src_claude src_codex; then
+    fail "Antigravity --print must receive prompt text, not another flag"
+  fi
+
+  grep -n 'Gemini 3.1 Pro (High)' src_shared/commands/audit_epic.md
+  grep -n 'Gemini 3.1 Pro (High)' src_shared/commands/epic_refine.md
+  grep -n -- '--print "$prompt_text"' src_shared/commands/audit_epic.md
+  grep -n -- '--print "$AGY_PROMPT_TEXT"' src_shared/commands/epic_refine.md
+}
+
 check_command_expectations() {
   local command
   local reviewer
@@ -236,6 +253,7 @@ main() {
   check_codex_plugin_naming
   check_codegraph_guidance
   check_codex_override_sources
+  check_agy_invocation
   check_command_expectations
 
   section "All PR checks passed"

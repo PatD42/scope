@@ -477,7 +477,7 @@ Claude should be run through the `pexpect` one-shot file-output wrapper when
 available because Claude CLI headless mode can be token-only or restricted in
 some subscription environments. Do not use tmux pane scraping for Claude review
 output.
-Antigravity should use the direct `agy --print` invocation.
+Antigravity should use the direct `agy --print "prompt"` invocation.
 
 - Claude receives a short one-shot instruction that points to the reviewer
   prompt file, repository/worktree path, and required output file.
@@ -490,7 +490,7 @@ Antigravity should use the direct `agy --print` invocation.
 - On Claude timeout, terminate the process and retry once.
 - If `pexpect`, `python3`, `claude`, or the wrapper is unavailable, record
   `claude-unavailable.md` and continue.
-- Antigravity runs headless with `agy --model "Gemini 3.1 Pro (High)" --print --sandbox --dangerously-skip-permissions --print-timeout "$SCOPE_AGY_PRINT_TIMEOUT"`. If the primary model is rate-limited, retry once with `Gemini 3.5 Flash (High)`.
+- Antigravity runs headless with `agy --model "Gemini 3.1 Pro (High)" --sandbox --dangerously-skip-permissions --print-timeout "$SCOPE_AGY_PRINT_TIMEOUT" --print "$PROMPT_TEXT"`. If the primary model is rate-limited, retry once with `Gemini 3.5 Flash (High)`.
 - Write timing/status data for every reviewer into `review-metadata.yaml`.
 
 ```bash
@@ -655,20 +655,46 @@ is_agy_rate_limit_error() {
   grep -Eiq 'rate.?limit|quota|429|resource.?exhausted|too many requests|try again later' "$error_file"
 }
 
+agy_model_available() {
+  local model="$1"
+  agy models 2>/dev/null | grep -Fxq "$model"
+}
+
+validate_agy_model_or_fail() {
+  local model="$1"
+  local output_file="$2"
+  local model_role="$3"
+
+  if agy_model_available "$model"; then
+    return 0
+  fi
+
+  {
+    printf 'Antigravity %s model is not an exact agy model label: %s\n' "$model_role" "$model"
+    printf '\nUse one of the exact labels from `agy models`, for example:\n'
+    printf '%s\n' '- Gemini 3.1 Pro (High)'
+    printf '%s\n' '- Gemini 3.5 Flash (High)'
+    printf '\nDo not use Gemini CLI aliases such as `gemini-3.1-pro-high`; agy may silently fall back to Flash Medium.\n'
+  } > "$output_file"
+  return 1
+}
+
 run_agy_model_review() {
   local model="$1"
   local output_id="$2"
   local prompt_file="$3"
   local output_file="${ATTEMPT_DIR}/${output_id}.md"
   local error_file="${ATTEMPT_DIR}/${output_id}.stderr.txt"
+  local prompt_text
+
+  prompt_text="$(cat "$prompt_file")"
 
   agy \
     --model "$model" \
-    --print \
     --sandbox \
     --dangerously-skip-permissions \
     --print-timeout "$AGY_PRINT_TIMEOUT" \
-    < "$prompt_file" \
+    --print "$prompt_text" \
     > "$output_file" \
     2> "$error_file"
 }
@@ -685,6 +711,16 @@ run_agy_review() {
     echo "Antigravity agy CLI not found. Skipped Antigravity external review." > "${ATTEMPT_DIR}/agy-unavailable.md"
     append_review_metadata "agy" "$AGY_REVIEW_MODEL" "agy-print" "" "unavailable" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/agy-unavailable.md" "agy CLI not found"
     return 0
+  fi
+
+  if ! validate_agy_model_or_fail "$AGY_REVIEW_MODEL" "${ATTEMPT_DIR}/agy-unavailable.md" "primary"; then
+    append_review_metadata "agy" "$AGY_REVIEW_MODEL" "agy-print" "" "failed" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/agy-unavailable.md" "Antigravity primary model is not an exact agy model label"
+    return 1
+  fi
+
+  if ! validate_agy_model_or_fail "$AGY_FALLBACK_MODEL" "${ATTEMPT_DIR}/agy-unavailable.md" "fallback"; then
+    append_review_metadata "agy" "$AGY_FALLBACK_MODEL" "agy-print-fallback" "" "failed" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/agy-unavailable.md" "Antigravity fallback model is not an exact agy model label"
+    return 1
   fi
 
   build_review_prompt_file "reviewer-agy.md" "$prompt_file"

@@ -402,7 +402,7 @@ Validate reviewer command syntax before spending a review attempt:
   - `agy --help`
   - `agy models`
   - verify the configured primary and fallback model names appear in `agy models`
-  - verify Scope will call `agy --print --sandbox --dangerously-skip-permissions`
+  - verify Scope will call `agy --model "$AGY_REVIEW_MODEL" --sandbox --dangerously-skip-permissions --print-timeout "$AGY_PRINT_TIMEOUT" --print "$PROMPT_TEXT"`
   - if `agy` rejects Scope-provided flags or model names, stop as `SCOPE TOOLING ERROR`
 
 Local tool absence, expired credentials, quota, or unavailable local models can
@@ -647,7 +647,7 @@ Use the transport appropriate to each reviewer:
   paths to the reviewer prompt, repository/worktree, and output file. Claude
   writes the report file directly; the wrapper validates it with sentinels,
   strips the sentinels, and retries once on timeout.
-- Antigravity uses the direct `agy --print` invocation.
+- Antigravity uses the direct `agy --print "prompt"` invocation.
 
 Reviewer execution skeleton:
 
@@ -714,7 +714,12 @@ build_refine_review_prompt_file() {
 # - Claude through scope-reviewer-claude-pexpect.py when helper + `claude` +
 #   Python pexpect are available, otherwise claude-unavailable.md
 # - Antigravity directly with:
-#     agy --model "$AGY_REVIEW_MODEL" --print --sandbox --dangerously-skip-permissions --print-timeout "$AGY_PRINT_TIMEOUT"
+#     agy --model "$AGY_REVIEW_MODEL" --sandbox --dangerously-skip-permissions --print-timeout "$AGY_PRINT_TIMEOUT" --print "$PROMPT_TEXT"
+#   Validate "$AGY_REVIEW_MODEL" and "$AGY_FALLBACK_MODEL" by exact line match
+#   against `agy models` before running. Use the display labels from `agy models`
+#   such as `Gemini 3.1 Pro (High)`, not Gemini CLI aliases such as
+#   `gemini-3.1-pro-high`; agy can silently fall back to Flash Medium for the
+#   normalized alias.
 #   If the primary model is rate-limited, retry once with "$AGY_FALLBACK_MODEL".
 #   Otherwise write agy-unavailable.md.
 #
@@ -734,29 +739,35 @@ build_refine_review_prompt_file() {
 #   build_refine_review_prompt_file \
 #     "reviewer-architecture-agy.md" \
 #     "${REFINE_REVIEW_DIR}/reviewer-architecture-agy-prompt.md"
-#   if ! agy \
-#       --model "$AGY_REVIEW_MODEL" \
-#       --print \
-#       --sandbox \
-#       --dangerously-skip-permissions \
-#       --print-timeout "$AGY_PRINT_TIMEOUT" \
-#       < "${REFINE_REVIEW_DIR}/reviewer-architecture-agy-prompt.md" \
-#       > "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.md" \
-#       2> "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"; then
-#     if grep -Eiq 'rate.?limit|quota|429|resource.?exhausted|too many requests|try again later' \
-#         "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"; then
-#       agy \
-#         --model "$AGY_FALLBACK_MODEL" \
-#         --print \
+#   AGY_PROMPT_TEXT="$(cat "${REFINE_REVIEW_DIR}/reviewer-architecture-agy-prompt.md")"
+#   if ! agy models 2>/dev/null | grep -Fxq "$AGY_REVIEW_MODEL"; then
+#     echo "Antigravity primary model is not an exact agy model label: ${AGY_REVIEW_MODEL}" > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#     echo 'Use `Gemini 3.1 Pro (High)`, not `gemini-3.1-pro-high`.' >> "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#   elif ! agy models 2>/dev/null | grep -Fxq "$AGY_FALLBACK_MODEL"; then
+#     echo "Antigravity fallback model is not an exact agy model label: ${AGY_FALLBACK_MODEL}" > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#   else
+#     if ! agy \
+#         --model "$AGY_REVIEW_MODEL" \
 #         --sandbox \
 #         --dangerously-skip-permissions \
 #         --print-timeout "$AGY_PRINT_TIMEOUT" \
-#         < "${REFINE_REVIEW_DIR}/reviewer-architecture-agy-prompt.md" \
-#         > "${REFINE_REVIEW_DIR}/${AGY_FALLBACK_OUTPUT_ID}.md" \
-#         2> "${REFINE_REVIEW_DIR}/${AGY_FALLBACK_OUTPUT_ID}.stderr.txt" \
-#         || echo "Antigravity fallback failed." > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
-#     else
-#       echo "Antigravity failed." > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#         --print "$AGY_PROMPT_TEXT" \
+#         > "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.md" \
+#         2> "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"; then
+#       if grep -Eiq 'rate.?limit|quota|429|resource.?exhausted|too many requests|try again later' \
+#           "${REFINE_REVIEW_DIR}/${AGY_REVIEW_OUTPUT_ID}.stderr.txt"; then
+#         agy \
+#           --model "$AGY_FALLBACK_MODEL" \
+#           --sandbox \
+#           --dangerously-skip-permissions \
+#           --print-timeout "$AGY_PRINT_TIMEOUT" \
+#           --print "$AGY_PROMPT_TEXT" \
+#           > "${REFINE_REVIEW_DIR}/${AGY_FALLBACK_OUTPUT_ID}.md" \
+#           2> "${REFINE_REVIEW_DIR}/${AGY_FALLBACK_OUTPUT_ID}.stderr.txt" \
+#           || echo "Antigravity fallback failed." > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#       else
+#         echo "Antigravity failed." > "${REFINE_REVIEW_DIR}/agy-unavailable.md"
+#       fi
 #     fi
 #   fi
 ```
