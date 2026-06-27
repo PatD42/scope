@@ -232,10 +232,28 @@ check_claude_invocation() {
     fail "Claude reviewer must use local Opus alias naming, not a stale pinned Opus version label"
   fi
 
+  if grep -R -n 'permission-mode acceptEdits' src_shared/commands/audit_epic.md src_shared/commands/epic_refine.md; then
+    fail "Claude reviewer automation must use bypassPermissions to avoid interactive permission prompts"
+  fi
+
   grep -n "claude-opus.md" src_shared/commands/audit_epic.md
   grep -n "claude-opus.md" src_shared/commands/epic_refine.md
   grep -n "Claude Opus (local alias)" src_shared/commands/audit_epic.md
   grep -n "Claude Opus (local alias)" src_shared/commands/epic_refine.md
+  grep -n "permission-mode bypassPermissions" src_shared/commands/audit_epic.md
+  grep -n "permission-mode bypassPermissions" src_shared/commands/epic_refine.md
+  grep -n "Bash(grep:\\*)" src_shared/commands/audit_epic.md
+  grep -n "Bash(grep:\\*)" src_shared/commands/epic_refine.md
+  grep -n "Bash(echo:\\*)" src_shared/commands/audit_epic.md
+  grep -n "Bash(echo:\\*)" src_shared/commands/epic_refine.md
+  grep -n "Bash(printf:\\*)" src_shared/commands/audit_epic.md
+  grep -n "Bash(printf:\\*)" src_shared/commands/epic_refine.md
+  grep -n "Bash(for:\\*)" src_shared/commands/audit_epic.md
+  grep -n "Bash(for:\\*)" src_shared/commands/epic_refine.md
+  grep -n "Bash(which:\\*)" src_shared/commands/audit_epic.md
+  grep -n "Bash(which:\\*)" src_shared/commands/epic_refine.md
+  grep -n "Bash(python -c:\\*)" src_shared/commands/audit_epic.md
+  grep -n "Bash(python -c:\\*)" src_shared/commands/epic_refine.md
 }
 
 check_command_expectations() {
@@ -249,11 +267,27 @@ check_command_expectations() {
     test -f "src_codex/commands/${command}.md"
   done
 
-  for reviewer in reviewer-codex reviewer-claude reviewer-agy; do
+  for reviewer in reviewer-codex reviewer-claude reviewer-agy reviewer-glm; do
     test -f "src_shared/commands/audit_epic/${reviewer}.md"
+    grep -n "not the Scope orchestrator" "src_shared/commands/audit_epic/${reviewer}.md"
+    grep -n "any other reviewer" "src_shared/commands/audit_epic/${reviewer}.md"
+  done
+
+  for reviewer in reviewer-architecture-codex reviewer-architecture-claude reviewer-architecture-agy reviewer-architecture-glm; do
+    test -f "src_shared/commands/epic_refine/${reviewer}.md"
+    grep -n "not the Scope orchestrator" "src_shared/commands/epic_refine/${reviewer}.md"
+    grep -n "any other reviewer" "src_shared/commands/epic_refine/${reviewer}.md"
   done
 
   grep -n "Nested Scope Command Execution" src_codex/skills/scope-workflows/SKILL.md
+  grep -n "zai-coding-plan/glm-5.2" src_shared/commands/audit_epic.md
+  grep -n "zai-coding-plan/glm-5.2" src_shared/commands/epic_refine.md
+  grep -n -- '--variant "high"' src_shared/commands/audit_epic.md
+  grep -n -- '--variant "high"' src_shared/commands/epic_refine.md
+  grep -n "glm-5.2.md" src_shared/commands/audit_epic.md
+  grep -n "glm-5.2.md" src_shared/commands/epic_refine.md
+  grep -n "skip GLM silently" src_shared/commands/audit_epic.md
+  grep -n "skip GLM silently" src_shared/commands/epic_refine.md
   grep -n "not an informal audit" src_claude/commands/implement.md
   grep -n "not an informal audit" src_codex/commands/implement.md
   grep -n "review-metadata.yaml" src_claude/commands/implement.md

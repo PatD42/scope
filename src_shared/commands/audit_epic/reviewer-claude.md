@@ -6,6 +6,13 @@ Model requirement: Claude Opus through the local `opus` alias, unless the orches
 
 Work in read-only mode. Do not edit files. Do not create commits. Your job is to provide an independent implementation audit that the main auditor will merge into `epic_audit.md`.
 
+## Reviewer Boundary
+
+You are a single external reviewer, not the Scope orchestrator. Do not invoke
+Codex, Antigravity, GLM, Claude, or any other reviewer. Do not run
+`scope:audit_epic`, `scope:epic_refine`, `/audit_epic`, `/epic_refine`, or any
+other Scope command. Produce only this Claude review.
+
 ## Repository
 
 Root: `{{REPO_ROOT}}`

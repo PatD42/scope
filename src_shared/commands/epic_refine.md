@@ -350,6 +350,12 @@ Phase 3.5 review must be performed by all three reviewer perspectives: Codex,
 Claude, and Antigravity. Do not choose only one reviewer and do not treat one
 reviewer's approval as sufficient.
 
+If the user preapproves all epic refinement gates, that preapproval only
+removes the need to pause for user confirmation at the approval gates. It does
+not skip Phase 3.5, reviewer CLI preflight, required reviewer attempts,
+reviewer finding merge, or `refinement-review.md`. Preapproved gates cannot be
+used as reviewer approval.
+
 Each reviewer must be attempted for the initial full review and the final
 approval review. Targeted correction reruns may use only the reviewer(s)
 required by the rerun policy below, but `refinement-review.md` must document why
@@ -362,6 +368,12 @@ silently skip a required reviewer.
 Unavailable reviewer tooling is not, by itself, a refinement failure. However,
 Gate #3 must still include the three-reviewer coverage table and must clearly
 state which of Codex, Claude, and Antigravity completed or were unavailable.
+
+GLM through `opencode` is an optional additional reviewer. If `opencode`, the
+configured GLM model, or the invocation fails, skip GLM silently: do not create
+`glm-unavailable.md`, do not fail Phase 3.5, and do not classify reviewer
+coverage as incomplete. If GLM completes and writes `glm-5.2.md`, import its
+findings like any other reviewer output and record successful metadata.
 
 Bad Scope-owned reviewer command syntax is not normal reviewer unavailability.
 Before creating a review attempt, run the reviewer CLI preflight below. If a
@@ -404,6 +416,10 @@ Validate reviewer command syntax before spending a review attempt:
   - verify the configured primary and fallback model names appear in `agy models`
   - verify Scope will call `agy --model "$AGY_REVIEW_MODEL" --sandbox --dangerously-skip-permissions --print-timeout "$AGY_PRINT_TIMEOUT" --print "$PROMPT_TEXT"`
   - if `agy` rejects Scope-provided flags or model names, stop as `SCOPE TOOLING ERROR`
+- GLM/opencode:
+  - optional only
+  - if `command -v opencode` succeeds, Scope may call `opencode run -m "$GLM_REVIEW_MODEL" --variant "high" --dir "$(pwd)" --dangerously-skip-permissions "$PROMPT_TEXT"`
+  - if `opencode` is absent, the model is unavailable, or the call fails, skip GLM silently
 
 Local tool absence, expired credentials, quota, or unavailable local models can
 still be recorded as reviewer unavailable. Bad Scope invocation syntax cannot.
@@ -563,7 +579,8 @@ Required loop:
 
 1. Run deterministic readiness preflight and fix mechanical gaps.
 2. Run pre-review hardening and fix self-detected gaps.
-3. Run the initial Codex, Claude, and Antigravity reviews.
+3. Run the initial Codex, Claude, and Antigravity reviews, plus GLM when
+   `opencode` is available.
 4. Merge reviewer findings and classify every issue as `BLOCKING`,
    `NON-BLOCKING`, or `QUESTION_FOR_USER`.
 5. If there are no blocking findings, create `refinement-review.md` with
@@ -636,6 +653,7 @@ unresolved issues if the loop stopped.
 | Codex | `gpt-5.5` with high reasoning | `commands/epic_refine/reviewer-architecture-codex.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/codex-gpt-5.5-high.md` |
 | Claude | Opus via local `opus` alias | `commands/epic_refine/reviewer-architecture-claude.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/claude-opus.md` |
 | Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/epic_refine/reviewer-architecture-agy.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
+| GLM | Optional `zai-coding-plan/glm-5.2` through opencode | `commands/epic_refine/reviewer-architecture-glm.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/glm-5.2.md` |
 
 Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
 Claude uses the local Claude CLI `opus` alias by default. This is not pinned to a specific Claude release. To pin a specific Claude model id, set `SCOPE_CLAUDE_PEXPECT_COMMAND`.
@@ -649,6 +667,7 @@ Use the transport appropriate to each reviewer:
   writes the report file directly; the wrapper validates it with sentinels,
   strips the sentinels, and retries once on timeout.
 - Antigravity uses the direct `agy --print "prompt"` invocation.
+- GLM uses `opencode run` when available and is skipped silently otherwise.
 
 Reviewer execution skeleton:
 
@@ -688,8 +707,12 @@ AGY_FALLBACK_MODEL="${SCOPE_AGY_FALLBACK_MODEL:-Gemini 3.5 Flash (High)}"
 AGY_REVIEW_OUTPUT_ID="${SCOPE_AGY_OUTPUT_ID:-agy-gemini-3.1-pro-high}"
 AGY_FALLBACK_OUTPUT_ID="${SCOPE_AGY_FALLBACK_OUTPUT_ID:-agy-gemini-3.5-flash}"
 AGY_PRINT_TIMEOUT="${SCOPE_AGY_PRINT_TIMEOUT:-60m}"
+GLM_REVIEW_MODEL="${SCOPE_GLM_MODEL:-zai-coding-plan/glm-5.2}"
+GLM_REVIEW_OUTPUT_ID="${SCOPE_GLM_OUTPUT_ID:-glm-5.2}"
+GLM_TMP_DIR="tmp_debug/scope-refine/${EPIC_ID}/${REFINE_REVIEW_ID}"
+mkdir -p "$GLM_TMP_DIR"
 SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
-CLAUDE_REFINE_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(python3 -c:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Write"
+CLAUDE_REFINE_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(grep:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(which:*),Bash(echo:*),Bash(printf:*),Bash(for:*),Bash(python -c:*),Bash(python3 -c:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Write"
 
 build_refine_review_prompt_file() {
   local reviewer_file="$1"
@@ -723,12 +746,15 @@ build_refine_review_prompt_file() {
 #   normalized alias.
 #   If the primary model is rate-limited, retry once with "$AGY_FALLBACK_MODEL".
 #   Otherwise write agy-unavailable.md.
+# - GLM through opencode when `opencode` is available. This reviewer is optional
+#   and silent-fail: if opencode/model is unavailable or the command fails, skip
+#   without creating glm-unavailable.md.
 #
 # Claude invocation shape for each refine attempt:
 #   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
 #     --reviewer "claude" \
 #     --model "Claude Opus (local alias)" \
-#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools '${CLAUDE_REFINE_ALLOWED_TOOLS}' --no-chrome}" \
+#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode bypassPermissions --allowedTools '${CLAUDE_REFINE_ALLOWED_TOOLS}' --no-chrome}" \
 #     --prompt-file "${REFINE_REVIEW_DIR}/reviewer-architecture-claude-prompt.md" \
 #     --output-file "${REFINE_REVIEW_DIR}/claude-opus.md" \
 #     --metadata-file "$REFINE_REVIEW_METADATA_FILE" \
@@ -771,6 +797,24 @@ build_refine_review_prompt_file() {
 #       fi
 #     fi
 #   fi
+#
+# GLM invocation shape for each refine attempt:
+#   if command -v opencode >/dev/null 2>&1; then
+#     build_refine_review_prompt_file \
+#       "reviewer-architecture-glm.md" \
+#       "${REFINE_REVIEW_DIR}/reviewer-architecture-glm-prompt.md"
+#     GLM_PROMPT_TEXT="$(cat "${REFINE_REVIEW_DIR}/reviewer-architecture-glm-prompt.md")"
+#     if ! opencode run \
+#         -m "$GLM_REVIEW_MODEL" \
+#         --variant "high" \
+#         --dir "$(pwd)" \
+#         --dangerously-skip-permissions \
+#         "$GLM_PROMPT_TEXT" \
+#         > "${REFINE_REVIEW_DIR}/${GLM_REVIEW_OUTPUT_ID}.md" \
+#         2> "${GLM_TMP_DIR}/${GLM_REVIEW_OUTPUT_ID}.stderr.txt"; then
+#       rm -f "${REFINE_REVIEW_DIR}/${GLM_REVIEW_OUTPUT_ID}.md"
+#     fi
+#   fi
 ```
 
 **Review questions:**
@@ -798,6 +842,7 @@ build_refine_review_prompt_file() {
 | Codex | {completed/unavailable/not run} | {N} |
 | Claude | {completed/unavailable/not run} | {N} |
 | Antigravity | {completed/unavailable/not run} | {N} |
+| GLM | {completed/not run} | {N} |
 
 ## Readiness Preflight
 | Check | Status | Evidence |
@@ -860,6 +905,10 @@ exists and its decision is `Approved for Gate #3`. Also confirm
 `docs/epics/{epic-dir}/architecture-readiness-matrix.yaml` exists and the latest
 `readiness-preflight.md` and `pre-review-hardening.md` have no unresolved
 blocking failures.
+
+If the user preapproved Gate #3 or all gates, do not present the approval prompt
+again, but still enforce the checks above. Gate preapproval is valid only after
+Phase 3.5 reviewers were attempted and `refinement-review.md` is approved.
 
 **If user approves**: Write summary entry and proceed to Phase 4
 

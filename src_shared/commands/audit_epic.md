@@ -88,12 +88,15 @@ Every audit should gather independent reviewer feedback before the final audit r
 | Codex | `gpt-5.5` with high reasoning | `commands/audit_epic/reviewer-codex.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/codex-gpt-5.5-high.md` |
 | Claude | Opus via local `opus` alias | `commands/audit_epic/reviewer-claude.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/claude-opus.md` |
 | Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/audit_epic/reviewer-agy.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
+| GLM | Optional `zai-coding-plan/glm-5.2` through opencode | `commands/audit_epic/reviewer-glm.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/glm-5.2.md` |
 
 Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
 
 These reviewers are read-only auditors. They do not edit files and do not decide what to fix. The orchestrating audit command merges their findings, removes duplicates, assigns severities, and produces the fix plan for the responsible implementation agent.
 
 Reviewer tools are optional. If Codex, Claude, Antigravity, or a required model is unavailable or not configured in the user's environment, record the failure in the current audit attempt directory as `{reviewer}-unavailable.md` and continue with the reviewers that are available. Do not mark the audit as `FAIL` solely because an external reviewer tool is missing. The audit report must disclose which reviewers completed and which were unavailable.
+
+GLM through `opencode` is an optional additional reviewer. If `opencode`, the configured GLM model, or the invocation fails, skip GLM silently: do not create `glm-unavailable.md`, do not fail the audit, and do not classify reviewer coverage as incomplete. If GLM completes and writes `glm-5.2.md`, import its findings like any other reviewer output and record successful metadata.
 
 Model reviews are never overwritten. Each audit run writes to a new `reviews/audit-NNN/` directory.
 
@@ -139,6 +142,7 @@ SOURCES:
 ├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
 ├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus.md
 ├── Antigravity review if available: docs/epics/{epic-id}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md
+├── GLM review if opencode is available: docs/epics/{epic-id}/reviews/audit-NNN/glm-5.2.md
 ├── Reviewer metadata: docs/epics/{epic-id}/reviews/audit-NNN/review-metadata.yaml
 ├── Auto Claude spec: .auto-claude/specs/*/spec.md
 └── Implemented code: .auto-claude/worktrees/tasks # The auto-claude ID is the same as the folder that has the relevant spec.md
@@ -520,6 +524,7 @@ Antigravity should use the direct `agy --print "prompt"` invocation.
 - If `pexpect`, `python3`, `claude`, or the wrapper is unavailable, record
   `claude-unavailable.md` and continue.
 - Antigravity runs headless with `agy --model "Gemini 3.1 Pro (High)" --sandbox --dangerously-skip-permissions --print-timeout "$SCOPE_AGY_PRINT_TIMEOUT" --print "$PROMPT_TEXT"`. If the primary model is rate-limited, retry once with `Gemini 3.5 Flash (High)`.
+- GLM runs only when `opencode` is available: `opencode run -m "zai-coding-plan/glm-5.2" --variant "high" --dir "$(pwd)" --dangerously-skip-permissions "$PROMPT_TEXT"`. If it is unavailable or fails, skip it silently.
 - Write timing/status data for every reviewer into `review-metadata.yaml`.
 
 ```bash
@@ -535,8 +540,10 @@ AGY_FALLBACK_MODEL="${SCOPE_AGY_FALLBACK_MODEL:-Gemini 3.5 Flash (High)}"
 AGY_REVIEW_OUTPUT_ID="${SCOPE_AGY_OUTPUT_ID:-agy-gemini-3.1-pro-high}"
 AGY_FALLBACK_OUTPUT_ID="${SCOPE_AGY_FALLBACK_OUTPUT_ID:-agy-gemini-3.5-flash}"
 AGY_PRINT_TIMEOUT="${SCOPE_AGY_PRINT_TIMEOUT:-60m}"
+GLM_REVIEW_MODEL="${SCOPE_GLM_MODEL:-zai-coding-plan/glm-5.2}"
+GLM_REVIEW_OUTPUT_ID="${SCOPE_GLM_OUTPUT_ID:-glm-5.2}"
 SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
-CLAUDE_AUDIT_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(python3 -c:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write"
+CLAUDE_AUDIT_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(grep:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(which:*),Bash(echo:*),Bash(printf:*),Bash(for:*),Bash(python -c:*),Bash(python3 -c:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write"
 
 if [ -z "$REVIEWER_PROMPT_DIR" ]; then
   echo "Audit reviewer prompts not found"
@@ -664,7 +671,7 @@ run_claude_review() {
   fi
 
   build_review_prompt_file "reviewer-claude.md" "$prompt_file"
-  local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode acceptEdits --allowedTools '${CLAUDE_AUDIT_ALLOWED_TOOLS}' --no-chrome}"
+  local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode bypassPermissions --allowedTools '${CLAUDE_AUDIT_ALLOWED_TOOLS}' --no-chrome}"
   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
     --reviewer "claude" \
     --model "Claude Opus (local alias)" \
@@ -793,9 +800,45 @@ run_agy_review() {
   append_review_metadata "agy" "$final_model" "$final_transport" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$final_output_file" ""
 }
 
+run_glm_review() {
+  local prompt_file="${ATTEMPT_DIR}/reviewer-glm-prompt.md"
+  local output_file="${ATTEMPT_DIR}/${GLM_REVIEW_OUTPUT_ID}.md"
+  local error_file="${AUDIT_TMP_DIR}/${GLM_REVIEW_OUTPUT_ID}.stderr.txt"
+  local prompt_text started_epoch started_at completed_at duration_seconds
+
+  if ! command -v opencode >/dev/null 2>&1; then
+    return 0
+  fi
+
+  build_review_prompt_file "reviewer-glm.md" "$prompt_file" || return 0
+  prompt_text="$(cat "$prompt_file")"
+  started_epoch="$(date +%s)"
+  started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+  if opencode run \
+      -m "$GLM_REVIEW_MODEL" \
+      --variant "high" \
+      --dir "$(pwd)" \
+      --dangerously-skip-permissions \
+      "$prompt_text" \
+      > "$output_file" \
+      2> "$error_file"; then
+    if [ -s "$output_file" ]; then
+      completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+      duration_seconds="$(( $(date +%s) - started_epoch ))"
+      append_review_metadata "glm" "$GLM_REVIEW_MODEL" "opencode-run" "" "completed" "$started_at" "$completed_at" "$duration_seconds" "$REVIEW_TIMEOUT_SECONDS" 0 "$output_file" ""
+      return 0
+    fi
+  fi
+
+  rm -f "$output_file"
+  return 0
+}
+
 run_codex_review || echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
 run_claude_review || echo "Claude reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/claude-unavailable.md"
 run_agy_review || echo "Antigravity reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/agy-unavailable.md"
+run_glm_review || true
 ```
 
 Claude CLI model aliases vary by installation. By default Scope calls
@@ -901,7 +944,7 @@ Residual findings must still be evidence-backed. Do not use the residual review 
 
 After reviewer execution finishes:
 
-1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus.md`, and `reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `reviews/audit-NNN/agy-gemini-3.5-flash.md`, but any of them may be absent when the local tool is unavailable. For legacy attempts, also read any additional `reviews/audit-NNN/claude-opus*.md` review file if present.
+1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus.md`, `reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `reviews/audit-NNN/agy-gemini-3.5-flash.md`, and optional `reviews/audit-NNN/glm-5.2.md` when opencode is available. Any required reviewer may be absent when the local tool is unavailable; GLM may be absent silently. For legacy attempts, also read any additional `reviews/audit-NNN/claude-opus*.md` review file if present.
 2. Read `reviews/audit-NNN/review-metadata.yaml` and use it to report reviewer duration, timeout, retry count, transport, and status.
 3. Read `reviews/audit-NNN/exploratory-residual-review.md` if it exists.
 4. Merge reviewer row statuses into `audit-verification-matrix.yaml` under `reviewer_status`.
@@ -1527,7 +1570,7 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 **Date**: {date}
 **Auditor**: Scope audit command
 **Audit Attempt**: {audit-NNN}
-**External Reviewers**: Codex `gpt-5.5` with high reasoning, Claude Opus via local `opus` alias, Antigravity `Gemini 3.1 Pro (High)` or fallback `Gemini 3.5 Flash (High)`
+**External Reviewers**: Codex `gpt-5.5` with high reasoning, Claude Opus via local `opus` alias, Antigravity `Gemini 3.1 Pro (High)` or fallback `Gemini 3.5 Flash (High)`, optional GLM `zai-coding-plan/glm-5.2` when opencode is available
 **Status**: {PASS / FAIL / PASS WITH CONDITIONS}
 
 ---
@@ -1569,7 +1612,7 @@ Rows without implementation evidence, test evidence, or required runtime evidenc
 
 | Row ID | Priority | Risk | Final Status | Reviewer Status | Finding |
 |--------|----------|------|--------------|-----------------|---------|
-| AC2.2-P10-REPROCESS-SERVICE | required | high | {pass/fail/unverified/blocked/not_applicable} | Codex: {status}; Claude: {status}; Antigravity: {status} | {none/finding id} |
+| AC2.2-P10-REPROCESS-SERVICE | required | high | {pass/fail/unverified/blocked/not_applicable} | Codex: {status}; Claude: {status}; Antigravity: {status}; GLM: {status if present} | {none/finding id} |
 
 Rows marked `fail`, required rows marked `unverified`, and blocked rows must appear in the finding list or human-question list. Rows marked `pass` require cited implementation, test, or runtime evidence.
 
@@ -1596,6 +1639,7 @@ Rows marked `fail`, required rows marked `unverified`, and blocked rows must app
 | Codex | gpt-5.5 / high reasoning | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Claude | Opus via local alias | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Antigravity | {Gemini 3.1 Pro (High) / Gemini 3.5 Flash (High)} | agy-print | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| GLM | zai-coding-plan/glm-5.2 | opencode-run | n/a | {completed/not run} | {from review-metadata.yaml if present} | {N} | {N} |
 
 ### Exploratory Residual Review
 
