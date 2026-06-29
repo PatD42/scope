@@ -337,6 +337,7 @@ Include:
 
 - all files from every `file-plan-story-*.yaml`
 - all implementation and test files from `acceptance-traceability.yaml`
+- all implementation proof from `implementation-evidence.yaml` when present
 - all files changed in git for the epic branch/worktree, generated in `docs/epics/{epic-dir}/changed-files.txt`
 - API, schema, migration, worker, queue, dashboard, and storage files touched indirectly by changed imports or routes
 - tests touching those modules
@@ -384,6 +385,7 @@ attempt_id: audit-001
 generated_at: YYYY-MM-DDTHH:MM:SSZ
 source_traceability: docs/epics/{epic-dir}/acceptance-traceability.yaml
 source_manifest: docs/epics/{epic-dir}/audit-manifest.yaml
+source_implementation_evidence: docs/epics/{epic-dir}/implementation-evidence.yaml
 rows:
   - id: AC2.2-P10-REPROCESS-SERVICE
     source_acceptance_id: AC2.2
@@ -472,6 +474,7 @@ Run or explicitly mark blocked for each gate in `audit-manifest.yaml` before mod
 
 - file-plan path validation
 - acceptance traceability validation: every row has implementation files, required assertions, expected tests, and status
+- implementation evidence validation: `implementation-evidence.yaml` exists when `/implement` produced code, `audit_ready` is true, and completed stories map to proof
 - contract parity test
 - schema/OpenAPI enum parity
 - ruff, mypy, and vulture
@@ -487,6 +490,39 @@ Also validate `audit-verification-matrix.yaml` before model review:
 - every runtime-required row has a command and evidence field
 - every row id is stable and unique
 - every expected file path exists or is listed as a manifest missing path
+
+### Fast-Fail Before External Review
+
+Do not spend external reviewer time on an audit attempt whose deterministic
+evidence package is mechanically incomplete.
+
+Before launching Codex, Claude, Antigravity, or GLM, inspect the scripted gates
+and matrix validation results. If any of these conditions exist, stop this
+attempt before external reviewer launch:
+
+- missing or stale file-plan paths for required/high-risk work
+- `implementation-evidence.yaml` is missing after implementation has changed code
+- `implementation-evidence.yaml` has `audit_ready: false`
+- a completed story lacks mapped acceptance rows, changed files, tests, runtime
+  evidence, or an explicit not-applicable reason
+- a required/high-risk matrix row lacks implementation evidence
+- a required/high-risk matrix row lacks test evidence and is not explicitly
+  runtime-only
+- a runtime-required row lacks a wired command, passing result, or evidence path
+
+When fast-failing:
+- write concise gate evidence into the current `reviews/audit-NNN/` directory
+- update `audit-verification-matrix.yaml` with `fail`, `unverified`, or `blocked`
+  statuses
+- update `audit-issue-ledger.yaml`
+- write `epic_audit.md` with `FAIL` or `BLOCKED`
+- do not create reviewer prompt files
+- do not launch external reviewers
+
+This still counts as an audit attempt because it reaches final finding
+classification. It should be rare when `/implement` followed its pre-audit
+handoff rules; if it happens, the remediation target is the implementation
+evidence/matrix gap, not reviewer disagreement.
 
 ## Step 5: Fix-Verification Audit
 
@@ -520,11 +556,55 @@ Antigravity should use the direct `agy --print "prompt"` invocation.
   during audits, while still excluding mutating commands.
 - Claude requests are blocking until the output file is valid or the timeout
   expires.
-- On Claude timeout, terminate the process and retry once.
+- On Claude timeout, the wrapper inspects the live PTY log under
+  `tmp_debug/scope-reviewer-logs/` before terminating the process and retrying
+  once.
+- Before manually treating Claude as hung, unavailable, or safe to kill,
+  inspect the matching PTY log under `tmp_debug/scope-reviewer-logs/`. Empty
+  wrapper stdout/stderr files in the audit attempt directory are not evidence
+  that Claude is idle or blocked.
 - If `pexpect`, `python3`, `claude`, or the wrapper is unavailable, record
   `claude-unavailable.md` and continue.
 - Antigravity runs headless with `agy --model "Gemini 3.1 Pro (High)" --sandbox --dangerously-skip-permissions --print-timeout "$SCOPE_AGY_PRINT_TIMEOUT" --print "$PROMPT_TEXT"`. If the primary model is rate-limited, retry once with `Gemini 3.5 Flash (High)`.
 - GLM runs only when `opencode` is available: `opencode run -m "zai-coding-plan/glm-5.2" --variant "high" --dir "$(pwd)" --dangerously-skip-permissions "$PROMPT_TEXT"`. If it is unavailable or fails, skip it silently.
+- For follow-up attempts after `audit-001`, generate `reviews/audit-NNN/reviewer-packet.yaml` before launching reviewers. The packet narrows reviewer attention without hiding evidence:
+  - previous failed, blocked, or unverified matrix rows
+  - previous critical/major findings and closure evidence
+  - remediation diff since the prior attempt
+  - rows sharing the same risk pattern or dimensions as prior findings
+  - runtime evidence added or changed since the prior attempt
+  - changed files and sibling surfaces affected by the fix
+- Required reviewer packet shape:
+
+```yaml
+epic_id: {epic-id}
+attempt_id: audit-002
+previous_attempt: audit-001
+generated_at: YYYY-MM-DDTHH:MM:SSZ
+review_mode: follow_up_delta
+previous_findings:
+  critical: []
+  major: []
+  minor_easy: []
+rows_to_prioritize: []
+sibling_risk_patterns: []
+remediation_diff:
+  base_ref: ""
+  files_changed_since_previous_attempt: []
+runtime_evidence_changed: []
+bounded_fresh_scan:
+  required: true
+  focus: "new high-impact issues only"
+```
+
+- Reviewers must read `reviewer-packet.yaml` when present, prioritize it first,
+  and then run a bounded fresh scan for new high-impact issues.
+- Run independent reviewers in parallel by default after CodeGraph sync and
+  prompt generation. Set `SCOPE_AUDIT_PARALLEL_REVIEWERS=0` to force sequential
+  execution for troubleshooting.
+- Parallel reviewers must not append concurrently to the same metadata file.
+  Each reviewer writes to a reviewer-specific metadata file and the orchestrator
+  merges them into `review-metadata.yaml` after all reviewer processes exit.
 - Write timing/status data for every reviewer into `review-metadata.yaml`.
 
 ```bash
@@ -543,6 +623,7 @@ AGY_PRINT_TIMEOUT="${SCOPE_AGY_PRINT_TIMEOUT:-60m}"
 GLM_REVIEW_MODEL="${SCOPE_GLM_MODEL:-zai-coding-plan/glm-5.2}"
 GLM_REVIEW_OUTPUT_ID="${SCOPE_GLM_OUTPUT_ID:-glm-5.2}"
 SCOPE_REVIEW_PYTHON="${SCOPE_REVIEW_PYTHON:-python3}"
+SCOPE_AUDIT_PARALLEL_REVIEWERS="${SCOPE_AUDIT_PARALLEL_REVIEWERS:-1}"
 CLAUDE_AUDIT_ALLOWED_TOOLS="Read,Glob,Grep,Bash(pwd),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(rg:*),Bash(grep:*),Bash(cat:*),Bash(sed:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(stat:*),Bash(file:*),Bash(which:*),Bash(echo:*),Bash(printf:*),Bash(for:*),Bash(python -c:*),Bash(python3 -c:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git ls-files:*),Bash(git merge-base:*),Bash(git branch:*),Bash(git worktree list:*),Bash(codegraph status:*),Bash(codegraph query:*),Bash(codegraph context:*),Bash(codegraph files:*),Bash(codegraph affected:*),Write"
 
 if [ -z "$REVIEWER_PROMPT_DIR" ]; then
@@ -598,8 +679,33 @@ build_review_prompt_file() {
     -e "s|{{ATTEMPT_DIR}}|${ATTEMPT_DIR}|g" \
     -e "s|{{CHANGED_FILES_PATH}}|${CHANGED_FILES_FILE}|g" \
     -e "s|{{AUDIT_MATRIX_PATH}}|${VERIFICATION_MATRIX_FILE}|g" \
+    -e "s|{{REVIEWER_PACKET_PATH}}|${REVIEWER_PACKET_FILE:-not-applicable}|g" \
     -e "s|{{REPO_ROOT}}|$(pwd)|g" \
     "${REVIEWER_PROMPT_DIR}/${reviewer_file}" > "$output_file"
+}
+
+run_with_metadata_file() {
+  local reviewer="$1"
+  shift
+  local reviewer_metadata="${ATTEMPT_DIR}/review-metadata-${reviewer}.yaml"
+  (
+    REVIEW_METADATA_FILE="$reviewer_metadata"
+    printf 'reviews:\n' > "$REVIEW_METADATA_FILE"
+    "$@"
+  )
+}
+
+merge_reviewer_metadata() {
+  {
+    printf 'epic_id: %s\n' "$(json_quote "$EPIC_ID")"
+    printf 'attempt_id: %s\n' "$(json_quote "$ATTEMPT_ID")"
+    printf 'generated_at: %s\n' "$(json_quote "$(date -u +"%Y-%m-%dT%H:%M:%SZ")")"
+    printf 'reviews:\n'
+    for reviewer_metadata in "${ATTEMPT_DIR}"/review-metadata-*.yaml; do
+      [ -f "$reviewer_metadata" ] || continue
+      sed -n '/^reviews:/,$p' "$reviewer_metadata" | sed '1d'
+    done
+  } > "${ATTEMPT_DIR}/review-metadata.yaml"
 }
 
 run_codex_review() {
@@ -628,7 +734,6 @@ run_codex_review() {
       --model "$CODEX_MODEL_ID" \
       -c model_reasoning_effort="\"$CODEX_REASONING_EFFORT\"" \
       --sandbox read-only \
-      --ask-for-approval never \
       --output-last-message "$output_file" \
       - < "$prompt_file"; then
     completed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -835,10 +940,38 @@ run_glm_review() {
   return 0
 }
 
-run_codex_review || echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
-run_claude_review || echo "Claude reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/claude-unavailable.md"
-run_agy_review || echo "Antigravity reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/agy-unavailable.md"
-run_glm_review || true
+if [ "$SCOPE_AUDIT_PARALLEL_REVIEWERS" = "1" ]; then
+  pids=()
+  (
+    run_with_metadata_file "codex" run_codex_review ||
+      echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
+  ) &
+  pids+=("$!")
+  (
+    run_with_metadata_file "claude" run_claude_review ||
+      echo "Claude reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/claude-unavailable.md"
+  ) &
+  pids+=("$!")
+  (
+    run_with_metadata_file "agy" run_agy_review ||
+      echo "Antigravity reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/agy-unavailable.md"
+  ) &
+  pids+=("$!")
+  (
+    run_with_metadata_file "glm" run_glm_review || true
+  ) &
+  pids+=("$!")
+
+  for pid in "${pids[@]}"; do
+    wait "$pid" || true
+  done
+  merge_reviewer_metadata
+else
+  run_codex_review || echo "Codex reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/codex-unavailable.md"
+  run_claude_review || echo "Claude reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/claude-unavailable.md"
+  run_agy_review || echo "Antigravity reviewer failed or model unavailable. Continuing audit with remaining evidence." > "${ATTEMPT_DIR}/agy-unavailable.md"
+  run_glm_review || true
+fi
 ```
 
 Claude CLI model aliases vary by installation. By default Scope calls

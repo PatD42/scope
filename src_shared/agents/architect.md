@@ -246,6 +246,56 @@ spec tree instead: `docs/architecture/backend/13-specs/` or
 `docs/architecture/frontend/13-specs/`. Do not create `14-schema`; schemas live
 under `13-specs/schemas/`.
 
+### Contract Self-Gate Before Review
+
+Before handing specs to Phase 3.5 review, create
+`docs/epics/{epic-dir}/architecture-contract-self-check.yaml`.
+
+The architect owns this gate. External reviewers should not be the first agents
+to discover that generated API/schema/SQL/error contracts fail to enforce the
+accepted AC/PDR/ADR rules.
+
+For every acceptance criterion and accepted PDR/ADR claim containing or implying
+`must`, `only`, `never`, `all`, `every`, `exact`, thresholds, fail-closed
+behavior, required reasons, conditional behavior, idempotency, resumability,
+supersession, ownership, generated outputs, metrics, reports, or operator-visible
+state:
+
+1. Identify the generated contract surface that must enforce it.
+2. State the enforcement mechanism: required field, enum, exact cardinality,
+   conditional rule, invariant, SQL constraint, error contract, test strategy, or
+   explicit not-applicable rationale.
+3. Provide a negative case: a payload/state that should be rejected or fail.
+4. Mark the row `pass`, `fail`, `user_question`, or `not_applicable`.
+
+Do not mark the gate pass when behavior is only described in prose. If a
+contract-valid payload/state could violate an accepted requirement, the row is
+`fail` and must be fixed before external review. If the correct enforcement is
+not clear from approved requirements, return to the Product Owner or earlier
+architecture phase instead of guessing.
+
+Also run these structural checks before external review:
+
+- Architecture entity inventory: every data model, report, manifest, artifact,
+  endpoint, command, script, worker, persistence surface, and error code named in
+  `architecture.md`, ADRs, PDRs, or acceptance criteria has a generated contract
+  or an explicit no-contract rationale.
+- Producer/consumer compatibility: every API response, report, artifact, and
+  operator-visible output can actually be produced by the endpoint, script,
+  worker, or command that owns it.
+- Aggregate vs per-item clarity: if a request can cover many components, rows,
+  jobs, records, files, attempts, or outputs, the contract states whether the
+  response is a single result, array, keyed map, aggregate report, or per-item
+  manifest.
+- Split runtime compatibility: if environment isolation means one command cannot
+  produce all final evidence, model partial outputs and final assembly
+  separately instead of requiring impossible fields from one producer.
+- Cross-surface expansion: when a rule applies to one surface, check all sibling
+  surfaces. Resumability, idempotency, supersession, exact coverage, fail-closed
+  reasons, conditional required fields, output ownership, and report completeness
+  must be applied consistently across endpoints, commands, reports, manifests,
+  and persistence surfaces.
+
 ---
 
 ## Phase 5: Story Breakdown

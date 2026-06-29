@@ -93,6 +93,36 @@ def terminate_child(child: Any) -> None:
         pass
 
 
+def tail_text(path: Path, max_lines: int = 40) -> str:
+    if not path.exists():
+        return ""
+
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except Exception as exc:
+        return f"Unable to read PTY log {path}: {exc}"
+
+    return "\n".join(lines[-max_lines:])
+
+
+def pre_termination_diagnostic(log_file: Path, reason: str) -> str:
+    tail = tail_text(log_file)
+    message = f"Before terminating Claude, inspected PTY log: {log_file}"
+    if tail:
+        message = f"{message}\nLast PTY log lines before termination:\n{tail}"
+
+    try:
+        with log_file.open("a", encoding="utf-8", errors="ignore") as log:
+            log.write(f"\n--- pre-termination diagnostic {utc_now()} ---\n")
+            log.write(f"Reason: {reason}\n")
+            if tail:
+                log.write("Last PTY log lines before termination were captured in metadata/output.\n")
+    except Exception:
+        pass
+
+    return message
+
+
 def default_log_file(cwd: Path, output_file: Path) -> Path:
     relative_name = str(output_file).lstrip(os.sep).replace(os.sep, "__")
     return cwd / "tmp_debug" / "scope-reviewer-logs" / f"{relative_name}.pty.log"
@@ -243,11 +273,13 @@ Return the complete requested review report in the output file, not in the conso
             if not error:
                 error = f"Timed out waiting for Claude output file after {args.timeout_seconds}s"
             if child is not None:
+                error = f"{error}\n{pre_termination_diagnostic(log_file, error)}"
                 terminate_child(child)
 
         except Exception as exc:
             error = str(exc)
             if child is not None:
+                error = f"{error}\n{pre_termination_diagnostic(log_file, error)}"
                 terminate_child(child)
 
     completed_at = utc_now()

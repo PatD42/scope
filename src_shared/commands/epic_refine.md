@@ -8,7 +8,7 @@ agents: product-owner, architect
 
 # /epic_refine
 
-Contract-first epic refinement with 4 approval gates. Produces executable Python Protocol contracts that agents verify via mypy — not just prose descriptions.
+Contract-first epic refinement with a gated Phase 0 intent alignment plus 4 delivery approval gates. Produces executable Python Protocol contracts that agents verify via mypy — not just prose descriptions.
 
 **Syntax:** `/epic_refine {epic-id}`
 
@@ -39,14 +39,73 @@ These rules are mandatory for every refined epic:
   - `adr.md`
   - `pdr.md`
   - `test-strategy.md`
+  - `refinement-inconsistencies.yaml`
 - `details.md` must use YAML frontmatter with at least `epic_id`, `title`, and `status`.
+- `details.md` must include an approved `## Intent Alignment` section before Phase 1 begins.
 - `adr.md` must use the global ADR numbering sequence and include `Date`, `Status`, `Scope`, `Epic`, `Context`, `Decision`, `Alternatives Considered`, and `Consequences` for every ADR entry.
 
 Do not pass a phase if these artifact rules are not satisfied by the work completed so far.
 
+## Artifact Generation Discipline
+
+Refinement artifacts must be generated transactionally. Do not write a large set
+of documents and defer consistency checks to Phase 3.5 reviewers.
+
+Before writing each artifact batch, state the artifact contract:
+
+- source inputs that must be reflected
+- required sections, IDs, rows, or fields
+- required cross-links to ACs, PDRs, ADRs, specs, tests, or file plans
+- validation checks that will be run immediately after writing
+- known assumptions and unknowns
+
+After writing each artifact batch, validate it before moving on:
+
+- Markdown required sections exist and no placeholders remain
+- YAML and JSON parse
+- OpenAPI specs parse when created or changed
+- SQL/spec files exist for persistence or migration promises
+- required IDs are stable and unique
+- evidence paths referenced by matrices or plans exist
+- every new artifact lists what changed relative to previously approved
+  artifacts and which AC/PDR/ADR rows it satisfies
+
+Maintain `docs/epics/{epic-dir}/refinement-inconsistencies.yaml` throughout the
+command. This is the working ledger for unclear issues, mismatches, and deferred
+questions discovered while producing artifacts.
+
+Required shape:
+
+```yaml
+epic_id: "{epic-id}"
+items:
+  - id: "RI-001"
+    discovered_phase: "phase_1 | phase_2 | phase_3 | phase_3_5 | phase_4"
+    owner_phase: "phase_0 | phase_1 | phase_2 | phase_3 | phase_4"
+    issue: "Concrete ambiguity or inconsistency"
+    affects: ["intent", "business", "architecture", "api", "schema", "sql", "tests", "file_plan"]
+    status: "open | resolved | user_question"
+    resolution: ""
+```
+
+No approval gate can pass while the ledger has `open` or `user_question` items.
+If the item can be resolved from already approved context, resolve it before the
+gate. If it requires user input, ask the user and update the owning phase
+artifact before continuing.
+
 ## Workflow Overview
 
 ```
+┌─────────────────────────────────────────────────────────┐
+│ Phase 0: Intent alignment (why_understanding)           │
+│ - Explain the epic's why in concrete product terms       │
+│ - Interview user until intent, value, and success are    │
+│   understood                                             │
+│ - Record Intent Alignment in details.md                  │
+│ ──────────────────────────────────────────────────────  │
+│ → USER APPROVAL GATE #0                                 │
+└─────────────────────────────────────────────────────────┘
+                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │ Phase 1: Take role of product-owner (epic_validation)   │
 │ - Load epic, ask clarifying questions                   │
@@ -89,11 +148,14 @@ Do not pass a phase if these artifact rules are not satisfied by the work comple
 ## Phase Handoff Rule
 
 Do not pass a phase by "good enough" intuition. A phase passes only when downstream roles can execute without inventing missing decisions:
+- Phase 0 is not complete until the orchestrator can explain the epic's underlying intent, user/business value, target outcome, and non-goals in a way the user confirms is correct.
+- If the orchestrator cannot explain why the epic exists, who benefits, what outcome matters, or what would make the epic successful, it must interview the user before Phase 1.
 - Phase 1 is not complete until the Product Owner has specified the business behavior in enough detail that neither the Architect nor the Developer would need to make product, policy, scope, workflow, or acceptance decisions during later phases.
 - If the Architect would need to choose what the business wants, or the Developer would need to choose what behavior is correct, then the business requirements are incomplete.
 - In that case, the Product Owner must interview the user in a semi-structured approach to complete the business requirements in enough details before proceeding.
 - Phases 2-4 are not complete until the architecture is detailed enough that the Developer would not need to make architecture decisions during implementation.
 - If the Developer must decide how the system should be designed, refinement was incomplete and must return to the Architect before implementation begins.
+- At every phase boundary, explicitly list unknowns or unclear issues found during that phase. If any unknown affects product intent, business behavior, architecture, acceptance, testing, security, rollout, or implementation ownership, ask the user or return to the correct prior phase before continuing.
 
 ---
 
@@ -115,12 +177,21 @@ fi
 # Create .scope directory for this epic
 mkdir -p ".scope/${EPIC_DIR}"
 SUMMARIES_FILE=".scope/${EPIC_DIR}/refine_summaries.jsonl"
+INCONSISTENCIES_FILE="docs/epics/${EPIC_DIR}/refinement-inconsistencies.yaml"
 
 # Get session ID for cost tracking
 SESSION_ID=$(skill session-id-finder)
 
 # Write baseline entry
 echo '{"agent":"baseline","completed_at":"'"$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\(..\)$/:\1/')"'"}' > "$SUMMARIES_FILE"
+
+# Create the working inconsistencies ledger if it does not already exist
+if [ ! -f "$INCONSISTENCIES_FILE" ]; then
+  cat > "$INCONSISTENCIES_FILE" <<EOF
+epic_id: "${EPIC_ID}"
+items: []
+EOF
+fi
 ```
 
 ### Step 1: Load Epic Context
@@ -134,11 +205,98 @@ echo '{"agent":"baseline","completed_at":"'"$(date +%Y-%m-%dT%H:%M:%S%z | sed 's
 
 ---
 
+## Phase 0: Intent Alignment (why_understanding)
+
+**Instruction:** Before writing or refining acceptance criteria, convince the user that you understand why the epic exists.
+
+**Goal:** Align on intent before Scope turns the epic into requirements, architecture, specs, and file plans.
+
+The orchestrator must not infer the "why" from implementation details alone. Read `details.md` and product context, then explain the epic in plain product terms:
+
+- why this epic matters now
+- who benefits and what job/outcome they need
+- what product, operational, commercial, community, or risk-reduction value is expected
+- what success looks like after implementation
+- what is explicitly not the goal
+- what assumptions or unknowns remain
+
+If any of those points are weak, vague, or inferred, interview the user before Phase 1. Use a semi-structured approach: ask concise questions about motivation, users, success, non-goals, constraints, risks, and tradeoffs. Continue until there are no intent-level unknowns.
+
+**Key deliverable:**
+
+Update `docs/epics/{epic-dir}/details.md` with an `## Intent Alignment` section containing:
+
+- `Why`
+- `Beneficiaries`
+- `Expected value`
+- `Success outcome`
+- `Non-goals`
+- `Assumptions`
+- `Open intent questions` (must be `None` before Gate #0 passes)
+
+### Phase 0 Checklist
+
+Present to the user in the console before asking for Gate #0 approval. Do not
+only write this interpretation to `details.md`; the user must see your
+interpretation in the chat/console so they can correct it before Phase 1.
+
+```
+Phase 0: Intent Alignment - Why Understanding
+
+My interpretation of the epic intent:
+- Why this matters now: [plain-language explanation]
+- Who benefits: [primary users/stakeholders]
+- Outcome they need: [job/outcome]
+- Expected value: [product / operational / commercial / community / risk-reduction value]
+- Observable success: [what will be true after implementation]
+- Non-goals: [what this epic is not trying to do]
+- Assumptions I am making: [list or None]
+
+✅ Why
+   My understanding: [concise explanation]
+   User/business/community value: [clear / needs clarification]
+
+✅ Beneficiaries
+   Primary users or stakeholders: [list]
+   Job/outcome they need: [clear / needs clarification]
+
+✅ Success Outcome
+   Observable success: [clear / needs clarification]
+   Non-goals: [listed / needs clarification]
+
+✅ Unknowns
+   Intent-level unknowns: [None / list]
+   Questions asked and answered: [N]
+   refinement-inconsistencies.yaml open items: [0 / list]
+
+Is this understanding of why the epic exists correct? [yes / refine]
+```
+
+Gate #0 approval is invalid if the console message says only that validation
+passed, points the user to a file, or asks "is this intent alignment correct"
+without first showing the interpreted intent in the console.
+
+### Approval Gate #0
+
+**If user approves**: Write summary entry and proceed to Phase 1
+
+```bash
+echo '{"agent":"orchestrator","session_id":"'"$SESSION_ID"'","phase":"why_understanding","status":"success","completed_at":"'"$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\(..\)$/:\1/')"'"}' >> "$SUMMARIES_FILE"
+```
+
+**If user wants refinement**: Ask targeted questions, update `details.md`, and re-present the checklist.
+
+Do not proceed to Phase 1 while `Open intent questions` is anything other than `None`.
+
+---
+
 ## Phase 1: Product Owner (epic_validation)
 
 **Instruction:** Take the role of `product-owner` agent for the `epic_validation` phase.
 
 **Goal:** Validate epic and define business requirements.
+
+Start from the approved `details.md` Intent Alignment section. Acceptance criteria must preserve the approved why; do not introduce behavior that changes the intent, beneficiaries, expected value, success outcome, or non-goals without asking the user.
 
 **Phase context to pass:**
 ```
@@ -158,6 +316,8 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 
 **Phase 1 completeness rule:** If the Architect or Developer would still need to make business, policy, scope, workflow, or acceptance decisions, Phase 1 is not complete. The Product Owner must stop and interview the user before moving to Phase 2.
 
+If Phase 1 exposes an intent mismatch or a new unknown about why the epic exists, return to Phase 0 and ask the user before continuing.
+
 ### Phase 1 Checklist
 
 Present to user:
@@ -166,6 +326,7 @@ Present to user:
 Phase 1: Product Owner - Epic Validation
 
 ✅ Epic Details
+   Intent alignment preserved: [Yes / No]
    Business value: [Clear / Needs clarification]
    User stories: [N stories defined]
    Scope: [Well-bounded / Needs refinement]
@@ -181,6 +342,11 @@ Phase 1: Product Owner - Epic Validation
 ✅ Product Decisions
    pdr.md present: [Yes / No]
    Decisions captured or explicitly stated as none: [Yes / No]
+
+✅ Unknowns
+   Product/business unknowns: [None / list]
+   User questions needed before architecture: [No / list]
+   refinement-inconsistencies.yaml open items: [0 / list]
 
 Ready to proceed to architecture? [yes / refine]
 ```
@@ -202,6 +368,8 @@ echo '{"agent":"product-owner","session_id":"'"$SESSION_ID"'","phase":"epic_vali
 **Instruction:** Take the role of `architect` agent for the `system_context` and `architecture_design` phases.
 
 **Goal:** Analyze system context and design architecture.
+
+At the start of Phase 2, restate any product or business unknowns. If any remain, return to Phase 1 before designing architecture. If architecture work reveals a new product/intent unknown, stop and ask the user rather than encoding an assumption.
 
 **Phase context to pass:**
 ```
@@ -236,6 +404,7 @@ Present to user:
 Phase 2: Architect - System Context & Architecture
 
 ✅ System Context
+   Approved why preserved: [Yes / No]
    Integration points: [N components identified]
    Patterns to follow: [N patterns documented]
    Inherited constraints: [N constraints identified]
@@ -259,6 +428,11 @@ Phase 2: Architect - System Context & Architecture
    Docs to create: [list new files, e.g., backend/13-specs/database/sql/{epic-id}.sql]
    ADR roll-up needed: [Yes / No]
 
+✅ Unknowns
+   Architecture unknowns: [None / list]
+   Product questions discovered during architecture: [None / list]
+   refinement-inconsistencies.yaml open items: [0 / list]
+
 Ready to proceed to spec generation? [yes / refine]
 ```
 
@@ -280,6 +454,8 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"architecture_
 
 **Goal:** Generate technical specifications in `docs/architecture/13-specs/`, `docs/architecture/backend/13-specs/`, or `docs/architecture/frontend/13-specs/` depending on ownership. These are the canonical locations — all specs live under an applicable `13-specs/`, not in the project root and not in `14-schema`.
 
+If spec generation reveals an unclear field, endpoint, status, error, persistence rule, ownership rule, or behavior, do not guess. Return to Phase 1 for product ambiguity or Phase 2 for architecture ambiguity before writing inconsistent specs.
+
 **Phase context to pass:**
 ```
 epic_id: {epic-id}
@@ -294,6 +470,127 @@ specs_dir: docs/architecture/{13-specs|backend/13-specs|frontend/13-specs}
 - Database specs in the applicable `13-specs/database/`
 - Error codes in the applicable `13-specs/errors/by-domain/`
 - Updated error taxonomy in the applicable `13-specs/errors/taxonomy.yaml`
+- `docs/epics/{epic-dir}/architecture-contract-self-check.yaml`
+
+### Phase 3 Contract Self-Gate
+
+Before telling the user Phase 3 is ready for strategic architecture review, the
+architect must prove that the generated contracts enforce the business and
+architecture rules. Evidence links are not enough. A contract that merely
+mentions a behavior but does not enforce it is incomplete.
+
+Create `docs/epics/{epic-dir}/architecture-contract-self-check.yaml` from:
+
+- every acceptance criterion
+- every accepted PDR/ADR decision
+- every generated API/OpenAPI path and payload
+- every generated JSON/domain schema
+- every generated SQL/no-DDL spec
+- every generated error contract
+- the test strategy
+
+Required shape:
+
+```yaml
+epic_id: "{epic-id}"
+generated_at: "{ISO-8601}"
+status: "pass | fail"
+contract_inventory:
+  architecture_entities: []
+  api_operations: []
+  generated_schemas: []
+  generated_reports_or_artifacts: []
+  commands_or_scripts: []
+  persistence_surfaces: []
+  error_codes: []
+producer_consumer_compatibility:
+  - id: "API-COMPARE-1F"
+    producer: "script, endpoint, worker, command, or service that creates the output"
+    consumer: "API response, report, dashboard, operator, downstream story, or test"
+    required_output: "Schema/report/artifact that must be produced"
+    producer_can_create_required_fields: "yes | no | user_question"
+    split_runtime_or_environment_constraint: "none | described constraint"
+    status: "pass | fail | user_question | not_applicable"
+cross_surface_patterns:
+  - pattern: "resumability | idempotency | exact coverage | fail_closed | conditional_fields | split_runtime | generated_report"
+    surfaces_checked: []
+    missing_surfaces: []
+    status: "pass | fail | user_question | not_applicable"
+claims:
+  - id: "AC7-FIDELITY-PARTITIONS"
+    source:
+      artifact: "acceptance-criteria.md"
+      anchor: "AC7"
+    claim: "Fidelity gates must validate held-out, boundary, near-boundary, and stress rows."
+    keywords: ["must", "all", "fail-closed"]
+    contract_surfaces:
+      api: []
+      json_schema: ["docs/architecture/13-specs/schemas/domain/{epic-id}-*.json#/definitions/FidelityGateResult"]
+      sql: []
+      error_contract: []
+      test_strategy: ["docs/epics/{epic-dir}/test-strategy.md#AC7"]
+    enforcement:
+      type: "required_field | enum | exact_cardinality | conditional | invariant | no-ddl | explicit_no_contract_needed"
+      mechanism: "Concrete OpenAPI/JSON Schema/SQL/error/test mechanism that enforces the claim"
+      negative_case: "A bad payload/state that should be rejected or fail"
+    status: "pass | fail | user_question | not_applicable"
+    notes: ""
+```
+
+The self-gate must include rows for every claim containing or implying:
+
+- `must`, `only`, `never`, `all`, `every`, `exact`, `at least`, `no more than`
+- thresholds, floors, row counts, component counts, timing limits, or coverage rules
+- fail-closed behavior, rejection behavior, blocked states, or required reasons
+- optional vs required fields
+- conditional behavior such as "if X then require Y"
+- idempotency, resumability, retries, supersession, overwrite, ordering, or ownership
+- generated reports, manifests, metrics, artifacts, exports, or operator-visible outputs
+- split runtime/environment behavior where one command cannot produce all evidence
+
+The self-gate must also inventory and check structural consistency:
+
+- Every data model/entity/report/artifact named in `architecture.md` has a
+  generated schema or an explicit reason no schema is needed.
+- Every generated schema/report/artifact has a producer and a consumer.
+- Every API response schema can actually be produced by the endpoint, script,
+  worker, or command named in the architecture.
+- Aggregate vs per-item behavior is explicit. If an operation can cover many
+  components, rows, records, files, attempts, or jobs, the request and response
+  contract must say whether it returns one result, a list, or a keyed map.
+- Split runtime/environment workflows are explicit. If one command cannot
+  produce all required fields because of environment isolation, the schema must
+  model partial outputs and final assembly separately.
+- Every generated report or manifest has a completeness rule: required keys,
+  exact counts, unique ids, keyed maps, or explicit allowed partial states.
+- Every cross-cutting rule is expanded across sibling surfaces. If one surface
+  needs resumability, idempotency, supersession, exact coverage, fail-closed
+  reasons, conditional required fields, or output ownership, check every endpoint,
+  command, report, manifest, and persistence surface touched by the same rule.
+
+Self-gate failure rules:
+
+- A row is `fail` if the behavior is only described in prose but not enforced by
+  API/schema/SQL/error/test strategy where enforcement is applicable.
+- A row is `fail` if the generated contract allows a payload/state that would
+  violate the AC/PDR/ADR.
+- A row is `fail` if a required output/report can omit a promised field,
+  cardinality, reason, state transition, artifact path, or evidence link.
+- A row is `fail` if a conditional rule is represented only as optional fields
+  without a conditional enforcement mechanism or explicit implementation rule.
+- A row is `fail` if an architecture-defined entity/report/artifact is missing
+  from generated contracts.
+- A row is `fail` if an API/command response requires fields that the documented
+  producer cannot create.
+- A row is `fail` if a cross-cutting rule is enforced on one surface but omitted
+  on a sibling endpoint, command, report, manifest, or persistence surface.
+- A row is `user_question` if the architect cannot determine the correct
+  enforcement from approved requirements. Return to Phase 1 or Phase 2 before
+  review.
+
+The architect must fix all `fail` rows that can be resolved from approved
+requirements before external review. Do not launch Phase 3.5 reviewers while
+`architecture-contract-self-check.yaml` has any `fail` or `user_question` row.
 
 ### Phase 3 Checklist
 
@@ -313,6 +610,17 @@ Phase 3: Architect - Spec Generation
 ✅ Error Codes ({system|backend|frontend}/13-specs/errors/)
    Error codes defined: [N codes]
    Taxonomy updated: [Yes / No]
+
+✅ Contract Self-Gate
+   architecture-contract-self-check.yaml exists: [Yes / No]
+   Enforceable claims checked: [N]
+   Failed/user-question rows: [0 / list]
+   Examples of negative cases checked: [list]
+
+✅ Unknowns
+   Spec-generation unknowns: [None / list]
+   Questions requiring user or prior-phase input: [None / list]
+   refinement-inconsistencies.yaml open items: [0 / list]
 
 Ready to proceed to strategic architecture review? [yes / refine]
 ```
@@ -338,6 +646,7 @@ and spec gaps before tactical planning begins.
 - `docs/epics/{epic-dir}/pdr.md`
 - `docs/epics/{epic-dir}/test-strategy.md`
 - `docs/epics/{epic-dir}/architecture-readiness-matrix.yaml`
+- `docs/epics/{epic-dir}/architecture-contract-self-check.yaml`
 - `docs/architecture/13-specs/api/{epic-id}-*.yaml`
 - `docs/architecture/13-specs/schemas/domain/{epic-id}-*.json`
 - `docs/architecture/13-specs/database/postgresql/{epic-id}-*.sql`
@@ -398,7 +707,8 @@ Validate reviewer command syntax before spending a review attempt:
   - `command -v codex`
   - `codex exec --help`
   - verify `CODEX_MODEL_ID` does not end in `-low`, `-medium`, or `-high`
-  - verify Scope will call `codex exec --model "$CODEX_MODEL_ID" -c model_reasoning_effort="\"$CODEX_REASONING_EFFORT\""`
+  - verify Scope will call `codex exec --model "$CODEX_MODEL_ID" -c model_reasoning_effort="\"$CODEX_REASONING_EFFORT\"" --sandbox read-only`
+  - verify Scope does not pass stale approval flags such as `--ask-for-approval`, which current `codex exec` rejects
   - if the local `codex exec --help` does not support a Scope-specified flag, stop as `SCOPE TOOLING ERROR`
 - Claude:
   - `command -v claude`
@@ -493,13 +803,19 @@ Run lightweight scripted checks and write results to
 before launching reviewers:
 
 - required epic artifacts exist
+- `refinement-inconsistencies.yaml` exists and has no `open` or
+  `user_question` items
 - `architecture-readiness-matrix.yaml` exists and has at least one row per AC
+- `architecture-contract-self-check.yaml` exists, parses, has rows for every
+  enforceable AC/PDR/ADR claim, and has no `fail` or `user_question` rows
 - every matrix row has a stable id, source, requirement, risk, requires,
   evidence, status, and blocker flag
 - every `requires.*: true` has evidence or the row is `fail`/`unverified`
 - API, JSON, and error specs parse
 - SQL specs exist when any AC/PDR/ADR promises persistence or migrations
 - every API/schema/error/SQL file expected by the matrix exists
+- generated contracts enforce required/conditional/cardinality/fail-closed
+  claims from `architecture-contract-self-check.yaml`
 - every accepted PDR/ADR has at least one matrix row
 - every high-risk row has test-strategy evidence
 - every row that requires implementation has a planned file-plan owner before
@@ -521,9 +837,13 @@ file-backed; do not turn it into another narrative architecture document.
 
 Required checks:
 
+- `architecture-contract-self-check.yaml` has no `fail` or `user_question` rows
 - every acceptance criterion maps to API, schema, SQL/DDL, error contract, and
   test-strategy evidence where applicable, or has an explicit not-applicable
   rationale
+- every AC/PDR/ADR claim with required, exact, conditional, fail-closed,
+  resumable, idempotent, ownership, or generated-output semantics is enforced by
+  a generated contract or explicitly marked not applicable with rationale
 - every persistence claim has matching DDL/migration evidence or an explicit
   no-DDL decision with rationale
 - every destructive, cleanup, replay, backfill, or migration action has a
@@ -554,7 +874,9 @@ Recommended format:
 ## Checks
 | Check | Status | Evidence | Correction |
 |---|---|---|---|
+| Contract self-gate clean | {pass/fail} | {architecture-contract-self-check.yaml rows} | {none or fix made} |
 | AC to contract/test coverage | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
+| Generated contracts enforce AC/PDR/ADR rules | {pass/fail} | {API/schema/SQL/error/test rows} | {none or fix made} |
 | Persistence DDL/no-DDL decisions | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
 | Destructive/replay ownership matrix | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
 | Current-state ownership/derivation | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
@@ -666,6 +988,10 @@ Use the transport appropriate to each reviewer:
   paths to the reviewer prompt, repository/worktree, and output file. Claude
   writes the report file directly; the wrapper validates it with sentinels,
   strips the sentinels, and retries once on timeout.
+- Before manually treating Claude as hung, unavailable, or safe to kill,
+  inspect the matching PTY log under `tmp_debug/scope-reviewer-logs/`. Empty
+  wrapper stdout/stderr files in the review directory are not evidence that
+  Claude is idle or blocked.
 - Antigravity uses the direct `agy --print "prompt"` invocation.
 - GLM uses `opencode run` when available and is skipped silently otherwise.
 
@@ -882,12 +1208,20 @@ Gate #3 cannot be shown if any reviewer or the orchestrator finds:
 
 - `SCOPE TOOLING ERROR` from reviewer CLI preflight
 - missing or failing `architecture-readiness-matrix.yaml`
+- missing or failing `architecture-contract-self-check.yaml`
 - missing or failing `pre-review-hardening.md`
+- open `refinement-inconsistencies.yaml` items
 - unresolved readiness preflight failures for required artifacts, parse checks,
   AC/PDR/ADR coverage, or high-risk ownership/test coverage
 - unresolved business ambiguity that would require Architect or Developer product decisions
+- unresolved unknown or unclear issue discovered during Phase 0-3 artifact generation
+  that affects intent, product behavior, architecture, specs, testing, rollout, or
+  implementation ownership
 - missing or contradictory architecture decisions
 - generated specs that do not match architecture or ADRs
+- generated specs that mention but do not enforce required, exact,
+  conditional, fail-closed, resumable, idempotent, ownership, or output
+  cardinality rules from accepted AC/PDR/ADR claims
 - missing API/schema/error contracts for behavior required by acceptance criteria
 - insufficient test strategy for high-risk behavior or the 90%+ story coverage floor
 - architectural gaps that would force Phase 4 to invent design while writing file plans
@@ -926,6 +1260,8 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"architecture_
 **Instruction:** Continue as `architect` agent for the `story_breakdown`, `file_plan`, and `contracts` phases.
 
 **Goal:** Break epic into implementable stories, create executable contracts, and document file-level intent.
+
+At the start of Phase 4, restate any remaining unknowns from Phase 3.5. Do not write stories, file plans, or contracts if any unresolved issue would force a developer to invent product behavior or architecture. Return to the appropriate earlier phase and ask the user when needed.
 
 **Story sizing constraints:** Each story should have max 7 non-trivial files, ~600 LOC of new/modified code, and the epic should have 5-8 stories. Trivial files (empty `__init__.py`, config with no logic, re-exports) don't count toward the 7-file limit. If a story exceeds these limits, split it.
 
@@ -1169,7 +1505,10 @@ fi
 The final approval gate cannot be shown until validation passes. Validation must confirm:
 - no `__pycache__`, `.py`, `.pyc`, `.DS_Store`, or other non-markdown/non-YAML artifacts exist in the epic docs folder
 - all required epic files exist
+- `refinement-inconsistencies.yaml` exists and has no `open` or
+  `user_question` items
 - `details.md` frontmatter is present and contains at least `epic_id`, `title`, and `status`
+- `details.md` includes `## Intent Alignment` and has no open intent questions
 - `adr.md` uses global ADR numbering and includes the required template fields
 - `acceptance-traceability.yaml` exists and contains `acceptance_items`
 - `architecture-readiness-matrix.yaml` exists and every row requiring
@@ -1211,8 +1550,15 @@ Phase 4: Architect - Stories, Contracts & File Plan
 ✅ Epic Artifact Validation
    Required epic files present: [Yes / No]
    details.md frontmatter valid: [Yes / No]
+   details.md Intent Alignment approved: [Yes / No]
    adr.md numbering/template valid: [Yes / No]
    Epic folder hygiene valid: [Yes / No]
+
+✅ Unknowns
+   Developer-facing product unknowns: [None / list]
+   Developer-facing architecture unknowns: [None / list]
+   User questions required before implementation: [None / list]
+   refinement-inconsistencies.yaml open items: [0 / list]
 
 Ready to mark epic as ready-for-implementation? [yes / refine]
 ```
@@ -1250,6 +1596,7 @@ Epic Refinement Complete: {epic-id}
 
 Artifacts created:
 ├── docs/epics/{epic-dir}/
+│   ├── details.md (with approved Intent Alignment)
 │   ├── acceptance-criteria.md
 │   ├── acceptance-traceability.yaml
 │   ├── system-context.md
@@ -1257,6 +1604,7 @@ Artifacts created:
 │   ├── adr.md
 │   ├── pdr.md
 │   ├── test-strategy.md
+│   ├── refinement-inconsistencies.yaml
 │   ├── refinement-review.md
 │   ├── file-plan-story-00.yaml   (only if scaffolding exists; may include contracts.py)
 │   ├── file-plan-story-01.yaml
@@ -1287,6 +1635,8 @@ If session compacts mid-refinement:
 
 1. Check `.scope/{epic-dir}/refine_summaries.jsonl` for completed phases
 2. Check which epic docs exist:
+   - `details.md` contains `## Intent Alignment` with no open intent questions → Phase 0 complete
+   - `refinement-inconsistencies.yaml` has no open or user-question items → no known unresolved ambiguity
    - `acceptance-criteria.md` exists → Phase 1 complete
    - `architecture.md` exists → Phase 2 complete
    - `docs/architecture/13-specs/api/{epic-id}-*` exists → Phase 3 complete
@@ -1299,6 +1649,7 @@ If session compacts mid-refinement:
 ## Communication Style
 
 **Progress indicators:**
+- "Phase 0: Intent Alignment - Why Understanding"
 - "Phase 1/4: Product Owner - Epic Validation"
 - "Phase 2/4: Architect - System Context & Architecture"
 - "Phase 3/4: Architect - Spec Generation"
@@ -1311,4 +1662,8 @@ If session compacts mid-refinement:
 - Wait for explicit approval before proceeding
 
 **Discovery updates:**
+- If any phase reveals new unknowns or unclear issues, state the unknown, explain
+  which prior phase owns it, and ask the user before continuing when it affects
+  intent, product behavior, architecture, testing, rollout, or implementation
+  ownership.
 - If Phase 2 reveals issues with Phase 1, announce and update

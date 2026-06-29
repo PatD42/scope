@@ -23,6 +23,13 @@ Changed files manifest: `{{CHANGED_FILES_PATH}}`
 
 Audit verification matrix: `{{AUDIT_MATRIX_PATH}}`
 
+Reviewer packet: `{{REVIEWER_PACKET_PATH}}`
+
+If the reviewer packet path is not `not-applicable` and the file exists, read it
+first. On follow-up audits, prioritize the packet's previous failed/unverified
+rows, remediation diff, sibling risk surfaces, and changed runtime evidence
+before doing a bounded fresh scan for new high-impact issues.
+
 ## CodeGraph Query Mode
 
 The audit orchestrator owns CodeGraph initialization, initial index, and sync for `{{REPO_ROOT}}` when CLI CodeGraph is available. If CLI CodeGraph is available in this audit, it has already been initialized, indexed, or synced before reviewer launch.
@@ -43,6 +50,7 @@ Do not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codeg
 - `docs/epics/{{EPIC_DIR}}/details.md`
 - `docs/epics/{{EPIC_DIR}}/acceptance-criteria.md`
 - `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`
+- `docs/epics/{{EPIC_DIR}}/implementation-evidence.yaml` if present
 - `{{AUDIT_MATRIX_PATH}}`
 - `docs/epics/{{EPIC_DIR}}/architecture.md`
 - `docs/epics/{{EPIC_DIR}}/adr.md`
@@ -59,14 +67,15 @@ Before writing the review, you MUST:
 
 1. Read every `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml`.
 2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`.
-3. Read `{{AUDIT_MATRIX_PATH}}`.
-4. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, and audit verification matrix.
-5. Read each named implementation file and each named test file.
-6. Inspect test contents directly. Directory listings, test names, or counts are not enough.
-7. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
-8. If any required file cannot be read, list it under `Unread Required Files` with the error.
-9. Fill a `Required Checks Performed` table with one row per audit matrix row.
-10. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
+3. Read `docs/epics/{{EPIC_DIR}}/implementation-evidence.yaml` if present.
+4. Read `{{AUDIT_MATRIX_PATH}}`.
+5. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, implementation evidence, and audit verification matrix.
+6. Read each named implementation file and each named test file.
+7. Inspect test contents directly. Directory listings, test names, or counts are not enough.
+8. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
+9. If any required file cannot be read, list it under `Unread Required Files` with the error.
+10. Fill a `Required Checks Performed` table with one row per audit matrix row.
+11. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
 
 Do not report `None` for findings unless every required file was read successfully and every audit matrix row has evidence in `Required Checks Performed`.
 
@@ -74,6 +83,7 @@ Do not report `None` for findings unless every required file was read successful
 
 Find concrete, evidence-backed issues in:
 
+- implementation call paths, source/test behavior, and runtime proof
 - architecture compliance
 - ADR compliance
 - acceptance criteria implementation

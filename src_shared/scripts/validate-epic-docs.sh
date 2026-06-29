@@ -24,6 +24,7 @@ REQUIRED_FILES=(
     "adr.md"
     "pdr.md"
     "test-strategy.md"
+    "refinement-inconsistencies.yaml"
 )
 
 FORBIDDEN_NAMES=(
@@ -61,6 +62,13 @@ validate_details_frontmatter() {
     [[ "$frontmatter" =~ (^|[[:space:]])epic_id: ]] || fail "details.md frontmatter missing epic_id"
     [[ "$frontmatter" =~ (^|[[:space:]])title: ]] || fail "details.md frontmatter missing title"
     [[ "$frontmatter" =~ (^|[[:space:]])status: ]] || fail "details.md frontmatter missing status"
+}
+
+validate_details_intent_alignment() {
+    local details_file="$1"
+
+    rg -F -q "## Intent Alignment" "$details_file" || fail "details.md missing ## Intent Alignment section"
+    rg -i -q "Open intent questions.*None" "$details_file" || fail "details.md Intent Alignment must state Open intent questions: None"
 }
 
 validate_folder_hygiene() {
@@ -165,6 +173,17 @@ for row in rows[1:]:
 PY
 }
 
+validate_refinement_inconsistencies() {
+    local inconsistencies_file="$1"
+
+    rg -F -q "epic_id:" "$inconsistencies_file" || fail "refinement-inconsistencies.yaml missing epic_id"
+    rg -F -q "items:" "$inconsistencies_file" || fail "refinement-inconsistencies.yaml missing items"
+
+    if rg -q 'status:[[:space:]]*"?open"?([[:space:]]*$|[[:space:]]+#)|status:[[:space:]]*"?user_question"?([[:space:]]*$|[[:space:]]+#)' "$inconsistencies_file"; then
+        fail "refinement-inconsistencies.yaml contains open or user_question items"
+    fi
+}
+
 for file_name in "${REQUIRED_FILES[@]}"; do
     require_file "${EPIC_DIR}/${file_name}"
 done
@@ -173,8 +192,10 @@ compgen -G "${EPIC_DIR}/file-plan-story-*.yaml" > /dev/null || fail "missing fil
 
 validate_folder_hygiene
 validate_details_frontmatter "${EPIC_DIR}/details.md"
+validate_details_intent_alignment "${EPIC_DIR}/details.md"
 validate_adr "${EPIC_DIR}/adr.md"
 validate_acceptance_traceability "${EPIC_DIR}/acceptance-traceability.yaml"
 validate_architecture_readiness_matrix "${EPIC_DIR}/architecture-readiness-matrix.yaml"
+validate_refinement_inconsistencies "${EPIC_DIR}/refinement-inconsistencies.yaml"
 
 echo "Epic documentation validation passed: ${EPIC_DIR}"

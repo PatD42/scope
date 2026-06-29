@@ -31,6 +31,13 @@ Changed files manifest: `{{CHANGED_FILES_PATH}}`
 
 Audit verification matrix: `{{AUDIT_MATRIX_PATH}}`
 
+Reviewer packet: `{{REVIEWER_PACKET_PATH}}`
+
+If the reviewer packet path is not `not-applicable` and the file exists, read it
+first. On follow-up audits, prioritize the packet's previous failed/unverified
+rows, remediation diff, sibling risk surfaces, and changed runtime evidence
+before doing a bounded fresh scan for new high-impact issues.
+
 <evidence_precedence>
 Use this evidence precedence order:
 
@@ -81,9 +88,11 @@ Implementation source files must live in the source package, not in `docs/epics/
 
 Read these files before judging the code:
 
+- `{{REVIEWER_PACKET_PATH}}` if it is not `not-applicable` and exists
 - `docs/epics/{{EPIC_DIR}}/details.md`
 - `docs/epics/{{EPIC_DIR}}/acceptance-criteria.md`
 - `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`
+- `docs/epics/{{EPIC_DIR}}/implementation-evidence.yaml` if present
 - `{{AUDIT_MATRIX_PATH}}`
 - `docs/epics/{{EPIC_DIR}}/architecture.md`
 - `docs/epics/{{EPIC_DIR}}/adr.md`
@@ -109,8 +118,8 @@ Before inspecting implementation code, inspect raw gate evidence in `{{ATTEMPT_D
 Before writing the review, you MUST complete this inspection procedure:
 
 1. Read every `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml` file. Do not rely on glob results or file names alone.
-2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml` and `{{AUDIT_MATRIX_PATH}}`.
-3. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, and audit verification matrix.
+2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`, `docs/epics/{{EPIC_DIR}}/implementation-evidence.yaml` if present, and `{{AUDIT_MATRIX_PATH}}`.
+3. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, implementation evidence, and audit verification matrix.
 4. Read each named implementation file and each named test file. Inspect test contents directly; directory listings are not enough.
 5. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
 6. If any required file cannot be read, list it under `Unread Required Files` with the exact path and error.

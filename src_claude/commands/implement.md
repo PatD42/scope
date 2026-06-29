@@ -39,6 +39,8 @@ Do not report the epic complete when code merely exists. The epic is complete on
   (examples: migrations, backfills, seed/bootstrap scripts, reindex jobs, onboarding runs)
 - The intended environment is verified ready (`.env`, schema/migrations, required services)
 - `audit_epic` has been run, fix stories implemented, and the final audit is acceptable
+- `implementation-evidence.yaml` is updated before the first audit with the concrete proof gathered during implementation
+- `audit-verification-matrix.yaml` is populated before the first audit with implementation, test, and runtime evidence for every required/high-risk row
 - After implementation verification is green, the agent must automatically run `audit_epic`,
   fix all findings from critical through minor unless the user explicitly approves a defer,
   and rerun `audit_epic` until it passes or a maximum of 3 audit runs has been reached
@@ -65,6 +67,7 @@ When `/implement` reaches an audit step, it must load and execute `commands/audi
 Implementation completion proof must include:
 - latest `reviews/audit-NNN/` attempt id created after implementation verification began
 - path to `reviews/audit-NNN/review-metadata.yaml`
+- path to `implementation-evidence.yaml`
 - path to `audit-verification-matrix.yaml`
 - path to `audit-issue-ledger.yaml`
 - reviewer coverage: completed or unavailable for Codex, Claude, and Antigravity
@@ -591,6 +594,86 @@ Procedure:
 If the epic changes no runtime state and is purely code-path work, record that explicitly and continue.
 
 `/implement` must not start Step 5 while any runtime-required row lacks a wired checker/command and a passing result, unless the row is blocked by a concrete external dependency that has been reported to the user. Missing live smoke wiring is an implementation gap, not an audit finding.
+
+### Step 4d: Build Implementation Evidence Package
+
+Before the first audit, create or update `docs/epics/{epic-dir}/implementation-evidence.yaml`.
+
+This artifact is the implementation handoff to audit. It prevents reviewers from
+rediscovering basic missing proof and keeps audit focused on verifying claims
+instead of reconstructing them.
+
+Required shape:
+
+```yaml
+epic_id: {epic-id}
+generated_at: YYYY-MM-DDTHH:MM:SSZ
+stories:
+  - story_id: story-01
+    status: complete
+    acceptance_rows: []
+    files_changed: []
+    tests_added_or_updated: []
+    commands_run:
+      - command: "pytest ..."
+        status: pass
+        evidence: "docs/epics/{epic-dir}/reviews/audit-001/pytest-output.txt"
+    runtime_evidence: []
+    value_proof: ""
+    remaining_unproven_work: []
+epic_level:
+  tests:
+    unit: {status: pass, evidence: ""}
+    integration: {status: pass, evidence: ""}
+    e2e: {status: not_applicable, evidence: ""}
+    live_smoke: {status: pass, evidence: ""}
+  coverage:
+    measured: true
+    percent: 0
+    evidence: ""
+  operational_deliverables: []
+  blocked_rows: []
+audit_ready: true
+```
+
+Rules:
+- Every completed story must have at least one changed implementation/doc file,
+  one verification method, and one mapped acceptance-traceability row unless the
+  story is explicitly scaffolding.
+- Every runtime-required row must have command/result/evidence or be listed in
+  `blocked_rows` with the external blocker already reported to the user.
+- Every promised output, row, file, metric, event, side effect, or user-visible
+  behavior must have representative proof or an explicit statement that zero/no-op
+  is valid by acceptance criteria or file plan.
+- `audit_ready` must be false if any required/high-risk row still lacks proof.
+
+### Step 4e: Build Pre-Audit Verification Matrix
+
+Before the first audit, create or update
+`docs/epics/{epic-dir}/audit-verification-matrix.yaml` from:
+
+- `acceptance-traceability.yaml`
+- `implementation-evidence.yaml`
+- all `file-plan-story-*.yaml`
+- changed files
+- runtime/operational evidence from Step 4c
+
+The matrix may be refined by `audit_epic`, but `/implement` must not enter audit
+with an empty or evidence-free matrix.
+
+Pre-audit gate:
+- Every `required`, `runtime_required`, and `high_risk` row must have actual
+  implementation files or an explicit not-applicable reason.
+- Every `required`, `runtime_required`, and `high_risk` row must have actual
+  tests or runtime evidence appropriate to the requirement.
+- Every runtime-required row must have a passing command and evidence path unless
+  blocked by a reported external dependency.
+- Every row with a partial proof must be marked `unverified`, `blocked`, or
+  `deferred`; do not mark it `pass` or `verified`.
+
+If this gate fails, stop before Step 5 and report `implementation-complete but
+not delivery-complete`. Missing proof is an implementation handoff failure, not
+something to discover for the first time during external audit.
 
 ### Step 5: Audit
 

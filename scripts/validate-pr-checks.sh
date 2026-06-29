@@ -225,6 +225,19 @@ check_agy_invocation() {
   grep -n -- '--print "$AGY_PROMPT_TEXT"' src_shared/commands/epic_refine.md
 }
 
+check_codex_invocation() {
+  section "Check Codex invocation"
+
+  if grep -R -n -E -- '--ask-for-approval([[:space:]]|$)' src_shared src_claude src_codex; then
+    fail "Codex exec no longer supports --ask-for-approval; use supported flags only"
+  fi
+
+  grep -n "codex exec" src_shared/commands/audit_epic.md
+  grep -n -- "--sandbox read-only" src_shared/commands/audit_epic.md
+  grep -n -- "--sandbox read-only" src_shared/commands/epic_refine.md
+  grep -n "stale approval flags" src_shared/commands/epic_refine.md
+}
+
 check_claude_invocation() {
   section "Check Claude invocation"
 
@@ -242,6 +255,10 @@ check_claude_invocation() {
   grep -n "Claude Opus (local alias)" src_shared/commands/epic_refine.md
   grep -n "permission-mode bypassPermissions" src_shared/commands/audit_epic.md
   grep -n "permission-mode bypassPermissions" src_shared/commands/epic_refine.md
+  grep -n "Before manually treating Claude as hung" src_shared/commands/audit_epic.md
+  grep -n "Before manually treating Claude as hung" src_shared/commands/epic_refine.md
+  grep -n "Before terminating Claude, inspected PTY log" src_shared/scripts/scope-reviewer-claude-pexpect.py
+  grep -n "Last PTY log lines before termination" src_shared/scripts/scope-reviewer-claude-pexpect.py
   grep -n "Bash(grep:\\*)" src_shared/commands/audit_epic.md
   grep -n "Bash(grep:\\*)" src_shared/commands/epic_refine.md
   grep -n "Bash(echo:\\*)" src_shared/commands/audit_epic.md
@@ -316,6 +333,7 @@ main() {
   check_codegraph_guidance
   check_codex_override_sources
   check_agy_invocation
+  check_codex_invocation
   check_claude_invocation
   check_command_expectations
 
