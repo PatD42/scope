@@ -32,6 +32,8 @@ Before writing the review, inspect these artifacts if they exist:
 - `docs/epics/{{EPIC_DIR}}/adr.md`
 - `docs/epics/{{EPIC_DIR}}/pdr.md`
 - `docs/epics/{{EPIC_DIR}}/test-strategy.md`
+- `docs/epics/{{EPIC_DIR}}/architecture-claims.yaml`
+- `docs/epics/{{EPIC_DIR}}/architecture-contract-self-check.yaml`
 - `docs/epics/{{EPIC_DIR}}/architecture-readiness-matrix.yaml`
 - `docs/architecture/13-specs/api/{{EPIC_ID}}-*.yaml`
 - `docs/architecture/13-specs/schemas/domain/{{EPIC_ID}}-*.json`
@@ -49,13 +51,27 @@ Be constructively adversarial. Do not summarize the epic or reward coherent pros
 
 Focus especially on:
 
+- missing, incomplete, or false-pass `architecture-claims.yaml` rows
+- missing, incomplete, or false-pass `architecture-contract-self-check.yaml` rows
+- generated schemas/reports/artifacts without producers or consumers
+- API responses that require fields their producer cannot create
+- aggregate/per-item ambiguity in multi-component, multi-row, multi-job, or
+  multi-attempt operations
+- aggregate success/status/pass fields that can contradict child evidence,
+  failed rows, blocking errors, skipped required children, or incomplete
+  split-runtime outputs
+- split-runtime workflows whose schemas require impossible combined outputs
+- cross-surface rules that were applied to one endpoint/report but missed on
+  sibling endpoints, commands, reports, manifests, or persistence surfaces
 - ACs that promise persistence without matching DDL or explicit no-DDL rationale
 - API/schema fields that do not match architecture requirements
 - SQL nullability or constraints that contradict generated schemas
 - missing ownership fields for destructive, cleanup, replay, or idempotency behavior
 - monitor/dashboard promises without API payload support
 - test strategy that names a risk but lacks a real runtime or integration proof path
-- file-plan ownership gaps that would make implementation guess where code belongs
+- file-plan ownership gaps only when they hide an architecture boundary or
+  test-strategy gap; ordinary empty `evidence.file_plan_owner` is Gate #4
+  pending before Phase 4
 
 Avoid noise. Do not report style preferences, hypothetical risks, or questions that can be answered mechanically from existing artifacts.
 
@@ -65,6 +81,13 @@ For each check, return `Pass`, `Fail`, or `Unverified` with file evidence:
 
 - Business behavior is complete enough that architecture does not choose product behavior.
 - Architecture is complete enough that implementation does not choose architecture.
+- Claims ledger covers every enforceable AC/PDR/ADR claim.
+- Contract self-check covers every claims-ledger row with enforcement and a negative case.
+- Producer/consumer compatibility is possible for every generated output.
+- Aggregate/per-item and split-runtime behavior are explicit where relevant.
+- Aggregate success/status/pass invariants are explicit, with validator
+  contracts and negative probes when JSON Schema cannot express the invariant.
+- Cross-surface patterns were expanded across sibling surfaces.
 - Persistence ACs map to JSON/API/SQL or an explicit no-persistence decision.
 - DDL is compatible with inherited tables and migration constraints.
 - Required architecture fields are required in generated schemas.
@@ -72,6 +95,8 @@ For each check, return `Pass`, `Fail`, or `Unverified` with file evidence:
 - Fail-closed rules have error/API/persistence behavior.
 - Routing, corpus, review-required, cleanup, replay, and ownership paths are auditable.
 - Test strategy proves real runtime paths for integration work.
+- File-plan ownership is treated as Gate #4 evidence and is not used to block
+  Gate #3 unless it hides an architecture boundary or test-strategy gap.
 - Pre-review hardening checked sibling defect patterns, not only named blockers.
 
 ## Output Format

@@ -33,6 +33,8 @@ Before writing the review, inspect these artifacts if they exist:
 - `docs/epics/{{EPIC_DIR}}/adr.md`
 - `docs/epics/{{EPIC_DIR}}/pdr.md`
 - `docs/epics/{{EPIC_DIR}}/test-strategy.md`
+- `docs/epics/{{EPIC_DIR}}/architecture-claims.yaml`
+- `docs/epics/{{EPIC_DIR}}/architecture-contract-self-check.yaml`
 - `docs/epics/{{EPIC_DIR}}/architecture-readiness-matrix.yaml`
 - `docs/architecture/13-specs/api/{{EPIC_ID}}-*.yaml`
 - `docs/architecture/13-specs/schemas/domain/{{EPIC_ID}}-*.json`
@@ -46,38 +48,58 @@ List missing required inputs under `Unread Or Missing Required Files`.
 
 ## Review Posture
 
-Start from `architecture-readiness-matrix.yaml`, the latest
-`readiness-preflight.md`, and the latest `pre-review-hardening.md`. Your job is
-not to rediscover the whole epic from scratch. Validate whether the matrix rows
-are complete, whether the cited evidence actually supports each row, whether
-the preflight missed a contract gap, and whether hardening searched sibling
-surfaces for repeated versions of the same defect pattern.
+Start from `architecture-claims.yaml`,
+`architecture-contract-self-check.yaml`, the latest `readiness-preflight.md`,
+and the latest `pre-review-hardening.md`. Your job is not to rediscover the
+whole epic from scratch. Validate whether the architect extracted the right
+enforceable claims, whether generated contracts actually enforce them, whether
+producer/consumer compatibility is possible, and whether hardening searched
+sibling surfaces for repeated versions of the same defect pattern.
 
 Be constructively adversarial. Do not approve merely because the docs are
 coherent at a high level. Approval requires evidence that the generated
-contracts and file-plan ownership are sufficient for Phase 4.
+contracts and test strategy are sufficient for Phase 4. File-plan ownership is
+created during Phase 4 and is not a Gate #3 blocker unless its absence reflects
+an unresolved architecture boundary or missing test-strategy proof path.
 
 ## Mandatory Adversarial Checks
 
 Before writing the review, explicitly try to disprove each of these claims:
 
 1. Every matrix row with `requires.api`, `requires.json_schema`,
-   `requires.sql`, `requires.error_contract`, `requires.test_strategy`, or
-   `requires.file_plan_owner` has cited evidence that exists and matches the
-   requirement.
-2. Every acceptance criterion and accepted PDR/ADR appears in at least one
+   `requires.sql`, `requires.error_contract`, or `requires.test_strategy` has
+   cited evidence that exists and matches the requirement. Rows with
+   `requires.file_plan_owner` may remain Gate #4 pending before Phase 4.
+2. Every enforceable AC/PDR/ADR claim appears in `architecture-claims.yaml`.
+3. Every claims-ledger row appears in `architecture-contract-self-check.yaml`
+   with enforcement mechanism and negative case evidence.
+4. Every generated schema/report/artifact has a producer and consumer.
+5. Every API response schema can be produced by its documented endpoint,
+   command, script, worker, or service.
+6. Aggregate vs per-item behavior is explicit for multi-component, multi-row,
+   multi-job, multi-file, or multi-attempt operations.
+7. Aggregate success/status/pass outcomes cannot contradict child evidence,
+   blocking errors, failed rows, skipped required children, or incomplete
+   split-runtime outputs. If JSON Schema cannot express the invariant, a
+   validator contract and negative test probes must be specified.
+8. Split-runtime workflows model partial outputs and final assembly separately
+   when one runtime cannot produce all final evidence.
+9. Cross-surface rules such as resumability, idempotency, supersession, exact
+   coverage, fail-closed reasons, conditional required fields, output ownership,
+   and report completeness were expanded across sibling surfaces.
+10. Every acceptance criterion and accepted PDR/ADR appears in at least one
    readiness matrix row.
-3. Every persistence or migration promise maps to SQL and, when applicable, API
+11. Every persistence or migration promise maps to SQL and, when applicable, API
    and JSON schema evidence.
-4. Every destructive cleanup, replay, idempotency, supersession, or attempt
+12. Every destructive cleanup, replay, idempotency, supersession, or attempt
    ownership promise has ownership-matrix evidence.
-5. Every generated API/schema/error/SQL contract is consistent with the
+13. Every generated API/schema/error/SQL contract is consistent with the
    architecture and ADRs.
-6. Every high-risk matrix row has a test-strategy proof path and a file-plan
-   owner before Gate #4.
-7. The latest `readiness-preflight.md` has no unresolved required-artifact,
+14. Every high-risk matrix row has a test-strategy proof path before Gate #3.
+   File-plan owner evidence is required before Gate #4, not Gate #3.
+15. The latest `readiness-preflight.md` has no unresolved required-artifact,
    parse, matrix, or obvious contract failures.
-8. The latest `pre-review-hardening.md` proves the orchestrator checked for
+16. The latest `pre-review-hardening.md` proves the orchestrator checked for
    sibling failures across AC/API/schema/DDL/tests, destructive ownership,
    current-state derivation, promised endpoints, existing data families, and
    implementer-invention risk.
@@ -99,6 +121,9 @@ Classify findings as `BLOCKING` when Gate #3 must not proceed:
   coverage floor.
 
 Use `NON-BLOCKING` for useful improvements that do not prevent Gate #3.
+Missing `file-plan-story-*.yaml` or empty `evidence.file_plan_owner` is
+non-blocking before Gate #3 when architecture, generated contracts, and
+test-strategy evidence are complete. It becomes blocking before Gate #4.
 
 ## Output Format
 
@@ -136,7 +161,8 @@ ADVERSARIAL CHECKS PERFORMED:
 | Persistence maps to SQL/API/schema | Pass/Fail/Unverified | {file/section evidence} |
 | Destructive/replay ownership specified | Pass/Fail/Unverified | {file/section evidence} |
 | Generated contracts match architecture | Pass/Fail/Unverified | {file/section evidence} |
-| High-risk rows have tests and owners | Pass/Fail/Unverified | {file/section evidence} |
+| High-risk rows have test strategy | Pass/Fail/Unverified | {file/section evidence} |
+| File-plan ownership deferred correctly | Pass/Fail/Unverified | {Gate #4 pending rows or evidence} |
 | Sibling defect patterns expanded | Pass/Fail/Unverified | {file/section evidence} |
 
 BLOCKING FINDINGS:

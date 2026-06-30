@@ -40,6 +40,8 @@ These rules are mandatory for every refined epic:
   - `pdr.md`
   - `test-strategy.md`
   - `refinement-inconsistencies.yaml`
+  - `architecture-claims.yaml`
+  - `architecture-contract-self-check.yaml`
 - `details.md` must use YAML frontmatter with at least `epic_id`, `title`, and `status`.
 - `details.md` must include an approved `## Intent Alignment` section before Phase 1 begins.
 - `adr.md` must use the global ADR numbering sequence and include `Date`, `Status`, `Scope`, `Epic`, `Context`, `Decision`, `Alternatives Considered`, and `Consequences` for every ADR entry.
@@ -465,12 +467,85 @@ specs_dir: docs/architecture/{13-specs|backend/13-specs|frontend/13-specs}
 ```
 
 **Key deliverables:**
+- `docs/epics/{epic-dir}/architecture-claims.yaml`
 - API contracts in the applicable `13-specs/api/` (OpenAPI 3.0.3)
 - Domain schemas in the applicable `13-specs/schemas/domain/` (JSON Schema)
 - Database specs in the applicable `13-specs/database/`
 - Error codes in the applicable `13-specs/errors/by-domain/`
 - Updated error taxonomy in the applicable `13-specs/errors/taxonomy.yaml`
 - `docs/epics/{epic-dir}/architecture-contract-self-check.yaml`
+
+### Phase 3 Claims Ledger
+
+Before generating or editing specs, create
+`docs/epics/{epic-dir}/architecture-claims.yaml`.
+
+The claims ledger is the source input for contract generation. The architect
+must not generate OpenAPI, JSON Schema, SQL, or error specs directly from prose
+without first extracting the enforceable claims.
+
+Required shape:
+
+```yaml
+epic_id: "{epic-id}"
+generated_at: "{ISO-8601}"
+status: "pass | fail"
+claims:
+  - id: "AC7-FIDELITY-PARTITIONS"
+    source:
+      artifact: "acceptance-criteria.md"
+      anchor: "AC7"
+    claim: "Fidelity gates must validate held-out, boundary, near-boundary, and stress rows."
+    owner_phase: "phase_3"
+    keywords: ["must", "all"]
+    affected_surfaces:
+      api: []
+      json_schema: []
+      sql: []
+      error_contract: []
+      test_strategy: []
+      producer_consumer: []
+      cross_surface_patterns: ["conditional_fields", "generated_report"]
+    enforcement_expected:
+      type: "required_field | enum | exact_cardinality | conditional | invariant | no-ddl | explicit_no_contract_needed"
+      rationale: "Why this claim needs this enforcement shape"
+    status: "pass | fail | user_question | not_applicable"
+    notes: ""
+```
+
+Compact example row:
+
+```yaml
+claims:
+  - id: "AC3-EXPORT-REJECTS-PARTIAL"
+    source:
+      artifact: "acceptance-criteria.md"
+      anchor: "AC3"
+    claim: "Export must fail closed when any required invoice line is missing."
+    owner_phase: "phase_3"
+    keywords: ["must", "fail closed", "required"]
+    affected_surfaces:
+      api: ["POST /exports"]
+      json_schema: ["ExportRequest", "ExportResult"]
+      sql: ["export_jobs"]
+      error_contract: ["EXPORT_REQUIRED_LINE_MISSING"]
+      test_strategy: ["AC3 fail-closed export test"]
+      producer_consumer: ["export worker -> export result"]
+      cross_surface_patterns: ["fail_closed", "generated_report"]
+    enforcement_expected:
+      type: "invariant"
+      rationale: "A successful export with missing required lines would violate AC3."
+    status: "pass"
+    notes: ""
+```
+
+Create one claim row for every accepted AC/PDR/ADR rule that contains or implies
+required, exact, conditional, fail-closed, ownership, idempotency, resumability,
+threshold, output-completeness, split-runtime, operator-visible, or generated
+artifact behavior. If the correct enforcement cannot be determined from approved
+requirements, mark the row `user_question` and return to Phase 1 or Phase 2
+before writing specs. Keep this ledger compact: one row per enforceable promise,
+not one row per implementation detail.
 
 ### Phase 3 Contract Self-Gate
 
@@ -481,6 +556,7 @@ mentions a behavior but does not enforce it is incomplete.
 
 Create `docs/epics/{epic-dir}/architecture-contract-self-check.yaml` from:
 
+- `architecture-claims.yaml`
 - every acceptance criterion
 - every accepted PDR/ADR decision
 - every generated API/OpenAPI path and payload
@@ -537,6 +613,43 @@ claims:
     notes: ""
 ```
 
+Compact example row:
+
+```yaml
+producer_consumer_compatibility:
+  - id: "PC-EXPORT-RESULT"
+    producer: "export worker"
+    consumer: "POST /exports response and operator export report"
+    required_output: "ExportResult with job_id, rejected_rows, artifact_path, and failure reasons"
+    producer_can_create_required_fields: "yes"
+    split_runtime_or_environment_constraint: "none"
+    status: "pass"
+cross_surface_patterns:
+  - pattern: "fail_closed"
+    surfaces_checked: ["POST /exports", "ExportResult", "export_jobs", "EXPORT_REQUIRED_LINE_MISSING", "test-strategy AC3"]
+    missing_surfaces: []
+    status: "pass"
+claims:
+  - id: "AC3-EXPORT-REJECTS-PARTIAL"
+    source:
+      artifact: "acceptance-criteria.md"
+      anchor: "AC3"
+    claim: "Export must fail closed when any required invoice line is missing."
+    keywords: ["must", "fail closed", "required"]
+    contract_surfaces:
+      api: ["docs/architecture/backend/13-specs/api/{epic-id}-exports.openapi.yaml#/paths/~1exports/post"]
+      json_schema: ["docs/architecture/backend/13-specs/schemas/domain/{epic-id}-export.schema.json#/definitions/ExportResult"]
+      sql: ["docs/architecture/backend/13-specs/database/{epic-id}-exports.sql#export_jobs"]
+      error_contract: ["docs/architecture/backend/13-specs/errors/by-domain/exports.yaml#EXPORT_REQUIRED_LINE_MISSING"]
+      test_strategy: ["docs/epics/{epic-dir}/test-strategy.md#AC3"]
+    enforcement:
+      type: "invariant"
+      mechanism: "OpenAPI requires failure status and reasons; SQL records rejected rows; error contract defines missing-line failure."
+      negative_case: "Request with one invoice missing a required line returns EXPORT_REQUIRED_LINE_MISSING and no success artifact."
+    status: "pass"
+    notes: ""
+```
+
 The self-gate must include rows for every claim containing or implying:
 
 - `must`, `only`, `never`, `all`, `every`, `exact`, `at least`, `no more than`
@@ -558,6 +671,11 @@ The self-gate must also inventory and check structural consistency:
 - Aggregate vs per-item behavior is explicit. If an operation can cover many
   components, rows, records, files, attempts, or jobs, the request and response
   contract must say whether it returns one result, a list, or a keyed map.
+- Aggregate pass/fail semantics are explicit. If a report, manifest, or response
+  has a top-level `passed`, `status`, `ready`, `complete`, `approved`, or similar
+  aggregate outcome, the contract must define how that outcome is derived from
+  child evidence, blocking errors, skipped items, failed rows, partial outputs,
+  and runtime/environment constraints.
 - Split runtime/environment workflows are explicit. If one command cannot
   produce all required fields because of environment isolation, the schema must
   model partial outputs and final assembly separately.
@@ -576,6 +694,9 @@ Self-gate failure rules:
   violate the AC/PDR/ADR.
 - A row is `fail` if a required output/report can omit a promised field,
   cardinality, reason, state transition, artifact path, or evidence link.
+- A row is `fail` if an aggregate success/completion/pass field can contradict
+  child evidence, blocking child errors, failed rows, skipped required children,
+  or incomplete split-runtime outputs.
 - A row is `fail` if a conditional rule is represented only as optional fields
   without a conditional enforcement mechanism or explicit implementation rule.
 - A row is `fail` if an architecture-defined entity/report/artifact is missing
@@ -602,6 +723,11 @@ Phase 3: Architect - Spec Generation
 ✅ API Contracts ({system|backend|frontend}/13-specs/api/)
    Endpoints defined: [N endpoints]
    Files created: [list]
+
+✅ Claims Ledger
+   architecture-claims.yaml exists: [Yes / No]
+   Enforceable claims extracted: [N]
+   Failed/user-question rows: [0 / list]
 
 ✅ Domain Schemas ({system|backend|frontend}/13-specs/schemas/domain/)
    Entities defined: [N entities]
@@ -646,6 +772,7 @@ and spec gaps before tactical planning begins.
 - `docs/epics/{epic-dir}/pdr.md`
 - `docs/epics/{epic-dir}/test-strategy.md`
 - `docs/epics/{epic-dir}/architecture-readiness-matrix.yaml`
+- `docs/epics/{epic-dir}/architecture-claims.yaml`
 - `docs/epics/{epic-dir}/architecture-contract-self-check.yaml`
 - `docs/architecture/13-specs/api/{epic-id}-*.yaml`
 - `docs/architecture/13-specs/schemas/domain/{epic-id}-*.json`
@@ -780,6 +907,18 @@ rows:
     notes: ""
 ```
 
+Gate semantics for `file_plan_owner`:
+
+- Before Gate #3, `requires.file_plan_owner: true` is allowed with empty
+  `evidence.file_plan_owner` when the row otherwise has business, architecture,
+  spec, and test-strategy evidence. Record it as `Gate #4 pending`, not as a
+  Phase 3.5 blocker.
+- Before Gate #4, every row with `requires.file_plan_owner: true` must have
+  `evidence.file_plan_owner` populated by the story/file-plan artifacts.
+- Missing file-plan ownership is a Gate #4 blocker, not a Gate #3 blocker,
+  unless the missing owner hides an architecture decision that Phase 4 would
+  need to invent.
+
 Create rows for:
 
 - every acceptance criterion
@@ -805,22 +944,35 @@ before launching reviewers:
 - required epic artifacts exist
 - `refinement-inconsistencies.yaml` exists and has no `open` or
   `user_question` items
+- `architecture-claims.yaml` exists, parses, has rows for every enforceable
+  AC/PDR/ADR claim, and has no `fail` or `user_question` rows
 - `architecture-readiness-matrix.yaml` exists and has at least one row per AC
 - `architecture-contract-self-check.yaml` exists, parses, has rows for every
   enforceable AC/PDR/ADR claim, and has no `fail` or `user_question` rows
 - every matrix row has a stable id, source, requirement, risk, requires,
   evidence, status, and blocker flag
-- every `requires.*: true` has evidence or the row is `fail`/`unverified`
+- every `requires.*: true` except `requires.file_plan_owner` has evidence or the
+  row is `fail`/`unverified` before Gate #3
+- every `requires.file_plan_owner: true` row is either populated or explicitly
+  marked `Gate #4 pending` before Gate #3
 - API, JSON, and error specs parse
 - SQL specs exist when any AC/PDR/ADR promises persistence or migrations
 - every API/schema/error/SQL file expected by the matrix exists
 - generated contracts enforce required/conditional/cardinality/fail-closed
   claims from `architecture-contract-self-check.yaml`
+- `validate-architecture-contracts.sh docs/epics/{epic-dir}` passes when the
+  script is installed
 - every accepted PDR/ADR has at least one matrix row
 - every high-risk row has test-strategy evidence
 - every row that requires implementation has a planned file-plan owner before
-  Gate #4
+  Gate #4; missing file-plan ownership must not block Gate #3 by itself
 - destructive cleanup/replay/idempotency rows have ownership-matrix evidence
+
+Do not run `validate-epic-docs.sh` as a Gate #3 blocker. That script is the
+Gate #4 validator and is expected to fail before Phase 4 because
+`file-plan-story-*.yaml` and file-plan-derived ownership evidence do not exist
+yet. Gate #3 uses the architecture contract validator and the Phase 3.5
+readiness preflight instead.
 
 If scripted checks find missing artifacts, empty evidence, parse failures, stale
 open questions, or obvious contract gaps that can be fixed from existing
@@ -838,6 +990,8 @@ file-backed; do not turn it into another narrative architecture document.
 Required checks:
 
 - `architecture-contract-self-check.yaml` has no `fail` or `user_question` rows
+- `architecture-claims.yaml` has no `fail` or `user_question` rows and every
+  claims-ledger row appears in `architecture-contract-self-check.yaml`
 - every acceptance criterion maps to API, schema, SQL/DDL, error contract, and
   test-strategy evidence where applicable, or has an explicit not-applicable
   rationale
@@ -874,6 +1028,7 @@ Recommended format:
 ## Checks
 | Check | Status | Evidence | Correction |
 |---|---|---|---|
+| Claims ledger complete | {pass/fail} | {architecture-claims.yaml rows} | {none or fix made} |
 | Contract self-gate clean | {pass/fail} | {architecture-contract-self-check.yaml rows} | {none or fix made} |
 | AC to contract/test coverage | {pass/fail/not applicable} | {files/sections} | {none or fix made} |
 | Generated contracts enforce AC/PDR/ADR rules | {pass/fail} | {API/schema/SQL/error/test rows} | {none or fix made} |
@@ -1179,7 +1334,8 @@ build_refine_review_prompt_file() {
 | Required artifacts | {pass/fail} | {missing/present list} |
 | API/schema/error/SQL parse | {pass/fail/not applicable} | {output} |
 | AC/PDR/ADR coverage | {pass/fail} | {matrix row counts} |
-| High-risk ownership/test coverage | {pass/fail/not applicable} | {matrix row counts} |
+| High-risk test coverage | {pass/fail/not applicable} | {matrix row counts} |
+| File-plan ownership status | {Gate #4 pending / pass / fail} | {rows pending or populated} |
 
 ## Review Cycle Summary
 | Cycle | Review directory | Review scope | Trigger | Blockers found | Corrections applied | Result |
@@ -1207,12 +1363,13 @@ build_refine_review_prompt_file() {
 Gate #3 cannot be shown if any reviewer or the orchestrator finds:
 
 - `SCOPE TOOLING ERROR` from reviewer CLI preflight
+- missing or failing `architecture-claims.yaml`
 - missing or failing `architecture-readiness-matrix.yaml`
 - missing or failing `architecture-contract-self-check.yaml`
 - missing or failing `pre-review-hardening.md`
 - open `refinement-inconsistencies.yaml` items
 - unresolved readiness preflight failures for required artifacts, parse checks,
-  AC/PDR/ADR coverage, or high-risk ownership/test coverage
+  AC/PDR/ADR coverage, or high-risk test coverage
 - unresolved business ambiguity that would require Architect or Developer product decisions
 - unresolved unknown or unclear issue discovered during Phase 0-3 artifact generation
   that affects intent, product behavior, architecture, specs, testing, rollout, or
@@ -1225,6 +1382,13 @@ Gate #3 cannot be shown if any reviewer or the orchestrator finds:
 - missing API/schema/error contracts for behavior required by acceptance criteria
 - insufficient test strategy for high-risk behavior or the 90%+ story coverage floor
 - architectural gaps that would force Phase 4 to invent design while writing file plans
+
+Missing `file-plan-story-*.yaml`, missing `acceptance-traceability.yaml` rows
+derived from file plans, or empty `evidence.file_plan_owner` rows are expected
+before Phase 4 and must not block Gate #3 by themselves. They become blocking
+before Gate #4. They are Gate #3 blockers only when the missing owner reflects a
+missing architecture decision, unclear implementation boundary, or absent
+test-strategy proof path.
 
 Fix all blocking findings before Gate #3. If a blocking finding reveals product
 ambiguity, return to Phase 1 and interview the user. If it reveals architecture
@@ -1503,10 +1667,13 @@ fi
 ```
 
 The final approval gate cannot be shown until validation passes. Validation must confirm:
-- no `__pycache__`, `.py`, `.pyc`, `.DS_Store`, or other non-markdown/non-YAML artifacts exist in the epic docs folder
+- macOS `.DS_Store` files are ignored and removed by validation
+- no `__pycache__`, `.py`, `.pyc`, or other non-markdown/non-YAML artifacts exist in the epic docs folder
 - all required epic files exist
 - `refinement-inconsistencies.yaml` exists and has no `open` or
   `user_question` items
+- `architecture-claims.yaml` exists and passes architecture contract validation
+- `architecture-contract-self-check.yaml` exists and passes architecture contract validation
 - `details.md` frontmatter is present and contains at least `epic_id`, `title`, and `status`
 - `details.md` includes `## Intent Alignment` and has no open intent questions
 - `adr.md` uses global ADR numbering and includes the required template fields
@@ -1605,6 +1772,8 @@ Artifacts created:
 │   ├── pdr.md
 │   ├── test-strategy.md
 │   ├── refinement-inconsistencies.yaml
+│   ├── architecture-claims.yaml
+│   ├── architecture-contract-self-check.yaml
 │   ├── refinement-review.md
 │   ├── file-plan-story-00.yaml   (only if scaffolding exists; may include contracts.py)
 │   ├── file-plan-story-01.yaml
@@ -1639,7 +1808,7 @@ If session compacts mid-refinement:
    - `refinement-inconsistencies.yaml` has no open or user-question items → no known unresolved ambiguity
    - `acceptance-criteria.md` exists → Phase 1 complete
    - `architecture.md` exists → Phase 2 complete
-   - `docs/architecture/13-specs/api/{epic-id}-*` exists → Phase 3 complete
+   - `architecture-claims.yaml`, `architecture-contract-self-check.yaml`, and `docs/architecture/13-specs/api/{epic-id}-*` exist → Phase 3 complete
    - `refinement-review.md` exists with `Approved for Gate #3` → Phase 3.5 complete
    - `file-plan-story-*.yaml` exists → Phase 4 complete
 3. Resume from appropriate phase

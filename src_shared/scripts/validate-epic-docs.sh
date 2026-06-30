@@ -25,11 +25,16 @@ REQUIRED_FILES=(
     "pdr.md"
     "test-strategy.md"
     "refinement-inconsistencies.yaml"
+    "architecture-claims.yaml"
+    "architecture-contract-self-check.yaml"
+)
+
+IGNORED_NAMES=(
+    ".DS_Store"
 )
 
 FORBIDDEN_NAMES=(
     "__pycache__"
-    ".DS_Store"
 )
 
 FORBIDDEN_EXTENSIONS=(
@@ -74,6 +79,10 @@ validate_details_intent_alignment() {
 validate_folder_hygiene() {
     local path
 
+    for name in "${IGNORED_NAMES[@]}"; do
+        find "$EPIC_DIR" -name "$name" -delete
+    done
+
     for name in "${FORBIDDEN_NAMES[@]}"; do
         path="$(find "$EPIC_DIR" -name "$name" -print -quit)"
         [[ -z "$path" ]] || fail "forbidden artifact in epic folder: ${path}"
@@ -84,7 +93,7 @@ validate_folder_hygiene() {
         [[ -z "$path" ]] || fail "forbidden source/cache artifact in epic folder: ${path}"
     done
 
-    path="$(find "$EPIC_DIR" -mindepth 1 -type f ! \( -name "*.md" -o -name "*.yaml" \) -print -quit)"
+    path="$(find "$EPIC_DIR" -mindepth 1 -type f ! \( -name "*.md" -o -name "*.yaml" -o -name ".DS_Store" \) -print -quit)"
     [[ -z "$path" ]] || fail "epic folder may contain only .md and .yaml files: ${path}"
 }
 
@@ -197,5 +206,8 @@ validate_adr "${EPIC_DIR}/adr.md"
 validate_acceptance_traceability "${EPIC_DIR}/acceptance-traceability.yaml"
 validate_architecture_readiness_matrix "${EPIC_DIR}/architecture-readiness-matrix.yaml"
 validate_refinement_inconsistencies "${EPIC_DIR}/refinement-inconsistencies.yaml"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"${SCRIPT_DIR}/validate-architecture-contracts.sh" "$EPIC_DIR"
 
 echo "Epic documentation validation passed: ${EPIC_DIR}"

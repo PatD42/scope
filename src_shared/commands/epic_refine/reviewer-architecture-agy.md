@@ -33,6 +33,8 @@ Before writing the review, inspect these artifacts if they exist:
 - `docs/epics/{{EPIC_DIR}}/adr.md`
 - `docs/epics/{{EPIC_DIR}}/pdr.md`
 - `docs/epics/{{EPIC_DIR}}/test-strategy.md`
+- `docs/epics/{{EPIC_DIR}}/architecture-claims.yaml`
+- `docs/epics/{{EPIC_DIR}}/architecture-contract-self-check.yaml`
 - `docs/epics/{{EPIC_DIR}}/architecture-readiness-matrix.yaml`
 - `docs/architecture/13-specs/api/{{EPIC_ID}}-*.yaml`
 - `docs/architecture/13-specs/schemas/domain/{{EPIC_ID}}-*.json`
@@ -50,12 +52,13 @@ Be constructively adversarial. Your goal is not to summarize the epic or reward
 well-written documentation. Your goal is to find the smallest concrete
 architecture/spec mismatch that would force Phase 4 to invent behavior.
 
-Start from `architecture-readiness-matrix.yaml`, the latest
-`readiness-preflight.md`, and the latest `pre-review-hardening.md`. Validate
-whether the matrix rows are complete, whether the cited evidence actually
-supports each row, whether the preflight missed a contract gap, and whether
+Start from `architecture-claims.yaml`,
+`architecture-contract-self-check.yaml`, the latest `readiness-preflight.md`,
+and the latest `pre-review-hardening.md`. Validate whether the architect
+extracted the right enforceable claims, whether generated contracts actually
+enforce them, whether producer/consumer compatibility is possible, and whether
 hardening searched sibling surfaces for repeated versions of the same defect
-pattern. Do not spend review budget reconstructing a matrix the orchestrator
+pattern. Do not spend review budget reconstructing artifacts the orchestrator
 already generated.
 
 Avoid noise:
@@ -69,7 +72,10 @@ Avoid noise:
 
 Do not approve merely because the docs are coherent at a high level. Approval
 requires evidence that the generated contracts actually enforce the acceptance
-criteria.
+criteria and that the test strategy is sufficient for Phase 4. File-plan
+ownership is created during Phase 4 and is not a Gate #3 blocker unless its
+absence reflects an unresolved architecture boundary or missing test-strategy
+proof path.
 
 ## Mandatory Adversarial Checks
 
@@ -78,31 +84,48 @@ Before writing the review, explicitly try to disprove each of these claims:
 1. Every acceptance criterion that promises persistence has a matching JSON
    schema, API surface if applicable, and PostgreSQL DDL or explicit migration
    plan.
-2. Every `CREATE TABLE IF NOT EXISTS` in this epic is safe against inherited
+2. Every enforceable AC/PDR/ADR claim appears in `architecture-claims.yaml`.
+3. Every claims-ledger row appears in `architecture-contract-self-check.yaml`
+   with enforcement mechanism and negative case evidence.
+4. Every generated schema/report/artifact has a producer and consumer.
+5. Every API response schema can be produced by its documented endpoint,
+   command, script, worker, or service.
+6. Aggregate vs per-item behavior is explicit for multi-component, multi-row,
+   multi-job, multi-file, or multi-attempt operations.
+7. Aggregate success/status/pass outcomes cannot contradict child evidence,
+   blocking errors, failed rows, skipped required children, or incomplete
+   split-runtime outputs. If JSON Schema cannot express the invariant, a
+   validator contract and negative test probes must be specified.
+8. Split-runtime workflows model partial outputs and final assembly separately
+   when one runtime cannot produce all final evidence.
+9. Cross-surface rules such as resumability, idempotency, supersession, exact
+   coverage, fail-closed reasons, conditional required fields, output ownership,
+   and report completeness were expanded across sibling surfaces.
+10. Every `CREATE TABLE IF NOT EXISTS` in this epic is safe against inherited
    tables from earlier analyzer v2 epics. If an earlier epic already creates the
    table, the new epic must use additive `ALTER TABLE ... ADD COLUMN IF NOT
    EXISTS` statements for new fields.
-3. Every field required by the architecture is required by the generated
+11. Every field required by the architecture is required by the generated
    OpenAPI and JSON Schema unless the docs explicitly define it as nullable or
    optional.
-4. Every nullable or optional generated-schema field is compatible with the SQL
+12. Every nullable or optional generated-schema field is compatible with the SQL
    constraints. Look especially for JSON schema optional fields backed by SQL
    `NOT NULL` columns.
-5. Every fail-closed rule has a concrete error code, response/status behavior,
+13. Every fail-closed rule has a concrete error code, response/status behavior,
    and persistence behavior.
-6. Every routing, corpus, source-membership, ontology, and review-required path
+14. Every routing, corpus, source-membership, ontology, and review-required path
    is auditable after the fact.
-7. Any inherited schema or DDL from regAssist-049 through regAssist-052 that is
+15. Any inherited schema or DDL from regAssist-049 through regAssist-052 that is
    extended by this epic is compatible with the new contract.
-8. Every matrix row with `requires.api`, `requires.json_schema`,
-   `requires.sql`, `requires.error_contract`, `requires.test_strategy`, or
-   `requires.file_plan_owner` has cited evidence that exists and matches the
-   requirement.
-9. Every destructive cleanup, replay, idempotency, supersession, or attempt
+16. Every matrix row with `requires.api`, `requires.json_schema`,
+   `requires.sql`, `requires.error_contract`, or `requires.test_strategy` has
+   cited evidence that exists and matches the requirement. Rows with
+   `requires.file_plan_owner` may remain Gate #4 pending before Phase 4.
+17. Every destructive cleanup, replay, idempotency, supersession, or attempt
    ownership promise has ownership-matrix evidence.
-10. The latest `readiness-preflight.md` has no unresolved required-artifact,
+18. The latest `readiness-preflight.md` has no unresolved required-artifact,
    parse, matrix, or obvious contract failures.
-11. The latest `pre-review-hardening.md` proves the orchestrator checked for
+19. The latest `pre-review-hardening.md` proves the orchestrator checked for
     sibling failures across AC/API/schema/DDL/tests, destructive ownership,
     current-state derivation, promised endpoints, existing data families, and
     implementer-invention risk.
@@ -126,6 +149,9 @@ Classify findings as `BLOCKING` when Gate #3 must not proceed:
   coverage floor.
 
 Use `NON-BLOCKING` for useful improvements that do not prevent Gate #3.
+Missing `file-plan-story-*.yaml` or empty `evidence.file_plan_owner` is
+non-blocking before Gate #3 when architecture, generated contracts, and
+test-strategy evidence are complete. It becomes blocking before Gate #4.
 
 ## Mandatory Evidence Rules
 

@@ -60,6 +60,7 @@ copy_overlay() {
     if [[ -d "$src" ]]; then
         mkdir -p "$dest"
         cp -R "$src/." "$dest/"
+        find "$dest" -name ".DS_Store" -delete
     fi
 }
 

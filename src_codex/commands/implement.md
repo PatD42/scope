@@ -143,6 +143,7 @@ if [ -n "$EPIC_FILES" ]; then
 fi
 
 # Create worktree for implementation
+PROJECT_ROOT_ABS="$(pwd)"
 WORKTREE_DIR="./wip/${EPIC_ID}"
 BRANCH_NAME="epic/${EPIC_ID}"
 
@@ -156,6 +157,21 @@ fi
 # All subsequent work happens in the worktree
 cd "$WORKTREE_DIR"
 WORKTREE_DIR_ABS="$(pwd)"
+
+# Keep local credentials visible from the implementation worktree without
+# copying secrets. Do not overwrite an existing worktree-specific .env.
+if [ ! -e ".env" ]; then
+  if [ -f "${PROJECT_ROOT_ABS}/.env" ]; then
+    ln -s "${PROJECT_ROOT_ABS}/.env" ".env"
+    echo "Linked worktree .env -> ${PROJECT_ROOT_ABS}/.env"
+  else
+    echo "NOTICE: project root has no .env to link into the worktree."
+  fi
+elif [ -L ".env" ]; then
+  echo "Worktree .env symlink already exists: $(readlink .env)"
+else
+  echo "NOTICE: worktree already has a .env file; leaving it unchanged."
+fi
 
 cat > AGENTS.md <<EOF
 # Epic Worktree Instructions
@@ -185,9 +201,8 @@ Before creating any tasks, verify the implementation environment inside the work
 
 ```bash
 # 1. Env visibility
-if [ ! -f ".env" ] && [ -f "../../.env" ]; then
-  echo "NOTICE: worktree has no .env. Create a symlink if the epic needs live credentials:"
-  echo "  ln -s ../../.env .env"
+if [ ! -e ".env" ]; then
+  echo "NOTICE: worktree has no .env. The worktree setup should link project-root .env automatically when present."
 fi
 
 # 2. Schema / migration readiness

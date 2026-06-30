@@ -246,6 +246,30 @@ spec tree instead: `docs/architecture/backend/13-specs/` or
 `docs/architecture/frontend/13-specs/`. Do not create `14-schema`; schemas live
 under `13-specs/schemas/`.
 
+### Claims Ledger Before Specs
+
+Before generating OpenAPI, JSON Schema, SQL, or error contracts, create
+`docs/epics/{epic-dir}/architecture-claims.yaml`.
+
+The claims ledger is the contract source. Extract every enforceable claim from
+accepted ACs, PDRs, ADRs, and architecture decisions before writing specs.
+Include claims that imply required fields, exact counts, thresholds,
+conditional behavior, fail-closed behavior, idempotency, resumability,
+supersession, ownership, generated outputs, metrics, reports, operator-visible
+state, or split-runtime constraints.
+
+For each claim, identify expected contract surfaces and the intended enforcement
+shape. If the correct enforcement is unclear, mark the claim `user_question` and
+return to the owning phase before writing specs. Do not generate contracts from
+ambiguous prose.
+
+Keep rows compact and enforceable. A good row names one promise, its source, the
+surfaces it must affect, and the enforcement shape. Example: an AC saying
+"export must fail closed when required invoice lines are missing" becomes one
+claim tied to the export API, result schema, persistence surface, error code,
+test strategy, and a fail-closed invariant. Do not create separate rows for
+minor implementation details unless they are independent promises.
+
 ### Contract Self-Gate Before Review
 
 Before handing specs to Phase 3.5 review, create
@@ -274,6 +298,10 @@ contract-valid payload/state could violate an accepted requirement, the row is
 not clear from approved requirements, return to the Product Owner or earlier
 architecture phase instead of guessing.
 
+The self-check should prove each claims-ledger row with one concise row that
+names the actual contract surfaces, mechanism, and negative case. It is not a
+second architecture document; it is a focused pre-review gate.
+
 Also run these structural checks before external review:
 
 - Architecture entity inventory: every data model, report, manifest, artifact,
@@ -287,6 +315,12 @@ Also run these structural checks before external review:
   jobs, records, files, attempts, or outputs, the contract states whether the
   response is a single result, array, keyed map, aggregate report, or per-item
   manifest.
+- Aggregate outcome derivation: if a report, response, or manifest has a
+  top-level `passed`, `status`, `ready`, `complete`, `approved`, or similar
+  aggregate outcome, the contract states how it is derived from child evidence,
+  blocking errors, failed rows, skipped required children, partial outputs, and
+  split-runtime inputs. Aggregate success must not be able to contradict child
+  failure evidence.
 - Split runtime compatibility: if environment isolation means one command cannot
   produce all final evidence, model partial outputs and final assembly
   separately instead of requiring impossible fields from one producer.
@@ -295,6 +329,18 @@ Also run these structural checks before external review:
   reasons, conditional required fields, output ownership, and report completeness
   must be applied consistently across endpoints, commands, reports, manifests,
   and persistence surfaces.
+
+When the validation script is installed, run:
+
+```bash
+plugins/scope/scripts/validate-architecture-contracts.sh docs/epics/{epic-dir}
+```
+
+or the Claude-installed equivalent:
+
+```bash
+.claude/commands/scripts/validate-architecture-contracts.sh docs/epics/{epic-dir}
+```
 
 ---
 
