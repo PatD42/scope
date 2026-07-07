@@ -57,7 +57,7 @@ Do not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codeg
 - `docs/epics/{{EPIC_DIR}}/test-strategy.md`
 - `{{CHANGED_FILES_PATH}}`
 - `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml`
-- changed implementation files referenced by the file plans
+- changed implementation files referenced by boundary-plan binding obligations, implementation evidence, traceability, or changed-files manifest
 
 ## Review Focus
 
@@ -65,7 +65,7 @@ Focus on cross-artifact mechanical consistency and executable evidence:
 
 - issues not already isolated by the reviewer packet
 - acceptance criteria to traceability matrix to audit verification matrix
-- file-plan promises to changed source and tests
+- binding boundary-plan obligations to changed source and tests
 - API/OpenAPI/schema/DDL/config/script/runbook consistency
 - runtime-required rows that rely on summaries instead of raw passing evidence
 - promised outputs that lack non-zero or threshold checks

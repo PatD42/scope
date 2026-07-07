@@ -243,11 +243,11 @@ If no lessons detected: "No lessons identified. Moving on."
 
 Create `{EPIC_DOC_DIR}/implementation-summary.md`:
 
-#### 4.1: Diff Plan vs. Reality
+#### 4.1: Diff Boundary Plan vs. Reality
 
 ```python
-# Load file plans
-file_plans = Glob(f"{EPIC_DOC_DIR}/file-plan-story-*.yaml")
+# Load implementation boundary plans
+boundary_plans = Glob(f"{EPIC_DOC_DIR}/file-plan-story-*.yaml")
 
 # Load agent summaries for actual changes
 summaries = Read(SUMMARIES)
@@ -257,9 +257,9 @@ git_changes = Bash(f"cd '{WORKTREE_DIR}' && git log --name-only --pretty=format:
 ```
 
 Compare:
-- **Planned files** (from file plans) vs. **actual files changed** (from git/summaries)
+- **Binding obligations and candidate files** (from boundary plans) vs. **actual files changed** (from git/summaries)
 - **Planned stories** vs. **completed stories** (from agent summaries)
-- **Unplanned modifications** (from agent summaries — `unplanned_modifications` field)
+- **Developer-discovered files** (from agent summaries — `developer_discovered_files` field)
 
 #### 4.2: Write Summary
 

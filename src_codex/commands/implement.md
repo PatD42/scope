@@ -33,7 +33,7 @@ Do not let the Developer invent missing decisions during implementation:
 
 Do not report the epic complete when code merely exists. The epic is complete only when:
 - All planned stories are implemented
-- All file-plan deliverables are executed, not just written
+- All binding implementation boundary plan obligations are satisfied, not just written
 - All epic tests pass (unit, integration, e2e when the epic calls for them)
 - One-time operational tasks are run and validated when the epic includes them
   (examples: migrations, backfills, seed/bootstrap scripts, reindex jobs, onboarding runs)
@@ -126,7 +126,7 @@ fi
 
 # Verify prerequisites
 if [ ! -f "docs/epics/${EPIC_DIR}/file-plan-story-01.yaml" ]; then
-  echo "No file plans found. Run /epic_refine first."
+  echo "No implementation boundary plans found. Run /epic_refine first."
   exit 1
 fi
 
@@ -270,9 +270,9 @@ mcp_context = ""
 #
 # Use CodeGraph output as discovery context only. Implementation decisions,
 # findings, and task completion still require direct source/test evidence.
-file_plans = Glob(f"docs/epics/{EPIC_DIR}/file-plan-story-*.yaml")
-planned_files = extract_file_paths(file_plans)
-print(f"CodeGraph is recommended for dependency context across {len(planned_files)} planned files. Prefer MCP when available; use CLI fallback otherwise.")
+boundary_plans = Glob(f"docs/epics/{EPIC_DIR}/file-plan-story-*.yaml")
+candidate_files = extract_candidate_file_paths(boundary_plans)
+print(f"CodeGraph is recommended for dependency context across {len(candidate_files)} candidate files. Prefer MCP when available; use CLI fallback otherwise.")
 
 # If Obsidian MCP is available, query for relevant lessons and decisions
 if mcp_available("obsidian"):
@@ -285,15 +285,15 @@ if mcp_available("obsidian"):
 
 ### Step 1: Discover Stories
 
-Find all `file-plan-story-*.yaml` files in the epic directory and sort them to ensure story-00, story-01, story-02... order.
+Find all `file-plan-story-*.yaml` implementation boundary plans in the epic directory and sort them to ensure story-00, story-01, story-02... order.
 
-For each file plan:
+For each boundary plan:
 1. Read the YAML content to extract `story_id` and `story_title`
 2. Extract the story number from the filename (e.g., `file-plan-story-02.yaml` → `"02"`)
 3. Look for a `# Dependencies: Stories 01a, 01b, 02` comment line in the file and parse the referenced story numbers into a list (e.g., `["01a", "01b", "02"]`)
 4. Record whether this is a scaffolding story (number `"00"`)
 
-Build a list of story objects with: `number`, `story_id`, `story_title`, `file_plan_path`, `dependencies`, `is_scaffolding`.
+Build a list of story objects with: `number`, `story_id`, `story_title`, `boundary_plan_path`, `dependencies`, `is_scaffolding`.
 
 Check if the first story is Story 0 (scaffolding).
 
@@ -314,13 +314,13 @@ epic_id: {epic_id}
 phase: scaffolding
 story_id: {story_0['story_id']}
 story_title: {story_0['story_title']}
-file_plan: {story_0['file_plan_path']}
+boundary_plan: {story_0['boundary_plan_path']}
 terminate_upon_completion: no
 
 Instructions:
-- Read the file plan at {story_0['file_plan_path']}
+- Read the implementation boundary plan at {story_0['boundary_plan_path']}
 - Create all directories, modules, config files, and base classes listed
-- If contracts.py is listed in the file plan, create it with Protocol classes
+- If contracts.py is required by the boundary plan, create it with Protocol classes
   that define the interfaces between components. Verify with:
   `python -c "from <module>.contracts import *"` and `mypy --strict contracts.py`
 - Do NOT implement business logic — only scaffolding
@@ -373,11 +373,11 @@ epic_id: {epic_id}
 phase: implementation
 story_id: {story['story_id']}
 story_title: {story['story_title']}
-file_plan: {story['file_plan_path']}
+boundary_plan: {story['boundary_plan_path']}
 terminate_upon_completion: no
 
 Context to load:
-- Read the file plan at {story['file_plan_path']}
+- Read the implementation boundary plan at {story['boundary_plan_path']}
 - Read acceptance criteria from docs/epics/{epic_dir}/acceptance-criteria.md
 - Read acceptance traceability from docs/epics/{epic_dir}/acceptance-traceability.yaml
 - Read architecture from docs/epics/{epic_dir}/architecture.md
@@ -395,16 +395,24 @@ Instructions:
   use them as type annotations for parameters, return types, and dependency
   injection. The contracts define the agreed interfaces — implementations MUST
   satisfy them. Run `mypy --strict` on your files to verify compliance.
-- Implement PRODUCTION-READY code that fulfills the file plan intent
-- Follow the intent documentation in the file plan — intent is the source of truth
-- Match the public_interface / signature_changes exactly
+- Before writing code, produce a concise implementation strategy and include it
+  in the agent summary and `implementation-evidence.yaml`: current code paths
+  inspected, selected approach, binding obligations, candidate files accepted or
+  skipped, developer-discovered files, and planned proof commands.
+- Implement PRODUCTION-READY code that satisfies the boundary plan's binding
+  obligations: `required_contracts`, `required_touchpoints`,
+  `forbidden_changes`, and `proof_obligations`.
+- Treat `candidate_files` as advisory investigation hints, not mandatory edit
+  targets. If a relevant candidate is skipped, record why and what source
+  evidence led to the chosen path.
+- Match required contract signatures and required touchpoint behavior exactly.
 - Write tests (unit + integration as appropriate) for the code you implement
 - Update docs/epics/{epic_dir}/acceptance-traceability.yaml for this story:
   add actual implementation files, actual test functions/classes, runtime
   evidence commands/results, and set each affected row to implemented, tested,
   verified, blocked, or deferred.
 - Before marking the story complete, write an acceptance-proof summary for every
-  affected acceptance criterion and file-plan promise. Include:
+  affected acceptance criterion and boundary-plan obligation. Include:
   promise verified, traceability row ID(s), verification method, real runtime path
   used yes/no, representative data used yes/no, observable result, and any
   remaining unproven work.
@@ -415,15 +423,15 @@ Instructions:
   available there, and downstream output/state is produced.
 - If the story promises output, persisted rows, generated files, extracted
   items, metrics, events, or side effects, run a representative check showing
-  non-zero output unless the acceptance criteria or file plan explicitly says
+  non-zero output unless the acceptance criteria or boundary plan explicitly says
   zero is valid. If a threshold is named, measure it.
 - Use `complete` only when the promised value is observed through the intended
   path. If proof is partial, use a non-complete status such as
   `implementation_complete_unverified`, `unit_verified`, `integration_verified`,
   `runtime_verified`, or `blocked_missing_runtime_input`.
-- If the story/file plan includes an operational deliverable (migration, bootstrap,
+- If the story/boundary plan includes an operational deliverable (migration, bootstrap,
   backfill, seed, sync, onboarding run, reindex, CLI execution), execute it and
-  validate the resulting system state unless the file plan explicitly says dry-run only
+  validate the resulting system state unless the boundary plan explicitly says dry-run only
 - If any affected `acceptance-traceability.yaml` row has
   `runtime_evidence.required: true`, create or update the smoke checker that
   exercises the real local/cloud dependency or end-to-end value path, run it,
@@ -432,7 +440,7 @@ Instructions:
 - If contracts.py exists, include tests that verify implementations satisfy the
   Protocol interfaces. Import Protocol types and assert structural compatibility.
 - Run all tests after implementation — all must pass
-- CRITICAL: If the file plan intent describes external I/O (API calls, HTTP
+- CRITICAL: If a boundary-plan obligation describes external I/O (API calls, HTTP
   requests, database operations, file system writes), the implementation MUST
   contain real I/O code — not hardcoded return values or placeholder stubs.
   If a dependency is unavailable for unit testing, implement the real code
@@ -441,7 +449,7 @@ Instructions:
 
 Decision tracking:
 - If you make an unplanned architectural choice (different pattern, different
-  library, different approach than the file plan), flag it in your agent summary
+  library, different approach than the boundary plan), flag it in your agent summary
   under concerns with type: "decision_candidate" and explain why.
 - If you deviate from a system ADR, flag it as type: "adr_deviation".
 - These will be surfaced by /wrap_epic for formal recording.
@@ -504,9 +512,9 @@ Task(
     Process dev tasks ONE AT A TIME in dependency order:
     1. Check TaskList for the lowest-ID dev task that is pending and has NO blockedBy
     2. If none available, STOP — you will be re-launched when tasks unblock
-    3. Read the task description — it contains file plan path, context to load, and constraints
+    3. Read the task description — it contains boundary plan path, context to load, and constraints
     4. Implement production-ready code AND write tests
-    5. Execute any operational deliverables required by the story/file plan and verify the real side effects
+    5. Execute any operational deliverables required by the story/boundary plan and verify the real side effects
     6. For every affected acceptance-traceability row with runtime_evidence.required=true,
        create/update the live smoke checker, run it against the intended local/cloud
        dependency, and record command/result/evidence before marking the story complete.
@@ -558,10 +566,10 @@ When all tasks are done (all marked `completed` in TaskList):
 
 Run ruff and vulture across ALL files created/modified in this epic. Developer already linted per-story, but this catches cross-story issues (e.g., an import added in story 1 that becomes unused after story 3 refactors it).
 
-1. Collect all production file paths from every file plan (`files_to_create` + `files_to_modify`)
-2. Run `ruff check --fix` and `ruff format` on all collected files (auto-fix what you can)
-3. Run `vulture` on all collected files to detect dead code
-4. If `contracts.py` exists in the epic source, run `mypy --strict` on all collected files
+1. Collect production file paths from implementation evidence, changed files, and boundary plan `candidate_files`/required touchpoint paths where present.
+2. Run `ruff check --fix` and `ruff format` on all collected Python files (auto-fix what you can)
+3. Run `vulture` on collected production Python files to detect dead code
+4. If `contracts.py` exists in the epic source, run `mypy --strict` on all collected Python files
 5. Re-run ruff and vulture to check what remains unfixed
 6. If any remaining violations exist, write them to `docs/epics/{epic-dir}/lint_findings.yaml` as a YAML dict with keys: `ruff_violations`, `vulture_dead_code`, `mypy_errors`
 7. Re-run all tests to confirm auto-fixes didn't break anything
@@ -584,7 +592,7 @@ Examples:
   `runtime_evidence.required: true`
 
 Procedure:
-1. Scan all file plans for operational verbs: `bootstrap`, `backfill`, `migrate`, `seed`, `sync`, `reindex`, `onboard`, `rollout`
+1. Scan all boundary plans for operational proof obligations and verbs: `bootstrap`, `backfill`, `migrate`, `seed`, `sync`, `reindex`, `onboard`, `rollout`
 2. Scan `acceptance-traceability.yaml` for all rows where `runtime_evidence.required: true`
 3. For every runtime-required row, verify a concrete smoke checker/command exists and is wired into the project test or smoke command structure
 4. Build an execution checklist of operational deliverables and runtime-required smoke checkers
@@ -659,7 +667,7 @@ Rules:
   `blocked_rows` with the external blocker already reported to the user.
 - Every promised output, row, file, metric, event, side effect, or user-visible
   behavior must have representative proof or an explicit statement that zero/no-op
-  is valid by acceptance criteria or file plan.
+  is valid by acceptance criteria or boundary plan.
 - `audit_ready` must be false if any required/high-risk row still lacks proof.
 
 ### Step 4e: Build Pre-Audit Verification Matrix
@@ -719,7 +727,7 @@ If audit status is PASS with no findings → skip to Step 8.
 
 ### Step 6: Create Fix Stories from Audit
 
-Convert ALL audit findings (critical, major, minor) into additional stories with file plans. The architect agent handles this.
+Convert ALL audit findings (critical, major, minor) into additional stories with implementation boundary plans. The architect agent handles this.
 
 ```python
 if not audit.has_findings:
@@ -749,12 +757,12 @@ Instructions:
   the design — do NOT update docs to match divergent code (that launders
   the divergence and makes drift invisible)
 - Number fix stories continuing from {last_story_num} (e.g., story-{next_num}, story-{next_num+1}...)
-- For each fix story, create a file-plan-story-NN.yaml with:
-  - files_to_modify (with intent + signature_changes if applicable)
-  - files_to_create (if new test files needed)
-  - Dependencies on existing stories (most fixes depend on the story they're fixing)
+- For each fix story, create a file-plan-story-NN.yaml implementation boundary plan with:
+  - required_contracts, required_touchpoints, forbidden_changes, and proof_obligations
+  - candidate_files as advisory investigation hints only
+  - dependencies on existing stories (most fixes depend on the story they're fixing)
 - Write fix stories to docs/epics/{epic_dir}/acceptance-criteria.md (append)
-- Write file plans to docs/epics/{epic_dir}/file-plan-story-NN.yaml
+- Write boundary plans to docs/epics/{epic_dir}/file-plan-story-NN.yaml
 """,
         activeForm="Creating fix stories from audit"
     )
@@ -768,12 +776,12 @@ Instructions:
 Once the architect creates fix stories, run them through the developer pipeline (no SDET).
 
 ```python
-    # Discover new fix stories (file plans created by architect in Step 6)
-    new_file_plans = Glob(f"docs/epics/{epic_dir}/file-plan-story-*.yaml")
-    new_file_plans.sort()
+    # Discover new fix stories (boundary plans created by architect in Step 6)
+    new_boundary_plans = Glob(f"docs/epics/{epic_dir}/file-plan-story-*.yaml")
+    new_boundary_plans.sort()
 
     fix_stories = []
-    for plan_path in new_file_plans:
+    for plan_path in new_boundary_plans:
         story_num = extract_story_number(plan_path)
         if int(story_num) > int(last_story_num):  # Only new stories
             plan_content = Read(plan_path)
@@ -785,7 +793,7 @@ Once the architect creates fix stories, run them through the developer pipeline 
                 "number": story_num,
                 "story_id": plan["story_id"],
                 "story_title": plan["story_title"],
-                "file_plan_path": plan_path,
+                "boundary_plan_path": plan_path,
                 "dependencies": story_deps,
                 "is_scaffolding": False
             })
@@ -805,11 +813,11 @@ epic_id: {epic_id}
 phase: implementation
 story_id: {story['story_id']}
 story_title: {story['story_title']}
-file_plan: {story['file_plan_path']}
+boundary_plan: {story['boundary_plan_path']}
 terminate_upon_completion: no
 
 Context to load:
-- Read the file plan at {story['file_plan_path']}
+- Read the implementation boundary plan at {story['boundary_plan_path']}
 - Read the audit report at docs/epics/{epic_dir}/epic_audit.md for context
 - Read acceptance traceability from docs/epics/{epic_dir}/acceptance-traceability.yaml
 - Read system ADRs from docs/architecture/09-adr-summary.md
@@ -818,7 +826,7 @@ Context to load:
 Instructions:
 - This is a FIX story from audit findings
 - Implement PRODUCTION-READY code that fixes the audit finding
-- Follow the intent documentation in the file plan — intent is the source of truth
+- Satisfy binding boundary-plan obligations and record implementation strategy/evidence
 - If contracts.py exists, ensure fixes maintain Protocol compliance. Import
   Protocol types for type annotations and run `mypy --strict` to verify.
 - If this is a documentation update story, update files in docs/architecture/ to
@@ -903,14 +911,14 @@ Before running tests, verify `docs/epics/{epic_dir}/acceptance-traceability.yaml
 - no row remains `planned` unless it is explicitly out of scope or deferred with a reason
 
 ```python
-# Collect ALL test files from ALL file plans (original + fix)
-all_file_plans = Glob(f"docs/epics/{epic_dir}/file-plan-story-*.yaml")
+# Collect ALL test files from implementation evidence and acceptance traceability
+all_boundary_plans = Glob(f"docs/epics/{epic_dir}/file-plan-story-*.yaml")
 test_files = []
-for plan_path in all_file_plans:
-    plan = read_yaml(plan_path)
-    for f in plan.get("files_to_create", []) + plan.get("files_to_modify", []):
-        if "/tests/" in f["path"] or f["path"].endswith(".test.ts") or f["path"].endswith("_test.py"):
-            test_files.append(f["path"])
+evidence = read_yaml(f"docs/epics/{epic_dir}/implementation-evidence.yaml")
+traceability = read_yaml(f"docs/epics/{epic_dir}/acceptance-traceability.yaml")
+test_files.extend(extract_test_paths(evidence))
+test_files.extend(extract_test_paths(traceability))
+test_files = sorted(set(test_files))
 
 # Run all epic tests
 Bash(f"run_tests {' '.join(test_files)}")  # Adapt to project test runner
@@ -987,7 +995,7 @@ Before declaring the epic complete:
      `unit_verified`, `integration_verified`, `runtime_verified`, or
      `blocked_missing_runtime_input`
    - per-story acceptance-proof summary mapping each acceptance criterion and
-     file-plan promise to verification method, runtime-path yes/no,
+     boundary-plan obligation to verification method, runtime-path yes/no,
      representative-data yes/no, observable result, and remaining unproven work
    - tests run and results
    - operational deliverables executed
@@ -1075,8 +1083,8 @@ Stories 01-N → Audit → Fix stories (if needed) → All epic tests → Final 
 
 **If developer can't pass tests:**
 - Developer returns `status: failure` with details
-- Common cause: file plan signatures don't match actual requirements
-- Fix: update file plan, re-run developer for that story
+- Common cause: boundary-plan contracts or proof obligations don't match actual requirements
+- Fix: return to refinement, update the boundary plan, re-run developer for that story
 
 ---
 

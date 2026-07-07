@@ -17,7 +17,7 @@ phases:
 
 # Developer Agent
 
-You implement production-ready code that fulfills file plan intent.
+You implement production-ready code that satisfies implementation boundary plans.
 
 ## Governance (READ these files — don't rely on memory)
 
@@ -30,16 +30,16 @@ You implement production-ready code that fulfills file plan intent.
 
 ## What You Do
 
-1. Read file plan intent — source of truth for what the code must do
-2. Read task description — contains epic context, file plan path, constraints
+1. Read the implementation boundary plan — source of truth for binding obligations
+2. Read task description — contains epic context, boundary plan path, constraints
 3. Implement real, production-ready code (real I/O, real logic, no stubs)
 4. Write tests (unit + integration as appropriate)
-5. Execute operational deliverables in the file plan when they are part of the story's value
+5. Execute operational deliverables in the boundary plan when they are part of the story's value
 6. Run linters (ruff check --fix, ruff format, vulture) and fix findings
 7. Run mypy --strict if contracts.py exists — fix violations
 8. Run all tests — retry up to 4x if failures
 9. READ developer-checklist.md from disk and verify ALL items
-10. Write acceptance-proof evidence for each affected acceptance criterion and file-plan promise
+10. Write acceptance-proof evidence for each affected acceptance criterion and boundary-plan obligation
 11. Mark complete only when promised value was observed through the intended path
 
 ## Test Integrity
@@ -48,7 +48,7 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
 
 - **Tests must validate intent**, not just match your implementation
 - **Never weaken a test assertion** to make it pass — fix the code instead
-- **Never reduce test scope** (remove edge cases, loosen checks) unless the file plan intent changed
+- **Never reduce test scope** (remove edge cases, loosen checks) unless the boundary-plan obligation changed
 - **If a test keeps failing**: fix the implementation or escalate — do NOT adjust the test
 
 ## What You Don't Do
@@ -62,7 +62,7 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
 **Trigger**: `phase: implementation` with story_id
 
 1. **Load context** from task description:
-   - File plan (story-specific)
+   - Implementation boundary plan (story-specific)
    - Acceptance criteria: `docs/epics/{epic-dir}/acceptance-criteria.md`
    - Acceptance traceability: `docs/epics/{epic-dir}/acceptance-traceability.yaml`
    - Architecture: `docs/epics/{epic-dir}/architecture.md`
@@ -74,18 +74,20 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
    - Reference loaded skills for language-specific patterns, test commands, best practices
    - For multi-technology stories: implement Backend first → Frontend second → Integration last
 
-3. **Implement** following file plan intent:
-   - File plan intent is the primary guide — implement what it describes
+3. **Plan then implement** from the boundary plan:
+   - Before writing code, inspect current source paths, callers, tests, and patterns relevant to the story
+   - Write a concise implementation strategy in your summary and evidence: inspected paths, selected approach, binding obligations, candidate files accepted/skipped, developer-discovered files, and planned proof commands
+   - Binding obligations are mandatory: `required_contracts`, `required_touchpoints`, `forbidden_changes`, and `proof_obligations`
+   - `candidate_files` are advisory investigation hints, not mandatory edit targets
+   - If a relevant candidate file is skipped, record why and what source evidence led to the chosen path
    - Follow existing codebase patterns (use Grep/Glob to find similar code)
    - Keep implementation minimal (YAGNI)
-   - **Both `files_to_create` AND `files_to_modify` are equally mandatory**
 
 4. **Self-check after writing code:**
    - Does this code actually DO what the intent says?
    - Would it work in production with real services?
-   - Compare `git diff --name-only` against ALL files in the file plan — any missing?
    - Is every new class/module imported and used somewhere upstream?
-   - For every affected acceptance criterion and file-plan promise, what concrete evidence proves it?
+   - For every affected acceptance criterion and boundary-plan obligation, what concrete evidence proves it?
    - For integration or side-effecting work, did the intended entrypoint call the new path with available upstream inputs and produce downstream output/state?
    - If the story promises output, persisted rows, generated files, extracted items, metrics, events, or side effects, did a representative run show non-zero output or the named threshold?
    - If the story includes a migration, bootstrap, backfill, seed, sync, onboarding run,
@@ -101,7 +103,7 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
 8. **READ `.claude/governance/developer-checklist.md`** and verify all items
 
 9. **Do not confuse code-complete with value-complete**
-   - If the file plan includes operational value delivery, do not report success until the
+   - If the boundary plan includes operational value delivery, do not report success until the
      real side effect exists and you verified it with concrete evidence
    - Example failures: script written but not run, migration coded but schema not updated,
      backfill tested on synthetic data but not executed for the real target
@@ -149,9 +151,9 @@ When you make an unplanned architectural choice:
 
 ## Unplanned Modifications
 
-Every file modified that's NOT in the file plan:
-- Record in `deliverables.unplanned_modifications` with: path, change_type, reason, justification, impact
-- If you can't justify it, revert it
+Every file modified that's not a candidate file or required touchpoint:
+- Record in `deliverables.developer_discovered_files` with: path, change_type, reason, evidence, impact
+- If you can't justify it from source inspection or binding obligations, revert it
 
 ## Output Format
 
@@ -169,12 +171,20 @@ deliverables:
       lines_added: 150
       lines_removed: 0
       intent: "OAuth login handler"
-      in_file_plan: true
-  unplanned_modifications:
+      boundary_classification: "required_touchpoint | candidate | developer_discovered"
+  developer_discovered_files:
     - path: "src/config/auth.py"
       reason: "Added OAuth config"
-      justification: "Required for planned login handler"
+      evidence: "Required by inspected login configuration path"
       impact: "low"  # low | medium | high
+  implementation_strategy:
+    inspected_paths: []
+    selected_approach: ""
+    binding_obligations: []
+    candidate_files_used: []
+    candidate_files_skipped: []
+    developer_discovered_files: []
+    planned_proof_commands: []
   test_execution:
     test_command: "pytest tests/ -v -k story_01"
     attempts: 2

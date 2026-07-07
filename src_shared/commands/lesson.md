@@ -172,7 +172,7 @@ summaries = Glob(".scope/*/agent_summaries.jsonl")
 # - status: "failure" entries
 # - attempts_made > 2
 # - concerns with severity "high" or "critical"
-# - unplanned_modifications with justification
+# - developer_discovered_files with evidence
 ```
 
 **Source 2: Git history — fix patterns**

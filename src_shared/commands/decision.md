@@ -243,7 +243,7 @@ Look for signals in commit messages and diffs:
 ```python
 # Check agent summaries for architectural choices
 summaries = Glob(".scope/*/agent_summaries.jsonl")
-# Look for "unplanned_modifications", "concerns", "decisions" fields
+# Look for "developer_discovered_files", "concerns", "decisions" fields
 ```
 
 **Source 3: Code patterns**

@@ -470,7 +470,9 @@ Every epic folder must contain these required artifacts:
 - `pdr.md`
 - `test-strategy.md`
 
-During refinement, the epic folder must also contain one or more `file-plan-story-*.yaml` files before the epic can be marked ready-for-implementation.
+During refinement, the epic folder must also contain one or more
+`file-plan-story-*.yaml` implementation boundary plans before the epic can be
+marked ready-for-implementation.
 
 ### Epic Folder Hygiene
 - Epic folders may contain only markdown and YAML files.
@@ -500,10 +502,10 @@ During refinement, the epic folder must also contain one or more `file-plan-stor
 
 ### acceptance-traceability.yaml
 **Template:** `templates-technical-arc42-c4/epic/acceptance-traceability.yaml`
-**Content:** Machine-readable matrix mapping acceptance criteria and story behaviors to expected implementation files, expected test files, required assertions, runtime evidence, status, and audit notes
+**Content:** Machine-readable matrix mapping acceptance criteria and story behaviors to expected implementation surfaces, expected test files, required assertions, runtime evidence, status, and audit notes
 **Owner:** Architect during refinement, Developer during implementation, Auditor during audit
 **Readers:** Developer, Auditor, Epic Housekeeping
-**Trigger:** Created during epic refinement with file plans; updated during implementation and audit
+**Trigger:** Created during epic refinement with implementation boundary plans; updated during implementation and audit
 
 ### test-strategy.md
 **Template:** `templates-technical-arc42-c4/epic/test-strategy.md`
@@ -532,8 +534,8 @@ During refinement, the epic folder must also contain one or more `file-plan-stor
 
 ### file-plan-story-NN.yaml
 **Template:** None (format defined inline in architect agent, Phase 7)
-**Format:** YAML with epic_id, story_id, story_title, files_to_create/modify, intent, public_interface, signature_changes
-**Intent:** 600-1200 chars total, optimized for semantic RAG
+**Format:** YAML implementation boundary plan with `epic_id`, `story_id`, `story_title`, `depends_on`, `required_contracts`, `required_touchpoints`, `candidate_files`, `forbidden_changes`, and `proof_obligations`
+**Intent:** Defines binding contracts/touchpoints/forbidden changes/proof obligations and advisory candidate files. It is not a mandatory tactical file-edit list.
 **Owner:** Architect
 **Usage:** One file per story in `docs/epics/{epic-dir}/`
 
@@ -732,12 +734,13 @@ On conversation start, read docs/lessons-learned/INDEX.md for project-specific l
 
 **Frontmatter (YAML):** Use for epic metadata only. Keep minimal.
 
-**Intent format (file plans):**
-- 5 parts: WHAT (100 chars), WHY (150-250), RESPONSIBILITIES (150-250), DEPENDENCIES (100-150), RELATED MODULES (100-150)
-- Total: 600-1200 chars
-- Use positive delegation: "Related modules: session encryption via SessionStore"
-- Avoid negation: ~~"Does NOT handle session encryption"~~
-- Optimizes semantic search routing
+**Implementation boundary plan format:**
+- Keep binding obligations compact and concrete.
+- Put required public interfaces under `required_contracts`.
+- Put required integration surfaces under `required_touchpoints`.
+- Put likely-but-advisory paths under `candidate_files`.
+- Put protected surfaces under `forbidden_changes`.
+- Put required test/runtime proof under `proof_obligations`.
 
 **Token efficiency:**
 - Agents load only pages they need (use direct paths from epic docs)

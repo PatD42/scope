@@ -58,7 +58,7 @@ sibling surfaces for repeated versions of the same defect pattern.
 
 Be constructively adversarial. Do not approve merely because the docs are
 coherent at a high level. Approval requires evidence that the generated
-contracts and test strategy are sufficient for Phase 4. File-plan ownership is
+contracts and test strategy are sufficient for Phase 4. Implementation-boundary ownership is
 created during Phase 4 and is not a Gate #3 blocker unless its absence reflects
 an unresolved architecture boundary or missing test-strategy proof path.
 
@@ -69,7 +69,7 @@ Before writing the review, explicitly try to disprove each of these claims:
 1. Every matrix row with `requires.api`, `requires.json_schema`,
    `requires.sql`, `requires.error_contract`, or `requires.test_strategy` has
    cited evidence that exists and matches the requirement. Rows with
-   `requires.file_plan_owner` may remain Gate #4 pending before Phase 4.
+   `requires.implementation_boundary_owner` may remain Gate #4 pending before Phase 4.
 2. Every enforceable AC/PDR/ADR claim appears in `architecture-claims.yaml`.
 3. Every claims-ledger row appears in `architecture-contract-self-check.yaml`
    with enforcement mechanism and negative case evidence.
@@ -96,7 +96,7 @@ Before writing the review, explicitly try to disprove each of these claims:
 13. Every generated API/schema/error/SQL contract is consistent with the
    architecture and ADRs.
 14. Every high-risk matrix row has a test-strategy proof path before Gate #3.
-   File-plan owner evidence is required before Gate #4, not Gate #3.
+   Implementation-boundary owner evidence is required before Gate #4, not Gate #3.
 15. The latest `readiness-preflight.md` has no unresolved required-artifact,
    parse, matrix, or obvious contract failures.
 16. The latest `pre-review-hardening.md` proves the orchestrator checked for
@@ -121,7 +121,7 @@ Classify findings as `BLOCKING` when Gate #3 must not proceed:
   coverage floor.
 
 Use `NON-BLOCKING` for useful improvements that do not prevent Gate #3.
-Missing `file-plan-story-*.yaml` or empty `evidence.file_plan_owner` is
+Missing `file-plan-story-*.yaml` or empty `evidence.implementation_boundary_owner` is
 non-blocking before Gate #3 when architecture, generated contracts, and
 test-strategy evidence are complete. It becomes blocking before Gate #4.
 
@@ -162,7 +162,7 @@ ADVERSARIAL CHECKS PERFORMED:
 | Destructive/replay ownership specified | Pass/Fail/Unverified | {file/section evidence} |
 | Generated contracts match architecture | Pass/Fail/Unverified | {file/section evidence} |
 | High-risk rows have test strategy | Pass/Fail/Unverified | {file/section evidence} |
-| File-plan ownership deferred correctly | Pass/Fail/Unverified | {Gate #4 pending rows or evidence} |
+| Implementation-boundary ownership deferred correctly | Pass/Fail/Unverified | {Gate #4 pending rows or evidence} |
 | Sibling defect patterns expanded | Pass/Fail/Unverified | {file/section evidence} |
 
 BLOCKING FINDINGS:

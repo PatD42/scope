@@ -19,7 +19,7 @@
 - Product Reference: Existing architecture patterns and standards
 
 **Provides Context For (documents that depend on this)**:
-- [{epic-id}: File Plan](link) - Decisions inform file structure
+- [{epic-id}: Implementation Boundary Plans](link) - Decisions inform binding contracts, touchpoints, forbidden changes, and proof obligations
 - Development Phase: Developers implement per decisions
 - [{epic-id}: Implementation Summary](link) - Documents which decisions were followed
 - Future Epics: Decisions may influence future architectural choices

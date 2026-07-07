@@ -9,7 +9,7 @@ Do NOT rely on memory. Do NOT summarize. READ THE FILE every time.
 
 ### Story Completion Proof
 
-- [ ] **Acceptance-proof summary complete** — For every affected acceptance criterion and file-plan promise, your completion summary maps the promise to concrete evidence:
+- [ ] **Acceptance-proof summary complete** — For every affected acceptance criterion and boundary-plan obligation, your completion summary maps the obligation to concrete evidence:
   - Promise verified
   - Traceability row ID(s), when `acceptance-traceability.yaml` exists
   - Verification method
@@ -18,13 +18,13 @@ Do NOT rely on memory. Do NOT summarize. READ THE FILE every time.
   - Observable result
   - Remaining unproven work, if any
 - [ ] **Runtime path proven for integration work** — If the story adds or changes an adapter, mapper, importer, writer, parser, service call, queue/worker path, scheduled job, backfill, migration, CLI, dashboard/API integration, or any side-effecting component, unit tests alone are insufficient. Prove the intended entrypoint calls the component, upstream inputs are available there, and downstream output/state is produced.
-- [ ] **Promised outputs observed** — If the story promises new output, persisted rows, generated files, extracted items, metrics, events, or side effects, provide a representative run showing the output exists. If an acceptance criterion names a threshold, measure it. If zero output is valid, the acceptance criterion or file plan must explicitly say zero is valid.
+- [ ] **Promised outputs observed** — If the story promises new output, persisted rows, generated files, extracted items, metrics, events, or side effects, provide a representative run showing the output exists. If an acceptance criterion names a threshold, measure it. If zero output is valid, the acceptance criterion or boundary plan must explicitly say zero is valid.
 - [ ] **Precise completion status used** — Do not use `complete` unless promised value was observed through the intended path. Use a non-complete status such as `implementation_complete_unverified`, `unit_verified`, `integration_verified`, `runtime_verified`, or `blocked_missing_runtime_input` when proof is partial.
 
 ### Code Quality (see production-code-rules.md for details)
 
-- [ ] **Intent match** — Re-read the file plan intent. Does the code do what it describes, not just what tests check?
-- [ ] **All planned files touched** — Compare your `git diff --name-only` against BOTH `files_to_create` AND `files_to_modify` in the file plan. Missing a file = not done.
+- [ ] **Boundary obligations satisfied** — Re-read the implementation boundary plan. Does the code satisfy every `required_contract`, `required_touchpoint`, `forbidden_change`, and `proof_obligation`, not just what tests check?
+- [ ] **Candidate/developer-discovered files documented** — Record candidate files used, relevant candidate files skipped, and developer-discovered files with source evidence. Candidate files are advisory; unexplained changed files are not allowed.
 - [ ] **No stubs or placeholders** — No TODO, Placeholder, Stub, Mock, pass, NotImplementedError in production code.
 - [ ] **I/O is real** — If intent says "calls/sends/queries", real I/O code exists (not hardcoded returns).
 - [ ] **No hardcoded values** — All configurable values in `.yaml` config, not literals in code.
@@ -46,6 +46,6 @@ Do NOT rely on memory. Do NOT summarize. READ THE FILE every time.
 ### Governance
 
 - [ ] **Lesson compliance** — Re-read `docs/lessons-learned/INDEX.md`. Any applicable lesson violated = bug.
-- [ ] **Unplanned changes documented** — Every file NOT in the file plan that you modified is in your agent summary under `unplanned_modifications` with justification.
-- [ ] **Scope check** — Did you add functionality not in the file plan? Stick to intent. Don't gold-plate.
+- [ ] **Developer-discovered files documented** — Every modified file that is not a candidate file or required touchpoint is in your agent summary under `developer_discovered_files` with evidence.
+- [ ] **Scope check** — Did you add functionality outside the boundary plan? Stick to binding obligations. Don't gold-plate.
 - [ ] **Decision tracking** — If you made an unplanned architectural choice, flag it as `decision_candidate` in concerns.

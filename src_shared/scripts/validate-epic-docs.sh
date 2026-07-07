@@ -167,7 +167,7 @@ validate_architecture_readiness_matrix() {
     rg -F -q "blocker_when_missing:" "$matrix_file" || fail "architecture-readiness-matrix.yaml missing blocker_when_missing"
     rg -F -q "status:" "$matrix_file" || fail "architecture-readiness-matrix.yaml missing status"
 
-    python3 - "$matrix_file" <<'PY' || fail "architecture-readiness-matrix.yaml has rows requiring file-plan ownership with empty evidence.file_plan_owner"
+    python3 - "$matrix_file" <<'PY' || fail "architecture-readiness-matrix.yaml has rows requiring implementation-boundary ownership with empty evidence.implementation_boundary_owner"
 from pathlib import Path
 import re
 import sys
@@ -175,11 +175,30 @@ import sys
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
 rows = re.split(r"(?m)^\s*-\s+id:\s*", text)
 for row in rows[1:]:
-    requires_owner = re.search(r"(?m)^\s*file_plan_owner:\s*true\s*$", row)
-    empty_owner = re.search(r"(?m)^\s*file_plan_owner:\s*\[\]\s*$", row)
+    requires_owner = re.search(r"(?m)^\s*implementation_boundary_owner:\s*true\s*$", row)
+    empty_owner = re.search(r"(?m)^\s*implementation_boundary_owner:\s*\[\]\s*$", row)
     if requires_owner and empty_owner:
         raise SystemExit(1)
 PY
+}
+
+validate_implementation_boundary_plans() {
+    local plan_file
+
+    for plan_file in "${EPIC_DIR}"/file-plan-story-*.yaml; do
+        [[ -f "$plan_file" ]] || continue
+        rg -F -q "epic_id:" "$plan_file" || fail "${plan_file} missing epic_id"
+        rg -F -q "story_id:" "$plan_file" || fail "${plan_file} missing story_id"
+        rg -F -q "story_title:" "$plan_file" || fail "${plan_file} missing story_title"
+        rg -F -q "required_contracts:" "$plan_file" || fail "${plan_file} missing required_contracts"
+        rg -F -q "required_touchpoints:" "$plan_file" || fail "${plan_file} missing required_touchpoints"
+        rg -F -q "candidate_files:" "$plan_file" || fail "${plan_file} missing candidate_files"
+        rg -F -q "forbidden_changes:" "$plan_file" || fail "${plan_file} missing forbidden_changes"
+        rg -F -q "proof_obligations:" "$plan_file" || fail "${plan_file} missing proof_obligations"
+        if rg -q "files_to_create:|files_to_modify:" "$plan_file"; then
+            fail "${plan_file} uses removed legacy files_to_create/files_to_modify schema"
+        fi
+    done
 }
 
 validate_refinement_inconsistencies() {
@@ -205,6 +224,7 @@ validate_details_intent_alignment "${EPIC_DIR}/details.md"
 validate_adr "${EPIC_DIR}/adr.md"
 validate_acceptance_traceability "${EPIC_DIR}/acceptance-traceability.yaml"
 validate_architecture_readiness_matrix "${EPIC_DIR}/architecture-readiness-matrix.yaml"
+validate_implementation_boundary_plans
 validate_refinement_inconsistencies "${EPIC_DIR}/refinement-inconsistencies.yaml"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

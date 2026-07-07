@@ -61,7 +61,7 @@ Read:
 - `{{CHANGED_FILES_PATH}}`
 - all `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml`
 - `docs/epics/{{EPIC_DIR}}/lint_findings.yaml` if present
-- implementation and test files referenced by the file plans
+- implementation and test files referenced by boundary-plan binding obligations, implementation evidence, traceability, or changed-files manifest
 
 ## Mandatory Inspection Procedure
 
@@ -71,7 +71,7 @@ Before writing the review, you MUST:
 2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`.
 3. Read `docs/epics/{{EPIC_DIR}}/implementation-evidence.yaml` if present.
 4. Read `{{AUDIT_MATRIX_PATH}}`.
-5. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, implementation evidence, and audit verification matrix.
+5. Extract every implementation path, test path, runtime command, required assertion, required contract, required touchpoint, forbidden change, and proof obligation named in the boundary plans, traceability matrix, implementation evidence, and audit verification matrix.
 6. Read each named implementation file and each named test file.
 7. Inspect test contents directly. Directory listings, test names, or counts are not enough.
 8. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
@@ -88,7 +88,7 @@ Do not inflate missing proof into `CRITICAL` unless the matrix row is runtime-re
 - Does the implementation preserve the product, architecture, security, and
   operational intent of the epic after remediation?
 - Does the implementation satisfy each acceptance criterion?
-- Does the code match the architecture, ADRs, contracts, and file plans?
+- Does the code match the architecture, ADRs, contracts, and binding boundary-plan obligations?
 - Are all story-owned code paths tested to the required standard?
 - Are there placeholders, stubs, TODOs, mocks, hardcoded returns, or no-op implementations in production code?
 - Were required operational deliverables executed and validated?

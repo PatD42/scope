@@ -43,7 +43,7 @@ Use this evidence precedence order:
 
 1. Raw command outputs in `{{ATTEMPT_DIR}}`, including `*.txt`, `*output*`, `*pytest*`, `*gate*`, `codegraph-status.*`, and `codegraph-sync.*`
 2. Source code and tests with file/line references
-3. `acceptance-traceability.yaml`, `audit-verification-matrix.yaml`, file plans, and ADRs
+3. `acceptance-traceability.yaml`, `audit-verification-matrix.yaml`, implementation boundary plans, and ADRs
 4. `implementation-summary.md` and other prose summaries
 
 If raw command output contradicts a summary, raw command output wins.
@@ -69,7 +69,7 @@ Do not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codeg
 
 ## Scope Workflow Context
 
-Scope epics are refined into documentation artifacts and file plans before implementation. The implementation is valid only if it follows those artifacts and delivers the user-facing value promised by the epic.
+Scope epics are refined into documentation artifacts and implementation boundary plans before implementation. The implementation is valid only if it satisfies binding obligations, respects forbidden changes, and delivers the user-facing value promised by the epic. Candidate files are advisory hints, not mandatory edit targets.
 
 Required epic artifacts:
 
@@ -101,7 +101,7 @@ Read these files before judging the code:
 - `{{CHANGED_FILES_PATH}}`
 - all `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml`
 - `docs/epics/{{EPIC_DIR}}/lint_findings.yaml` if present
-- implementation and test files named in the file plans
+- implementation and test files named in binding boundary-plan obligations, implementation evidence, traceability, or changed-files manifest
 
 ## FIRST: Scripted Gate Evidence Review
 
@@ -119,13 +119,13 @@ Before writing the review, you MUST complete this inspection procedure:
 
 1. Read every `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml` file. Do not rely on glob results or file names alone.
 2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`, `docs/epics/{{EPIC_DIR}}/implementation-evidence.yaml` if present, and `{{AUDIT_MATRIX_PATH}}`.
-3. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, implementation evidence, and audit verification matrix.
+3. Extract every implementation path, test path, runtime command, required assertion, required contract, required touchpoint, forbidden change, and proof obligation named in the boundary plans, traceability matrix, implementation evidence, and audit verification matrix.
 4. Read each named implementation file and each named test file. Inspect test contents directly; directory listings are not enough.
 5. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
 6. If any required file cannot be read, list it under `Unread Required Files` with the exact path and error.
 7. Do not report `None` for findings unless every required file was read successfully and the Required Checks Performed table has evidence for every audit matrix row.
 8. If a test coverage claim depends on a test file, cite the test file and the behavior asserted. Do not infer robust coverage from file names, directory structure, or test counts.
-9. If a file plan names an operational deliverable such as migration, backfill, seed/bootstrap, reindex, onboarding, or external sync, inspect evidence that it was executed or explicitly blocked.
+9. If a boundary plan names an operational deliverable such as migration, backfill, seed/bootstrap, reindex, onboarding, or external sync, inspect evidence that it was executed or explicitly blocked.
 10. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
 
 For each matrix row, choose exactly one result: `pass`, `fail`, `unverified`, `blocked`, or `not_applicable`.
@@ -136,7 +136,7 @@ Your final answer MUST include these sections before `Findings`:
 
 - `Machine-Readable Review Summary`: a YAML block with row counts and finding counts.
 - `Scripted Gate Evidence`: every raw gate failure or `None`.
-- `Files Inspected`: list every required epic artifact, file-plan file, implementation file, and test file actually read.
+- `Files Inspected`: list every required epic artifact, boundary-plan file, implementation file, and test file actually read.
 - `Unread Required Files`: list every required file that could not be read, with the read error. If none, write `None`.
 - `Required Checks Performed`: a table with one row per audit matrix row, including implementation evidence, test evidence, runtime evidence, and result.
 
@@ -147,7 +147,7 @@ If `Unread Required Files` is not `None`, include at least one finding explainin
 Report only evidence-backed findings. Focus on:
 
 - missing acceptance criteria
-- code that diverges from architecture, ADRs, contracts, or file plans
+- code that diverges from architecture, ADRs, contracts, or binding boundary-plan obligations
 - story coverage below the required 90% floor without an approved exception
 - production stubs, placeholders, TODOs, mocks, hardcoded returns, or functions that do not perform their stated intent
 - missing error handling or edge cases from acceptance criteria
@@ -157,7 +157,7 @@ Report only evidence-backed findings. Focus on:
 
 ## Targeted Recurring Risks
 
-In addition to the generic audit checks, explicitly verify these recurring risk areas when they are relevant to the epic or appear in file plans, ADRs, acceptance criteria, or code:
+In addition to the generic audit checks, explicitly verify these recurring risk areas when they are relevant to the epic or appear in boundary plans, ADRs, acceptance criteria, or code:
 
 - dedupe key behavior matches the ADR and cannot collapse distinct records incorrectly
 - stable provenance IDs are generated and preserved across ingest, storage, retrieval, and reprocessing paths

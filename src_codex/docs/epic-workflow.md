@@ -285,7 +285,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 **Output**: Detailed architecture design with diagrams
 
-**Context Provided**: Component structure, APIs, data model → feeds ADR, File Plan, Test Strategy
+**Context Provided**: Component structure, APIs, data model → feeds ADR, Implementation Boundary Plan, Test Strategy
 
 ---
 
@@ -307,7 +307,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 **Output**: ADR page with all architectural decisions documented
 
-**Context Provided**: Technical rationale → feeds File Plan, guides Development
+**Context Provided**: Technical rationale → feeds Implementation Boundary Plan, guides Development
 
 ---
 
@@ -340,7 +340,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 
 ---
 
-#### Step 2A.5: File Plan
+#### Step 2A.5: Implementation Boundary Plan
 
 **Document**: `epic/file-plan.md`
 
@@ -364,9 +364,9 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
    - Dependencies
    - Associated tests
 
-**Output**: File Plan page with complete file inventory
+**Output**: Implementation Boundary Plan page with complete file inventory
 
-**Context Provided**: What files to create/modify → guides Development phase
+**Context Provided**: What binding obligations and candidate file hints → guides Development phase
 
 ---
 
@@ -394,7 +394,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 - [ ] Architecture designed with diagrams
 - [ ] ADRs documented for all significant decisions
 - [ ] Test Strategy defined per story
-- [ ] File Plan complete with all files mapped
+- [ ] Implementation Boundary Plan complete with all files mapped
 - [ ] PDRs documented (if applicable)
 
 **Context Package for Developer**:
@@ -402,7 +402,7 @@ Context preservation and clear agent responsibilities ensure efficient handoffs 
 - Acceptance Criteria (definition of done)
 - Architecture (how it's designed)
 - ADR (technical decisions with rationale)
-- File Plan (what files to create/modify)
+- Implementation Boundary Plan (what binding obligations and candidate file hints)
 - Test Strategy (what tests to write per story)
 
 **Next Agent**: Developer (Sub-phase 2B begins)
@@ -424,10 +424,10 @@ For each user story (in order from Epic Details):
 2. Read Acceptance Criteria for this story
 3. Read Architecture for relevant components
 4. Read ADR for technical decision context
-5. Read File Plan for files to create/modify
+5. Read Implementation Boundary Plan for binding obligations and candidate file hints
 6. Read Test Strategy for tests required for this story
 7. Implement story:
-   - Write code per File Plan and Architecture
+   - Write code per Implementation Boundary Plan and Architecture
    - Follow ADR decisions
    - Write unit tests (always)
    - Write integration tests (if indicated by Test Strategy)
@@ -611,12 +611,12 @@ System Context → ADR (Alternatives Evaluated)
 System Context → Test Strategy (Risks)
 
 Epic Architecture → ADR (Design Decisions)
-Epic Architecture → File Plan (Components Map to Files)
+Epic Architecture → Implementation Boundary Plan (Components Map to Files)
 Epic Architecture → Test Strategy (Test Boundaries)
 
-ADR → File Plan (Technology Decisions)
+ADR → Implementation Boundary Plan (Technology Decisions)
 
-Epic Details + Epic Architecture + ADR + File Plan + System Architecture → Development
+Epic Details + Epic Architecture + ADR + Implementation Boundary Plan + System Architecture → Development
 Acceptance Criteria + Test Strategy → Development + QA
 
 Development + QA → Implementation Summary
@@ -633,11 +633,11 @@ Implementation Summary → System Architecture (update ADR Summary, Risks, Gloss
 | **System Architecture** | Product docs (all) | **ALL epic documents** (tech stack, patterns, standards, components) |
 | **Epic Details** | Product Strategy, Definition, System Architecture | All other epic documents |
 | **Acceptance Criteria** | Epic Details, Product Definition | Test Strategy, Development, QA, Implementation Summary |
-| **System Context** | Epic Details, Product Definition, Product Reference, **System Architecture** | Epic Architecture, ADR, Test Strategy, File Plan |
-| **Epic Architecture** | System Context, Epic Details, Product Reference, **System Architecture** | ADR, File Plan, Test Strategy, Development |
-| **ADR** | System Context, Epic Architecture, Product Reference, System Architecture | File Plan, Development, Implementation Summary, System Architecture (ADR Summary) |
+| **System Context** | Epic Details, Product Definition, Product Reference, **System Architecture** | Epic Architecture, ADR, Test Strategy, Implementation Boundary Plan |
+| **Epic Architecture** | System Context, Epic Details, Product Reference, **System Architecture** | ADR, Implementation Boundary Plan, Test Strategy, Development |
+| **ADR** | System Context, Epic Architecture, Product Reference, System Architecture | Implementation Boundary Plan, Development, Implementation Summary, System Architecture (ADR Summary) |
 | **Test Strategy** | Epic Architecture, Epic Details, Acceptance Criteria, System Context, **System Architecture (testing standards)** | Development, QA, Implementation Summary |
-| **File Plan** | Epic Architecture, ADR, System Context, Product Reference, **System Architecture (conventions)** | Development, Implementation Summary |
+| **Implementation Boundary Plan** | Epic Architecture, ADR, System Context, Product Reference, **System Architecture (conventions)** | Development, Implementation Summary |
 | **PDR** | Epic Details, Product Strategy, Product Decisions | Epic Architecture, Acceptance Criteria, Development |
 | **Implementation Summary** | All epic documents, Development results | Future epics, **System Architecture updates (Ch 9, 11, 12)** |
 
@@ -652,7 +652,7 @@ Implementation Summary → System Architecture (update ADR Summary, Risks, Gloss
 6. Epic Architecture (Phase 2A, step 2)
 7. ADR (Phase 2A, step 3)
 8. Test Strategy (Phase 2A, step 4)
-9. File Plan (Phase 2A, step 5)
+9. Implementation Boundary Plan (Phase 2A, step 5)
 10. PDR (Phase 2A, step 6 - if needed)
 11. Development (Phase 2B)
 12. QA (Phase 2C)
@@ -668,8 +668,8 @@ Each document depends on context from previous documents. Creating out of order 
 | Agent | Phases | Documents Created | Key Responsibilities |
 |-------|--------|-------------------|---------------------|
 | **Product Owner** | Phase 0, Phase 1 | Product docs, Epic Details, Acceptance Criteria, PDR | Define product vision and what to build, strategic alignment, product decisions |
-| **Architect** | Phase 0.5, Phase 2A | System Architecture (12 chapters), Epic System Context, Epic Architecture, ADR, Test Strategy, File Plan | Design system and epics, evaluate feasibility, document decisions, maintain system architecture |
-| **Developer** | Phase 2B | Code, Tests | Implement stories per system and epic architecture and file plan |
+| **Architect** | Phase 0.5, Phase 2A | System Architecture (12 chapters), Epic System Context, Epic Architecture, ADR, Test Strategy, Implementation Boundary Plan | Design system and epics, evaluate feasibility, document decisions, maintain system architecture |
+| **Developer** | Phase 2B | Code, Tests | Implement stories per system and epic architecture and implementation boundary plan |
 | **QA Engineer** | Phase 2C | Test Results, Bug Reports | Validate acceptance criteria, execute test strategy |
 | **Technical Writer** | Phase 3 | Implementation Summary | Document what was built, capture lessons learned |
 
@@ -721,7 +721,7 @@ These slash commands orchestrate the workflow:
 4. Create Epic Architecture (design that extends system architecture)
 5. Create ADR (decisions specific to this epic)
 6. Create Test Strategy (testing approach per story)
-7. Create File Plan (file inventory)
+7. Create Implementation Boundary Plan (file inventory)
 8. Create PDR (if product decisions arise during epic)
 9. **Update System Architecture if needed** (affected Arc42 chapters)
 

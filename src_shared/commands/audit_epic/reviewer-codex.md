@@ -59,7 +59,7 @@ Do not run `codegraph init`, `codegraph sync`, `codegraph sync-if-dirty`, `codeg
 - `{{CHANGED_FILES_PATH}}`
 - `docs/epics/{{EPIC_DIR}}/file-plan-story-*.yaml`
 - `docs/epics/{{EPIC_DIR}}/lint_findings.yaml` if present
-- changed implementation files referenced by the file plans
+- changed implementation files referenced by boundary-plan binding obligations, implementation evidence, traceability, or changed-files manifest
 
 ## Mandatory Inspection Procedure
 
@@ -69,11 +69,11 @@ Before writing the review, you MUST:
 2. Read `docs/epics/{{EPIC_DIR}}/acceptance-traceability.yaml`.
 3. Read `docs/epics/{{EPIC_DIR}}/implementation-evidence.yaml` if present.
 4. Read `{{AUDIT_MATRIX_PATH}}`.
-5. Extract every implementation path, test path, runtime command, and required assertion named in the file plans, traceability matrix, implementation evidence, and audit verification matrix.
+5. Extract every implementation path, test path, runtime command, required assertion, required contract, required touchpoint, forbidden change, and proof obligation named in the boundary plans, traceability matrix, implementation evidence, and audit verification matrix.
 6. Read each named implementation file and each named test file.
 7. Inspect test contents directly. Directory listings, test names, or counts are not enough.
 8. Evaluate every row in `{{AUDIT_MATRIX_PATH}}`, not just the rows that look interesting.
-9. If any required file cannot be read, list it under `Unread Required Files` with the error.
+9. If any file required by a binding obligation cannot be read, list it under `Unread Required Files` with the error. Candidate files are advisory unless implementation evidence or the audit matrix relies on them.
 10. Fill a `Required Checks Performed` table with one row per audit matrix row.
 11. A `pass` result requires exact file/line evidence, exact test assertion evidence, or command output. If you cannot cite that evidence, mark the row `unverified`, not `pass`.
 
@@ -91,7 +91,7 @@ Find concrete, evidence-backed issues in:
 - stub, mock, placeholder, or fake implementations
 - unexecuted operational deliverables such as migrations, backfills, bootstrap scripts, reindex jobs, or onboarding runs
 - security and data integrity regressions
-- divergence between file plans and code
+- divergence between binding boundary-plan obligations and code
 - easy minor issues the implementation agent should fix immediately
 
 ## Severity Rules

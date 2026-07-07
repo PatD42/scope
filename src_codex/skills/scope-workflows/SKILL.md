@@ -63,7 +63,7 @@ If the nested command cannot be executed, the parent command is not delivery-com
 Codex should usually perform Scope roles sequentially in the main session:
 
 - `product-owner`: validate business requirements, acceptance criteria, and product docs.
-- `architect`: architecture, ADRs, specs, contracts, and file plans.
+- `architect`: architecture, ADRs, specs, contracts, and implementation boundary plans.
 - `developer`: implementation plus tests.
 - `sdet`: test planning and test-first implementation when requested.
 - `reverse-engineer-po`: code-to-product-documentation workflow.

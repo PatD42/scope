@@ -52,7 +52,7 @@ status: draft
 - [{epic-id}: Architecture](link) - Component diagrams, data models, and integration points
 - [{epic-id}: ADR](link) - Architecture Decision Records for this epic
 - [{epic-id}: PDR](link) - Product Decision Records for this epic
-- [{epic-id}: File Plan](link) - Intent documentation for all files
+- [{epic-id}: Implementation Boundary Plans](link) - Binding obligations, advisory candidate files, and proof requirements
 - [{epic-id}: Implementation Summary](link) - Created after epic completion
 
 ---
@@ -165,8 +165,8 @@ status: draft
 | Phase | Agent Role | Responsibilities | Deliverables |
 |-------|-----------|------------------|--------------|
 | **Planning** | Product Owner | Define epic scope, user stories, strategic alignment | This document, Acceptance Criteria |
-| **Architecture** | Architect | Evaluate feasibility, design system, document decisions | System Context, Architecture, ADR, Test Strategy, File Plan |
-| **Development** | Developer | Implement stories in sequence, follow file plan | Code, unit tests |
+| **Architecture** | Architect | Evaluate feasibility, design system, document decisions | System Context, Architecture, ADR, Test Strategy, Implementation Boundary Plans |
+| **Development** | Developer | Implement stories in sequence, satisfy boundary-plan obligations | Code, unit tests |
 | **QA** | QA Engineer | Execute test strategy, validate acceptance criteria | Test results, bug reports |
 | **Completion** | Technical Writer + Architect | Document what was built and decisions made | Implementation Summary, updated ADRs |
 

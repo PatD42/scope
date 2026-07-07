@@ -47,7 +47,7 @@ List missing required inputs under `Unread Or Missing Required Files`.
 
 ## Review Posture
 
-Be constructively adversarial. Do not summarize the epic or reward coherent prose. Find concrete mismatches between acceptance criteria, architecture, ADRs, specs, test strategy, and file-plan expectations.
+Be constructively adversarial. Do not summarize the epic or reward coherent prose. Find concrete mismatches between acceptance criteria, architecture, ADRs, specs, test strategy, and boundary-plan expectations.
 
 Focus especially on:
 
@@ -69,8 +69,8 @@ Focus especially on:
 - missing ownership fields for destructive, cleanup, replay, or idempotency behavior
 - monitor/dashboard promises without API payload support
 - test strategy that names a risk but lacks a real runtime or integration proof path
-- file-plan ownership gaps only when they hide an architecture boundary or
-  test-strategy gap; ordinary empty `evidence.file_plan_owner` is Gate #4
+- implementation-boundary ownership gaps only when they hide an architecture boundary or
+  test-strategy gap; ordinary empty `evidence.implementation_boundary_owner` is Gate #4
   pending before Phase 4
 
 Avoid noise. Do not report style preferences, hypothetical risks, or questions that can be answered mechanically from existing artifacts.
@@ -95,7 +95,7 @@ For each check, return `Pass`, `Fail`, or `Unverified` with file evidence:
 - Fail-closed rules have error/API/persistence behavior.
 - Routing, corpus, review-required, cleanup, replay, and ownership paths are auditable.
 - Test strategy proves real runtime paths for integration work.
-- File-plan ownership is treated as Gate #4 evidence and is not used to block
+- Implementation-boundary ownership is treated as Gate #4 evidence and is not used to block
   Gate #3 unless it hides an architecture boundary or test-strategy gap.
 - Pre-review hardening checked sibling defect patterns, not only named blockers.
 

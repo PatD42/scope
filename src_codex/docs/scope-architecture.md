@@ -242,8 +242,8 @@ Agents are markdown files that define persona, responsibilities, and constraints
 
 | Agent | File | Role |
 |-------|------|------|
-| **Architect** | `architect.md` | System design, story breakdown, file plans, ADRs, contracts |
-| **Developer** | `developer.md` | Implements stories, writes tests, follows file plan intent |
+| **Architect** | `architect.md` | System design, story breakdown, implementation boundary plans, ADRs, contracts |
+| **Developer** | `developer.md` | Implements stories, writes tests, follows implementation boundary plan intent |
 | **SDET** | `sdet.md` | Writes tests first (TDD mode), test strategy |
 | **Product Owner** | `product-owner.md` | Business requirements, acceptance criteria, PDRs |
 | **RE Architect** | `reverse-engineer-architect.md` | Reverse-engineer architecture from existing code |
@@ -366,7 +366,7 @@ TaskUpdate(taskId: "1", addBlockedBy: ["0"])  # story-1 blocked by story-0
 
 ### 7.5 Inter-Story Dependencies
 
-Parsed from `# Dependencies:` comments in file plan headers. Commands read these and set up TaskUpdate `addBlockedBy` relationships.
+Parsed from `# Dependencies:` comments in implementation boundary plan headers. Commands read these and set up TaskUpdate `addBlockedBy` relationships.
 
 ### 7.6 Test-as-Soon-as-Possible
 
@@ -434,7 +434,7 @@ Phase 4: Story breakdown
   → USER APPROVAL GATE #4
 ```
 
-**Output:** Per-story file plans (`file-plan-story-*.yaml`), `contracts.py`, acceptance criteria, architecture docs, ADRs
+**Output:** Per-story implementation boundary plans (`file-plan-story-*.yaml`), `contracts.py`, acceptance criteria, architecture docs, ADRs
 
 ### 8.2 Implementation (`/implement` or `/implement_tdd`)
 
@@ -442,7 +442,7 @@ Phase 4: Story breakdown
 ```
 Story 0: Architect scaffolds (contracts.py, shared modules)
 Story 1-N: Developer implements + writes tests
-  → Each story: read file plan → implement → run tests → mypy --strict
+  → Each story: read implementation boundary plan → implement → run tests → mypy --strict
 After all stories: Epic-wide lint (ruff + vulture + mypy)
 ```
 
@@ -450,7 +450,7 @@ After all stories: Epic-wide lint (ruff + vulture + mypy)
 ```
 Story 0: Architect scaffolds (contracts.py, shared modules)
 Story 1-N:
-  SDET writes tests first (from file plan + acceptance criteria)
+  SDET writes tests first (from implementation boundary plan + acceptance criteria)
     → Developer implements to make tests pass
   → Each story: mypy --strict verification
 After all stories: Epic-wide lint (ruff + vulture + mypy)
@@ -621,7 +621,7 @@ Tests are written at the earliest possible point, not deferred to epic end. Fixi
 
 Architect leads story breakdown; Product Owner validates business alignment. Technical boundaries drive story structure (component alignment, dependencies).
 
-### 10.8 File Plan Intent Documentation
+### 10.8 Implementation Boundary Plan Intent Documentation
 
 Each file in the plan has a 600-1200 character intent with 5-part structure:
 

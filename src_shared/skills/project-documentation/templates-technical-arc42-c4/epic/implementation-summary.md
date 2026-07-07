@@ -16,7 +16,7 @@
 **Required Context (must exist before this document)**:
 - [{epic-id}: Epic Details](link) - Original plan to compare against
 - [{epic-id}: Architecture](link) - Design to compare against actual implementation
-- [{epic-id}: File Plan](link) - Planned files vs. actual files created
+- [{epic-id}: Implementation Boundary Plans](link) - Binding obligations and candidate files vs. actual implementation
 - [{epic-id}: Test Strategy](link) - Planned tests vs. actual test results
 - Development Phase: Completed code, tests, reviews
 
@@ -66,7 +66,7 @@
 
 ### Unexpected Technical Challenges
 
-<!-- Problems not anticipated in the architecture/file plan. -->
+<!-- Problems not anticipated in the architecture or implementation boundary plans. -->
 
 **Challenge 1**: [Description]
 - **Impact**: How this affected implementation
@@ -288,6 +288,6 @@
 - Stories requiring escalation: Y
 - Average retries before test success: Z
 
-**Most valuable file plan entries**: [Which file plan documentation helped most]
+**Most valuable boundary-plan entries**: [Which required contracts, touchpoints, candidate files, or proof obligations helped most]
 
-**File plan gaps**: [Where file plan documentation was insufficient]
+**Boundary-plan gaps**: [Where boundary-plan obligations or candidate hints were insufficient]

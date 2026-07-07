@@ -1,6 +1,6 @@
 ---
 name: epic_refine
-description: Contract-first epic refinement. Produces executable Python contracts alongside file plans. Output feeds /implement or /implement_tdd.
+description: Contract-first epic refinement. Produces executable Python contracts alongside implementation boundary plans. Output feeds /implement or /implement_tdd.
 args: "{epic-id}"
 skills: project-documentation, session-id-finder, agent-summary
 agents: product-owner, architect
@@ -14,13 +14,13 @@ Contract-first epic refinement with a gated Phase 0 intent alignment plus 4 deli
 
 ## Why Contract-First
 
-The previous approach produced file plans with method signatures in YAML prose. Agents implemented against these descriptions, but nothing machine-verified that components could actually call each other. Result: 81 tests pass, 5 critical integration failures hidden by mocks.
+The previous approach produced tactical file lists with method signatures in YAML prose. Agents implemented against these descriptions, but nothing machine-verified that components could actually call each other. Result: 81 tests pass, 5 critical integration failures hidden by mocks.
 
 **Contract-first** means:
 - Story 0 creates `contracts.py` with Python Protocol classes
 - Method signatures are executable code, not YAML descriptions
 - `mypy --strict` catches interface mismatches statically after each story
-- File plans reference contracts as source of truth for cross-story calls
+- Implementation boundary plans reference contracts as source of truth for cross-story calls
 
 **Key insight:** Agents need machine-verifiable contracts, not human-readable descriptions. TDD with mocks tests behavior in isolation; contracts + static analysis verifies integration mechanically.
 
@@ -57,7 +57,7 @@ Before writing each artifact batch, state the artifact contract:
 
 - source inputs that must be reflected
 - required sections, IDs, rows, or fields
-- required cross-links to ACs, PDRs, ADRs, specs, tests, or file plans
+- required cross-links to ACs, PDRs, ADRs, specs, tests, or implementation boundary plans
 - validation checks that will be run immediately after writing
 - known assumptions and unknowns
 
@@ -85,7 +85,7 @@ items:
     discovered_phase: "phase_1 | phase_2 | phase_3 | phase_3_5 | phase_4"
     owner_phase: "phase_0 | phase_1 | phase_2 | phase_3 | phase_4"
     issue: "Concrete ambiguity or inconsistency"
-    affects: ["intent", "business", "architecture", "api", "schema", "sql", "tests", "file_plan"]
+    affects: ["intent", "business", "architecture", "api", "schema", "sql", "tests", "implementation_boundary_plan"]
     status: "open | resolved | user_question"
     resolution: ""
 ```
@@ -137,10 +137,10 @@ artifact before continuing.
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │ Phase 4: Continue as architect (story_breakdown +       │
-│          file_plan + contracts)                         │
+│          implementation_boundary_plan + contracts)      │
 │ - Break epic into implementable user stories            │
 │ - Create contracts.py with Protocol classes             │
-│ - Create file plans with cross-story call references    │
+│ - Create implementation boundary plans with proof rules │
 │ ──────────────────────────────────────────────────────  │
 │ → USER APPROVAL GATE #4                                 │
 │ → Mark epic "ready-for-implementation"                  │
@@ -211,7 +211,7 @@ fi
 
 **Instruction:** Before writing or refining acceptance criteria, convince the user that you understand why the epic exists.
 
-**Goal:** Align on intent before Scope turns the epic into requirements, architecture, specs, and file plans.
+**Goal:** Align on intent before Scope turns the epic into requirements, architecture, specs, and implementation boundary plans.
 
 The orchestrator must not infer the "why" from implementation details alone. Read `details.md` and product context, then explain the epic in plain product terms:
 
@@ -388,7 +388,7 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 - **Documentation update plan** — list of product-level architecture docs that must be
   updated when this epic is implemented, with specific changes needed. This plan is
   executed in Story 0 (scaffolding) by the architect, NOT by the developer.
-- Source placement rule for `contracts.py` documented in the file plans and epic architecture:
+- Source placement rule for `contracts.py` documented in the implementation boundary plans and epic architecture:
   it must live in the source package, never in `docs/epics/...`.
 - Written to:
   - `docs/epics/{epic-dir}/system-context.md`
@@ -756,7 +756,8 @@ Ready to proceed to strategic architecture review? [yes / refine]
 Run this review after Phase 3 deliverables are complete and before Approval Gate #3.
 This review is strategic, not tactical: it evaluates whether the business
 requirements, architecture, ADRs, test strategy, and generated specs are
-coherent enough to justify moving into story/file-plan breakdown.
+coherent enough to justify moving into story and implementation-boundary
+breakdown.
 
 Do not start Phase 4 until Phase 3.5 is complete.
 
@@ -889,7 +890,7 @@ rows:
       sql: true
       error_contract: false
       test_strategy: true
-      file_plan_owner: true
+      implementation_boundary_owner: true
       ownership_matrix: false
     evidence:
       business: ["docs/epics/{epic-dir}/acceptance-criteria.md#AC1"]
@@ -900,24 +901,25 @@ rows:
       sql: []
       error_contract: []
       test_strategy: []
-      file_plan_owner: []
+      implementation_boundary_owner: []
       ownership_matrix: []
     status: "pass | fail | unverified | not_applicable"
     blocker_when_missing: true
     notes: ""
 ```
 
-Gate semantics for `file_plan_owner`:
+Gate semantics for `implementation_boundary_owner`:
 
-- Before Gate #3, `requires.file_plan_owner: true` is allowed with empty
-  `evidence.file_plan_owner` when the row otherwise has business, architecture,
-  spec, and test-strategy evidence. Record it as `Gate #4 pending`, not as a
-  Phase 3.5 blocker.
-- Before Gate #4, every row with `requires.file_plan_owner: true` must have
-  `evidence.file_plan_owner` populated by the story/file-plan artifacts.
-- Missing file-plan ownership is a Gate #4 blocker, not a Gate #3 blocker,
-  unless the missing owner hides an architecture decision that Phase 4 would
-  need to invent.
+- Before Gate #3, `requires.implementation_boundary_owner: true` is allowed
+  with empty `evidence.implementation_boundary_owner` when the row otherwise has
+  business, architecture, spec, and test-strategy evidence. Record it as
+  `Gate #4 pending`, not as a Phase 3.5 blocker.
+- Before Gate #4, every row with `requires.implementation_boundary_owner: true`
+  must have `evidence.implementation_boundary_owner` populated by the
+  story/boundary-plan artifacts.
+- Missing implementation-boundary ownership is a Gate #4 blocker, not a Gate #3
+  blocker, unless the missing owner hides an architecture decision that Phase 4
+  would need to invent.
 
 Create rows for:
 
@@ -928,7 +930,7 @@ Create rows for:
 - every destructive, idempotency, replay, cleanup, backfill, queue, external
   integration, or data-integrity behavior
 - every generated API/schema/SQL/error contract introduced by the epic
-- every file-plan story owner once file plans exist
+- every implementation-boundary story owner once boundary plans exist
 
 For cross-cutting resilience, replay, cleanup, or idempotency epics, also
 require a phase/table/output ownership row for each affected data family. If the
@@ -951,10 +953,10 @@ before launching reviewers:
   enforceable AC/PDR/ADR claim, and has no `fail` or `user_question` rows
 - every matrix row has a stable id, source, requirement, risk, requires,
   evidence, status, and blocker flag
-- every `requires.*: true` except `requires.file_plan_owner` has evidence or the
-  row is `fail`/`unverified` before Gate #3
-- every `requires.file_plan_owner: true` row is either populated or explicitly
-  marked `Gate #4 pending` before Gate #3
+- every `requires.*: true` except `requires.implementation_boundary_owner` has
+  evidence or the row is `fail`/`unverified` before Gate #3
+- every `requires.implementation_boundary_owner: true` row is either populated
+  or explicitly marked `Gate #4 pending` before Gate #3
 - API, JSON, and error specs parse
 - SQL specs exist when any AC/PDR/ADR promises persistence or migrations
 - every API/schema/error/SQL file expected by the matrix exists
@@ -964,14 +966,15 @@ before launching reviewers:
   script is installed
 - every accepted PDR/ADR has at least one matrix row
 - every high-risk row has test-strategy evidence
-- every row that requires implementation has a planned file-plan owner before
-  Gate #4; missing file-plan ownership must not block Gate #3 by itself
+- every row that requires implementation has a planned implementation-boundary
+  owner before Gate #4; missing implementation-boundary ownership must not block
+  Gate #3 by itself
 - destructive cleanup/replay/idempotency rows have ownership-matrix evidence
 
 Do not run `validate-epic-docs.sh` as a Gate #3 blocker. That script is the
 Gate #4 validator and is expected to fail before Phase 4 because
-`file-plan-story-*.yaml` and file-plan-derived ownership evidence do not exist
-yet. Gate #3 uses the architecture contract validator and the Phase 3.5
+`file-plan-story-*.yaml` and boundary-plan-derived ownership evidence do not
+exist yet. Gate #3 uses the architecture contract validator and the Phase 3.5
 readiness preflight instead.
 
 If scripted checks find missing artifacts, empty evidence, parse failures, stale
@@ -1007,7 +1010,7 @@ Required checks:
 - every endpoint or API payload promised by acceptance criteria, PDRs, or ADRs
   appears in the OpenAPI/API contract, or has an explicit no-endpoint decision
 - every existing table, data family, side table, or generated output family
-  named in architecture, ADRs, PDRs, file plans, previous audits, or reviewer
+  named in architecture, ADRs, PDRs, boundary plans, previous audits, or reviewer
   feedback is covered by the new contract or explicitly deferred
 - every observer, dashboard, monitor, report, export, or operator workflow can
   get the promised state from an API payload, database query, artifact, or
@@ -1235,7 +1238,7 @@ build_refine_review_prompt_file() {
 #   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
 #     --reviewer "claude" \
 #     --model "Claude Opus (local alias)" \
-#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode bypassPermissions --allowedTools '${CLAUDE_REFINE_ALLOWED_TOOLS}' --no-chrome}" \
+#     --claude-command "${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --dangerously-skip-permissions --allowedTools '${CLAUDE_REFINE_ALLOWED_TOOLS}' --no-chrome}" \
 #     --prompt-file "${REFINE_REVIEW_DIR}/reviewer-architecture-claude-prompt.md" \
 #     --output-file "${REFINE_REVIEW_DIR}/claude-opus.md" \
 #     --metadata-file "$REFINE_REVIEW_METADATA_FILE" \
@@ -1381,14 +1384,14 @@ Gate #3 cannot be shown if any reviewer or the orchestrator finds:
   cardinality rules from accepted AC/PDR/ADR claims
 - missing API/schema/error contracts for behavior required by acceptance criteria
 - insufficient test strategy for high-risk behavior or the 90%+ story coverage floor
-- architectural gaps that would force Phase 4 to invent design while writing file plans
+- architectural gaps that would force Phase 4 to invent design while writing boundary plans
 
 Missing `file-plan-story-*.yaml`, missing `acceptance-traceability.yaml` rows
-derived from file plans, or empty `evidence.file_plan_owner` rows are expected
-before Phase 4 and must not block Gate #3 by themselves. They become blocking
-before Gate #4. They are Gate #3 blockers only when the missing owner reflects a
-missing architecture decision, unclear implementation boundary, or absent
-test-strategy proof path.
+derived from boundary plans, or empty
+`evidence.implementation_boundary_owner` rows are expected before Phase 4 and
+must not block Gate #3 by themselves. They become blocking before Gate #4. They
+are Gate #3 blockers only when the missing owner reflects a missing architecture
+decision, unclear implementation boundary, or absent test-strategy proof path.
 
 Fix all blocking findings before Gate #3. If a blocking finding reveals product
 ambiguity, return to Phase 1 and interview the user. If it reveals architecture
@@ -1419,13 +1422,13 @@ echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"architecture_
 
 ---
 
-## Phase 4: Architect (story_breakdown + file_plan + contracts)
+## Phase 4: Architect (story_breakdown + implementation_boundary_plan + contracts)
 
-**Instruction:** Continue as `architect` agent for the `story_breakdown`, `file_plan`, and `contracts` phases.
+**Instruction:** Continue as `architect` agent for the `story_breakdown`, `implementation_boundary_plan`, and `contracts` phases.
 
-**Goal:** Break epic into implementable stories, create executable contracts, and document file-level intent.
+**Goal:** Break epic into implementable stories, create executable contracts, and document binding implementation boundaries plus proof obligations.
 
-At the start of Phase 4, restate any remaining unknowns from Phase 3.5. Do not write stories, file plans, or contracts if any unresolved issue would force a developer to invent product behavior or architecture. Return to the appropriate earlier phase and ask the user when needed.
+At the start of Phase 4, restate any remaining unknowns from Phase 3.5. Do not write stories, boundary plans, or contracts if any unresolved issue would force a developer to invent product behavior or architecture. Return to the appropriate earlier phase and ask the user when needed.
 
 **Story sizing constraints:** Each story should have max 7 non-trivial files, ~600 LOC of new/modified code, and the epic should have 5-8 stories. Trivial files (empty `__init__.py`, config with no logic, re-exports) don't count toward the 7-file limit. If a story exceeds these limits, split it.
 
@@ -1434,7 +1437,7 @@ At the start of Phase 4, restate any remaining unknowns from Phase 3.5. Do not w
 **Phase context to pass:**
 ```
 epic_id: {epic-id}
-phase: story_breakdown  # then file_plan, then contracts
+phase: story_breakdown  # then implementation_boundary_plan, then contracts
 agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 ```
 
@@ -1447,7 +1450,7 @@ agent_summaries: .scope/{epic-dir}/agent_summaries.jsonl
 - Stories sequenced for incremental delivery
 - Written to tracking system, `docs/epics/{epic-dir}/acceptance-criteria.md`, and `docs/epics/{epic-dir}/acceptance-traceability.yaml`
 
-### Story 0 extraction (CRITICAL — do this BEFORE writing file plans)
+### Story 0 extraction (CRITICAL — do this BEFORE writing boundary plans)
 
 Before assigning deliverables to dev stories, classify each file by work type:
 
@@ -1540,43 +1543,81 @@ class IKnowledgeSynthesizer(Protocol):
 
 **Validation rule:** After Story 0, running `python -c "import src.documentation.contracts"` must succeed (all types importable).
 
-### File plan (one per story)
+### Implementation Boundary Plan (one per story)
 
-- Intent documentation per file (600-1200 chars, 5-part template)
-- `public_interface` for new files (class/method signatures)
-- `signature_changes` for modified files (before/after with breaking_change flag)
-- **`calls` section for files that invoke other stories' components** ← NEW
-- Written to `docs/epics/{epic-dir}/file-plan-story-NN.yaml` (pure YAML, one per story)
+The file remains named `docs/epics/{epic-dir}/file-plan-story-NN.yaml` for workflow compatibility. Its content is an implementation boundary plan, not a tactical list of files to edit.
 
-### File plan `calls` section (CRITICAL — new requirement)
+Required shape:
 
-When a file plan entry describes a file that CALLS methods from another story's components, include an explicit `calls` section. This is the machine-readable cross-reference that prevents signature mismatches.
+```yaml
+epic_id: "{epic-id}"
+story_id: "story-01"
+story_title: "Short story title"
+depends_on: []
+required_contracts:
+  - id: "contract-identifier"
+    contract: "contracts.py::IExample.method"
+    obligation: "Exact public interface or behavior the implementation must satisfy"
+    verification: "mypy --strict path/to/file.py plus targeted test"
+required_touchpoints:
+  - id: "touchpoint-identifier"
+    surface: "API endpoint, CLI, worker, adapter, table, config, or existing module"
+    obligation: "What must be integrated or preserved"
+    evidence_required: "Source/test/runtime evidence expected after implementation"
+candidate_files:
+  - path: "src/package/module.py"
+    reason: "Likely implementation area discovered during refinement"
+    advisory: true
+forbidden_changes:
+  - path_or_surface: "public API, ADR-protected module, migration, config, or behavior"
+    rule: "Change that is not allowed without returning to refinement"
+proof_obligations:
+  - id: "proof-identifier"
+    acceptance_rows: ["AC1.1"]
+    required_evidence: "unit | integration | e2e | live_smoke | runtime_command"
+    command_hint: "pytest tests/... or concrete runtime checker"
+    success_condition: "Observable pass condition, output, state, or threshold"
+```
+
+Binding fields:
+
+- `required_contracts`
+- `required_touchpoints`
+- `forbidden_changes`
+- `proof_obligations`
+
+Advisory fields:
+
+- `candidate_files`
+
+The developer may skip candidate files or discover different implementation files when current source inspection shows a better path. The developer must record the strategy, files used, skipped relevant candidates, and evidence in `implementation-evidence.yaml`.
+
+### Contract Call Boundaries
+
+When a story must call methods from another story's components, include the obligation under `required_contracts`. This is the machine-readable cross-reference that prevents signature mismatches.
 
 **Example:**
 ```yaml
-modified_files:
-  - path: "src/documentation/updater.py"
-    intent: |
-      WHAT: Add re_render_entity() orchestration method.
-      WHY: Coordinates IntelAggregator → KnowledgeSynthesizer → TemplateReRenderer per file.
-      ...
-    calls:
-      - target: "IIntelAggregator.aggregate_for_file"
-        contract: "contracts.py"
-        signature: "aggregate_for_file(entity_id: str, file_config: dict) -> Dict[str, AggregatedSignals]"
-      - target: "IKnowledgeSynthesizer.synthesize"
-        contract: "contracts.py"
-        signature: "synthesize(file_name: str, section_signals: Dict[str, AggregatedSignals], entity_id: str) -> Optional[SynthesisResult]"
-      - target: "ITemplateReRenderer.render_file"
-        contract: "contracts.py"
-        signature: "render_file(template_name: str, context: dict, entity_slug: str, entity_config: EntityConfig) -> ReRenderResult"
+required_contracts:
+  - id: "re-render-aggregator-call"
+    contract: "contracts.py::IIntelAggregator.aggregate_for_file"
+    obligation: "Call aggregate_for_file(entity_id: str, file_config: dict) -> Dict[str, AggregatedSignals]"
+    verification: "mypy --strict src/documentation/updater.py"
+  - id: "re-render-synthesizer-call"
+    contract: "contracts.py::IKnowledgeSynthesizer.synthesize"
+    obligation: "Call synthesize(file_name: str, section_signals: Dict[str, AggregatedSignals], entity_id: str) -> Optional[SynthesisResult]"
+    verification: "mypy --strict src/documentation/updater.py"
+  - id: "template-renderer-call"
+    contract: "contracts.py::ITemplateReRenderer.render_file"
+    obligation: "Call render_file(template_name: str, context: dict, entity_slug: str, entity_config: EntityConfig) -> ReRenderResult"
+    verification: "mypy --strict src/documentation/updater.py"
 ```
 
-**Rule:** If a file has a `calls` section, the developer MUST verify each call matches the exact signature listed. mypy enforces this when the implementation type-hints dependencies using Protocol types from contracts.py.
+**Rule:** If a boundary plan has a `required_contracts` entry, the developer MUST verify each call matches the exact signature listed. mypy enforces this when the implementation type-hints dependencies using Protocol types from contracts.py.
 
 ### CodeGraph Context (Recommended)
 
-Use CodeGraph during refinement when it is present to discover existing symbols, dependencies, callers, and related files before finalizing architecture and file plans. Prefer CodeGraph MCP when available. If MCP is unavailable or unhealthy, use the CodeGraph CLI.
+Use CodeGraph during refinement when it is present to discover existing symbols, dependencies, callers, and related files before finalizing architecture and boundary plans. Prefer CodeGraph MCP when available. If MCP is unavailable or unhealthy, use the CodeGraph CLI.
 
 During refinement, CodeGraph queries should target the main repository root. CLI fallback examples:
 
@@ -1589,28 +1630,28 @@ else
 fi
 codegraph status .
 
-# JSON examples for architecture and file-plan context when using the CLI
+# JSON examples for architecture and boundary-plan context when using the CLI
 codegraph query "ExistingServiceName" --path . --json
 codegraph context "epic behavior or integration path to inspect" --path . --format json --max-nodes 80 --max-code 20
 codegraph files --path . --json
 ```
 
-Use CodeGraph output as discovery context only. Architecture decisions and file plans must still cite the actual source files, contracts, tests, and documentation that were inspected.
+Use CodeGraph output as discovery context only. Architecture decisions and boundary plans must still cite the actual source files, contracts, tests, and documentation that were inspected.
 
 ### Acceptance Traceability Matrix
 
-Create `docs/epics/{epic-dir}/acceptance-traceability.yaml` during Phase 4, alongside the file plans. This artifact is the audit checklist. It is not proof by itself; implementation and audit must verify each row against code, tests, and runtime evidence.
+Create `docs/epics/{epic-dir}/acceptance-traceability.yaml` during Phase 4, alongside the boundary plans. This artifact is the audit checklist. It is not proof by itself; implementation and audit must verify each row against code, tests, and runtime evidence.
 
 The initial matrix is generated from `acceptance-criteria.md`, `architecture.md`, `adr.md`, `test-strategy.md`, and `file-plan-story-*.yaml`.
 
 Also update `docs/epics/{epic-dir}/architecture-readiness-matrix.yaml` after
-file plans are written:
+boundary plans are written:
 
-- fill `evidence.file_plan_owner` for every row with `requires.file_plan_owner: true`
-- mark rows `fail` if they still lack a story/file-plan owner
-- add rows for any new implementation obligation discovered during file planning
+- fill `evidence.implementation_boundary_owner` for every row with `requires.implementation_boundary_owner: true`
+- mark rows `fail` if they still lack a story/boundary-plan owner
+- add rows for any new implementation obligation discovered during boundary planning
 - ensure every high-risk or runtime/operational row has both test-strategy and
-  file-plan ownership evidence before Gate #4
+  implementation-boundary ownership evidence before Gate #4
 
 Required format:
 
@@ -1646,7 +1687,7 @@ acceptance_items:
 
 Rules:
 - Every acceptance criterion, story-level behavior, required edge case, and runtime/operational requirement gets a row.
-- `expected_files` come from the file plans.
+- `expected_files` come from boundary-plan `candidate_files`, `required_touchpoints`, and developer strategy evidence where file paths are known.
 - `required_assertions` describe what must be proven, not just which test file should exist.
 - `runtime_evidence.required` is `true` for live smoke, migration, backfill, seed/bootstrap, reindex, onboarding, external sync, or other value-delivery checks.
 - Initial `actual_files`, `actual_tests`, and `runtime_evidence.evidence` remain empty until implementation.
@@ -1679,7 +1720,7 @@ The final approval gate cannot be shown until validation passes. Validation must
 - `adr.md` uses global ADR numbering and includes the required template fields
 - `acceptance-traceability.yaml` exists and contains `acceptance_items`
 - `architecture-readiness-matrix.yaml` exists and every row requiring
-  file-plan ownership has `evidence.file_plan_owner`
+  implementation-boundary ownership has `evidence.implementation_boundary_owner`
 - at least one `file-plan-story-*.yaml` exists
 
 ### Phase 4 Checklist
@@ -1687,7 +1728,7 @@ The final approval gate cannot be shown until validation passes. Validation must
 Present to user:
 
 ```
-Phase 4: Architect - Stories, Contracts & File Plan
+Phase 4: Architect - Stories, Contracts & Implementation Boundary Plan
 
 ✅ Story Breakdown
    Stories created: [N stories]
@@ -1698,14 +1739,16 @@ Phase 4: Architect - Stories, Contracts & File Plan
    Cross-story interfaces: [List of class names]
    All types importable: [Yes / No]
 
-✅ File Plan
-   New files: [N files with intent + public_interface]
-   Modified files: [N files with intent + signature_changes]
-   Cross-story calls documented: [N call references]
-   Breaking changes: [N breaking changes flagged]
+✅ Implementation Boundary Plan
+   Boundary plans: [N files]
+   Required contracts: [N binding obligations]
+   Required touchpoints: [N binding obligations]
+   Candidate files: [N advisory paths]
+   Forbidden changes: [N protected surfaces]
+   Proof obligations: [N evidence requirements]
 
 ✅ Coverage
-   All stories mapped to files: [Yes / No]
+   All stories mapped to boundary obligations: [Yes / No]
    All acceptance criteria traceable: [Yes / No]
    All cross-story calls have contracts: [Yes / No]
 
@@ -1740,7 +1783,7 @@ Ready to mark epic as ready-for-implementation? [yes / refine]
 
 ```bash
 # Write completion entry
-echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"file_plan","status":"success","completed_at":"'"$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\(..\)$/:\1/')"'"}' >> "$SUMMARIES_FILE"
+echo '{"agent":"architect","session_id":"'"$SESSION_ID"'","phase":"implementation_boundary_plan","status":"success","completed_at":"'"$(date +%Y-%m-%dT%H:%M:%S%z | sed 's/\(..\)$/:\1/')"'"}' >> "$SUMMARIES_FILE"
 
 # Update epic status in details.md frontmatter
 # status: ready-for-implementation
@@ -1752,7 +1795,7 @@ if [ -n "$SCRIPT" ]; then
 fi
 ```
 
-**If user wants refinement**: Address concerns, update stories/file plan/contracts, re-present checklist
+**If user wants refinement**: Address concerns, update stories/boundary plans/contracts, re-present checklist
 
 ---
 
@@ -1786,7 +1829,7 @@ Artifacts created:
     └── [N] stories created with AC and dependencies
 
 Contract protocols: [N] interfaces in contracts.py
-Cross-story calls documented: [N] call references in file plans
+Cross-story calls documented: [N] required contract obligations in boundary plans
 
 Status: ready-for-implementation
 Cost: $X.XX
@@ -1810,7 +1853,7 @@ If session compacts mid-refinement:
    - `architecture.md` exists → Phase 2 complete
    - `architecture-claims.yaml`, `architecture-contract-self-check.yaml`, and `docs/architecture/13-specs/api/{epic-id}-*` exist → Phase 3 complete
    - `refinement-review.md` exists with `Approved for Gate #3` → Phase 3.5 complete
-   - `file-plan-story-*.yaml` exists → Phase 4 complete
+   - `file-plan-story-*.yaml` exists with implementation boundary plan schema → Phase 4 complete
 3. Resume from appropriate phase
 
 ---
@@ -1823,7 +1866,7 @@ If session compacts mid-refinement:
 - "Phase 2/4: Architect - System Context & Architecture"
 - "Phase 3/4: Architect - Spec Generation"
 - "Phase 3.5/4: Strategic Architecture Review"
-- "Phase 4/4: Architect - Stories, Contracts & File Plan"
+- "Phase 4/4: Architect - Stories, Contracts & Implementation Boundary Plan"
 
 **Approval gates:**
 - Present checklist summary

@@ -643,7 +643,7 @@ For each approved epic (in dependency order):
 - Architecture (child) - tags: `epic`, `architecture`, `{epic-id}`
 - ADR (child) - tags: `epic`, `adr`, `{epic-id}`
 - PDR (child) - tags: `epic`, `pdr`, `{epic-id}`
-- File Plan (child) - tags: `epic`, `file-plan`, `{epic-id}`
+- Implementation Boundary Plan (child) - tags: `epic`, `implementation-boundary-plan`, `{epic-id}`
 - Implementation Summary (child) - tags: `epic`, `summary`, `{epic-id}`
 
 ### What Goes in Epic Details (Source of Truth)
@@ -792,7 +792,7 @@ Created Epic Documentation Pages (source of truth):
 ✓ {PREFIX}-003: [Epic Title] - Epic Details (parent page)
 ... all [N] epic documentation pages
 
-Note: Child pages (Architecture, ADR, PDR, File Plan) will be created during epic refinement.
+Note: Child pages (Architecture, ADR, PDR, Implementation Boundary Plan) will be created during epic refinement.
 
 Created Tracking System Epics (tracking with links to documentation):
 

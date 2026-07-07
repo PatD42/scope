@@ -335,13 +335,13 @@ Before model review, generate `docs/epics/{epic-dir}/audit-manifest.yaml`. The m
 
 Include:
 
-- all files from every `file-plan-story-*.yaml`
+- binding obligations and candidate file hints from every `file-plan-story-*.yaml`
 - all implementation and test files from `acceptance-traceability.yaml`
 - all implementation proof from `implementation-evidence.yaml` when present
 - all files changed in git for the epic branch/worktree, generated in `docs/epics/{epic-dir}/changed-files.txt`
 - API, schema, migration, worker, queue, dashboard, and storage files touched indirectly by changed imports or routes
 - tests touching those modules
-- missing or stale file-plan paths
+- missing or stale boundary-plan referenced paths
 - required runtime evidence commands from `acceptance-traceability.yaml`
 
 Required format:
@@ -352,7 +352,7 @@ attempt_id: audit-001
 generated_at: YYYY-MM-DDTHH:MM:SSZ
 changed_files_path: docs/epics/{epic-dir}/changed-files.txt
 files:
-  from_file_plans: []
+  from_boundary_plans: []
   from_traceability: []
   changed_in_git: []
   indirectly_touched: []
@@ -360,7 +360,7 @@ files:
 missing_paths: []
 runtime_evidence_required: []
 scripted_gates:
-  file_plan_path_validation: pending
+  boundary_plan_path_validation: pending
   acceptance_traceability_validation: pending
   contract_parity: pending
   schema_openapi_enum_parity: pending
@@ -369,11 +369,11 @@ scripted_gates:
   live_smoke_status_matrix: pending
 ```
 
-If `missing_paths` is non-empty, create a `MAJOR` finding before model review. Missing or stale file-plan paths bias reviewers and must be visible.
+If `missing_paths` is non-empty, create a `MAJOR` finding before model review when the path is required by a binding contract, required touchpoint, proof obligation, or traceability row. Missing candidate-file paths are advisory context issues, not findings by themselves.
 
 ## Step 3: Generate Audit Verification Matrix
 
-Before model review, generate `docs/epics/{epic-dir}/audit-verification-matrix.yaml` from `acceptance-traceability.yaml`, `audit-manifest.yaml`, file plans, changed files, previous issue ledger rows, and known recurring risk dimensions.
+Before model review, generate `docs/epics/{epic-dir}/audit-verification-matrix.yaml` from `acceptance-traceability.yaml`, `audit-manifest.yaml`, boundary plans, changed files, implementation evidence, previous issue ledger rows, and known recurring risk dimensions.
 
 This matrix is the primary audit contract. The audit is no longer a broad "find what you notice" review. Every required row must be evaluated as `pass`, `fail`, `unverified`, `blocked`, or `not_applicable`.
 
@@ -424,7 +424,7 @@ Required row fields:
 - `requirement`: one concrete behavior or evidence obligation.
 - `priority`: `required`, `runtime_required`, `high_risk`, `optional`, or `documentation`.
 - `risk_level`: `critical`, `high`, `medium`, or `low`.
-- `implementation.expected_files` and `tests.expected_files`: copied from traceability and file plans.
+- `implementation.expected_files` and `tests.expected_files`: copied from traceability, implementation evidence, and binding boundary-plan touchpoints/proof obligations where paths are known. Candidate files are advisory hints only.
 - `tests.required_assertions`: behavior that must be proven, not just test file names.
 - `runtime_evidence.required`: true for smoke, migration, backfill, queue, service, or external integration requirements.
 - `dimensions`: include relevant mode/state dimensions for orchestration-heavy epics.
@@ -455,7 +455,7 @@ Use deterministic severity mapping:
 
 Missing proof is not automatically the same as a broken behavior. Label it `unverified` and map severity by row priority. Do not classify unverified optional/documentation rows as `CRITICAL`.
 
-Unit tests passing must never downgrade a missing promised outcome. If a central promised benefit has no real-path evidence, or expected output is absent/zero without an explicit acceptance/file-plan statement that zero is valid, classify the row as `MAJOR` at minimum. Classify it as `CRITICAL` when the missing outcome is core acceptance behavior, the only proof path is runtime evidence, or the absence would make the epic's delivered value false.
+Unit tests passing must never downgrade a missing promised outcome. If a central promised benefit has no real-path evidence, or expected output is absent/zero without an explicit acceptance/boundary-plan statement that zero is valid, classify the row as `MAJOR` at minimum. Classify it as `CRITICAL` when the missing outcome is core acceptance behavior, the only proof path is runtime evidence, or the absence would make the epic's delivered value false.
 
 ### Follow-Up Audit Scope
 
@@ -472,7 +472,7 @@ Run a bounded fresh scan for new high-impact issues, but do not let follow-up au
 
 Run or explicitly mark blocked for each gate in `audit-manifest.yaml` before model review:
 
-- file-plan path validation
+- boundary-plan path validation
 - acceptance traceability validation: every row has implementation files, required assertions, expected tests, and status
 - implementation evidence validation: `implementation-evidence.yaml` exists when `/implement` produced code, `audit_ready` is true, and completed stories map to proof
 - contract parity test
@@ -500,7 +500,7 @@ Before launching Codex, Claude, Antigravity, or GLM, inspect the scripted gates
 and matrix validation results. If any of these conditions exist, stop this
 attempt before external reviewer launch:
 
-- missing or stale file-plan paths for required/high-risk work
+- missing or stale paths for binding required/high-risk work
 - `implementation-evidence.yaml` is missing after implementation has changed code
 - `implementation-evidence.yaml` has `audit_ready: false`
 - a completed story lacks mapped acceptance rows, changed files, tests, runtime
@@ -776,7 +776,7 @@ run_claude_review() {
   fi
 
   build_review_prompt_file "reviewer-claude.md" "$prompt_file"
-  local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --permission-mode bypassPermissions --allowedTools '${CLAUDE_AUDIT_ALLOWED_TOOLS}' --no-chrome}"
+  local claude_command="${SCOPE_CLAUDE_PEXPECT_COMMAND:-claude --model opus --dangerously-skip-permissions --allowedTools '${CLAUDE_AUDIT_ALLOWED_TOOLS}' --no-chrome}"
   "$SCOPE_REVIEW_PYTHON" "$REVIEWER_CLAUDE_PEXPECT_SCRIPT" \
     --reviewer "claude" \
     --model "Claude Opus (local alias)" \
@@ -1409,13 +1409,15 @@ spec_compliance = verify_spec_implementation(spec_requirements, implementation_f
 
 ## Audit Phase 6: Stub/Placeholder Detection
 
-**Check:** Does every implementation file actually perform what its file plan intent describes?
+**Check:** Does every implementation file satisfy the binding boundary-plan obligations and evidence claims that justify it?
 
 ```python
-for story_plan in file_plans:
-    for file_entry in story_plan["files_to_create"] + story_plan["files_to_modify"]:
-        path = file_entry["path"]
-        intent = file_entry["intent"]
+for story_plan in boundary_plans:
+    for obligation in story_plan["required_contracts"] + story_plan["required_touchpoints"] + story_plan["proof_obligations"]:
+        path = obligation.get("path") or find_path_from_implementation_evidence(obligation["id"])
+        if not path:
+            continue
+        intent = obligation.get("obligation") or obligation.get("required_evidence") or obligation.get("success_condition")
         code = Read(path)
 
         # 1. Search for stub markers in production code
@@ -1471,7 +1473,7 @@ for story_plan in file_plans:
 ✅ src/utils/parser.py - No stubs detected
 ```
 
-**Key rule:** A stub found in production code is ALWAYS severity CRITICAL, never minor. If the file plan says the code should do something and it doesn't, that's a failed implementation.
+**Key rule:** A stub found in production code is ALWAYS severity CRITICAL, never minor. If a binding boundary-plan obligation says the code should do something and it doesn't, that's a failed implementation.
 
 ---
 
@@ -1559,7 +1561,7 @@ new component `01-intro.md` through `13-specs/` tree.
 |----------|----------|----------------|
 | Database schema | `backend/13-specs/database/`, `backend/13-specs/schemas/` | Migration files, CREATE TABLE, schema.sql, Pydantic DB models |
 | Services | `backend/05-building-blocks.md`, `backend/06-runtime.md` | FastAPI apps, CLI entry points, new routers, workers |
-| Building blocks | `05-building-blocks.md` | New components from file plans vs. what's documented |
+| Building blocks | `05-building-blocks.md` | New components from boundary plans and implementation evidence vs. what's documented |
 | External dependencies | `03-context.md` | New cloud SDKs, API clients, DB drivers, Docker services |
 | Domain entities | `08-cross-cutting/domain.md` | New Pydantic models, dataclasses, named domain concepts |
 | Terminology | `12-glossary.md`, `terminology-data-model.md` | New terms in code not in glossary |
@@ -1671,7 +1673,7 @@ Maintain `docs/epics/{epic-dir}/audit-issue-ledger.yaml` across audit attempts. 
 | `new_requirement` | The issue comes from a requirement clarified after earlier audits |
 | `false_positive` | The issue is not valid, with evidence |
 
-For `missed_previous_audit`, include why it was missed: unchecked acceptance row, unread file, no runtime evidence, stale file plan, missing scripted gate, reviewer overtrusted docs, or other concrete reason.
+For `missed_previous_audit`, include why it was missed: unchecked acceptance row, unread file, no runtime evidence, stale boundary plan, missing scripted gate, reviewer overtrusted docs, or other concrete reason.
 
 Required ledger shape:
 

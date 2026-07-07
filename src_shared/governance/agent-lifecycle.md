@@ -146,7 +146,7 @@ If your context has been summarized, re-read these from disk before continuing:
 
 1. **Your task**: `TaskList()` / `TaskGet(taskId)`
 2. **Agent summaries**: `.scope/{epic-id}/agent_summaries.jsonl`
-3. **Epic context**: `docs/epics/{epic-dir}/` (architecture, AC, ADRs, file plans)
+3. **Epic context**: `docs/epics/{epic-dir}/` (architecture, AC, ADRs, implementation boundary plans)
 4. **Governance files**: `.claude/governance/` (your checklist, production rules)
 5. **Lessons learned**: `docs/lessons-learned/INDEX.md`
 

@@ -72,7 +72,7 @@ Avoid noise:
 
 Do not approve merely because the docs are coherent at a high level. Approval
 requires evidence that the generated contracts actually enforce the acceptance
-criteria and that the test strategy is sufficient for Phase 4. File-plan
+criteria and that the test strategy is sufficient for Phase 4. Boundary-plan
 ownership is created during Phase 4 and is not a Gate #3 blocker unless its
 absence reflects an unresolved architecture boundary or missing test-strategy
 proof path.
@@ -120,7 +120,7 @@ Before writing the review, explicitly try to disprove each of these claims:
 16. Every matrix row with `requires.api`, `requires.json_schema`,
    `requires.sql`, `requires.error_contract`, or `requires.test_strategy` has
    cited evidence that exists and matches the requirement. Rows with
-   `requires.file_plan_owner` may remain Gate #4 pending before Phase 4.
+   `requires.implementation_boundary_owner` may remain Gate #4 pending before Phase 4.
 17. Every destructive cleanup, replay, idempotency, supersession, or attempt
    ownership promise has ownership-matrix evidence.
 18. The latest `readiness-preflight.md` has no unresolved required-artifact,
@@ -149,7 +149,7 @@ Classify findings as `BLOCKING` when Gate #3 must not proceed:
   coverage floor.
 
 Use `NON-BLOCKING` for useful improvements that do not prevent Gate #3.
-Missing `file-plan-story-*.yaml` or empty `evidence.file_plan_owner` is
+Missing `file-plan-story-*.yaml` or empty `evidence.implementation_boundary_owner` is
 non-blocking before Gate #3 when architecture, generated contracts, and
 test-strategy evidence are complete. It becomes blocking before Gate #4.
 

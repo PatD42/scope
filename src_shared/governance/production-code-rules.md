@@ -4,11 +4,11 @@ Rules that apply to ALL production code written by any agent. READ this file —
 
 ---
 
-## Rule 1: File Plan Intent Is Source of Truth
+## Rule 1: Implementation Boundary Plan Obligations Are Source of Truth
 
-The file plan intent defines what the code must do. Tests validate behavior but do NOT define the full scope. If all tests pass but the code doesn't do what the intent says, that is a FAILURE.
+The implementation boundary plan defines binding obligations through `required_contracts`, `required_touchpoints`, `forbidden_changes`, and `proof_obligations`. Tests validate behavior but do NOT define the full scope. If all tests pass but the code violates a binding obligation, that is a FAILURE.
 
-When tests and intent conflict, intent wins.
+When tests and binding obligations conflict, the boundary plan wins until Product Owner or Architect updates it.
 
 ## Rule 2: No Stubs or Placeholders
 
@@ -21,7 +21,7 @@ The following in production code are FAILURES:
 
 ## Rule 3: I/O Must Be Real
 
-If the file plan says the function sends, calls, queries, uploads, fetches, connects, writes to, or reads from something — the implementation MUST contain real I/O code (HTTP client, DB driver, file system operations). Tests may mock the I/O boundary for speed, but the production code path must be real.
+If a boundary-plan obligation says the function sends, calls, queries, uploads, fetches, connects, writes to, or reads from something — the implementation MUST contain real I/O code (HTTP client, DB driver, file system operations). Tests may mock the I/O boundary for speed, but the production code path must be real.
 
 ## Rule 4: No Hardcoded Values
 
@@ -29,11 +29,11 @@ Unless the user specifically approved it in the spec, all configurable values mu
 
 If the config file doesn't have the value yet, add it there and read from config.
 
-## Rule 5: All Planned Files Must Be Touched
+## Rule 5: Candidate Files Are Advisory
 
-Both `files_to_create` AND `files_to_modify` in the file plan are equally mandatory. Skipping a file from `files_to_modify` is as much a failure as skipping a file from `files_to_create`.
+`candidate_files` in the boundary plan are investigation hints, not mandatory edit targets. Required contracts, required touchpoints, forbidden changes, and proof obligations are mandatory.
 
-**Self-check before completing:** Compare files you changed (git diff --name-only) against ALL files listed in the file plan. If any planned file is missing from your changes, you are not done.
+**Self-check before completing:** Record candidate files used, relevant candidate files skipped, and developer-discovered files in implementation evidence. If you cannot justify a changed file from source inspection or a binding obligation, revert it.
 
 ## Rule 6: Live Smoke Test for New External Services
 

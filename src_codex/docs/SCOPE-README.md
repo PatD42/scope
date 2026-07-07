@@ -113,7 +113,7 @@ your-project/
 ├── docs/
 │   ├── product/            # Product docs (strategy, definition, decisions)
 │   ├── architecture/       # Technical docs (Arc42 sections 01-13)
-│   ├── epics/{epic-id}/    # Per-epic docs (acceptance criteria, file plans, ADRs)
+│   ├── epics/{epic-id}/    # Per-epic docs (acceptance criteria, implementation boundary plans, ADRs)
 │   └── releases/           # Release documentation
 ├── ./wip/
 │   └── {epic-id}/          # Git worktree per epic (implementation happens here)
