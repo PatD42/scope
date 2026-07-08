@@ -245,16 +245,16 @@ check_claude_invocation() {
     fail "Claude reviewer must use local Opus alias naming, not a stale pinned Opus version label"
   fi
 
-  if grep -R -n 'permission-mode acceptEdits' src_shared/commands/audit_epic.md src_shared/commands/epic_refine.md; then
-    fail "Claude reviewer automation must use bypassPermissions to avoid interactive permission prompts"
+  if grep -R -n -E 'permission-mode (acceptEdits|bypassPermissions)' src_shared/commands/audit_epic.md src_shared/commands/epic_refine.md; then
+    fail "Claude reviewer automation must use --dangerously-skip-permissions to avoid interactive permission prompts"
   fi
 
   grep -n "claude-opus.md" src_shared/commands/audit_epic.md
   grep -n "claude-opus.md" src_shared/commands/epic_refine.md
   grep -n "Claude Opus (local alias)" src_shared/commands/audit_epic.md
   grep -n "Claude Opus (local alias)" src_shared/commands/epic_refine.md
-  grep -n "permission-mode bypassPermissions" src_shared/commands/audit_epic.md
-  grep -n "permission-mode bypassPermissions" src_shared/commands/epic_refine.md
+  grep -n -- "--dangerously-skip-permissions" src_shared/commands/audit_epic.md
+  grep -n -- "--dangerously-skip-permissions" src_shared/commands/epic_refine.md
   grep -n "Before manually treating Claude as hung" src_shared/commands/audit_epic.md
   grep -n "Before manually treating Claude as hung" src_shared/commands/epic_refine.md
   grep -n "Before terminating Claude, inspected PTY log" src_shared/scripts/scope-reviewer-claude-pexpect.py

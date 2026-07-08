@@ -26,10 +26,13 @@ Use platform-specific files only for real platform differences.
 Before committing prompt or workflow changes, run:
 
 ```bash
-git diff --check
+./scripts/validate-pr-checks.sh
 ```
 
-For installable Scope changes, also run an install smoke test:
+This is the same gate GitHub Actions runs. It includes whitespace checks,
+mirrored Claude/Codex validation, generated-file rejection, and install smoke.
+
+For quick manual install checks, you can also run:
 
 ```bash
 tmpdir=$(mktemp -d)
