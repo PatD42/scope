@@ -33,6 +33,10 @@ No custom tooling. No MCP servers. Just Claude Code slash commands, agents, skil
 
 - **`/re_documentation`** — Reverse engineer product and architecture documentation from an existing codebase. Two agents scan your code, interview you about decisions and rationale, then generate 24 documentation files (9 product + 15 architecture)
 
+### Session Continuity
+
+- **`/session-handoff`** / **`scope:session-handoff`** — Create an ephemeral `session-handoff.md` at the active worktree or project root when a long session has become inefficient. The file captures enough durable context for a fresh agent to assess the state and recommend the next course of action without treating unconfirmed next steps as instructions. The file is overwritten on each run and should not be tracked by git.
+
 Every command has user approval gates. Nothing is merged without your sign-off.
 
 ## How It Works
@@ -47,7 +51,7 @@ SCOPE uses Claude Code's built-in features:
 
 When running inside `./wip/{epic-id}`, use the `plugins/scope/` directory from that worktree checkout. Do not fall back to the main checkout.
 
-No external dependencies. No install scripts. No state files.
+No external dependencies. No install scripts. No persistent state files.
 
 ## Installation
 
