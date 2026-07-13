@@ -85,12 +85,12 @@ Every audit should gather independent reviewer feedback before the final audit r
 
 | Reviewer | Required model | Prompt source | Output |
 |----------|----------------|---------------|--------|
-| Codex | `gpt-5.5` with high reasoning | `commands/audit_epic/reviewer-codex.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/codex-gpt-5.5-high.md` |
+| Codex | `gpt-5.6-terra` with high reasoning | `commands/audit_epic/reviewer-codex.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/codex-gpt-5.6-terra-high.md` |
 | Claude | Opus via local `opus` alias | `commands/audit_epic/reviewer-claude.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/claude-opus.md` |
 | Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/audit_epic/reviewer-agy.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
 | GLM | Optional `zai-coding-plan/glm-5.2` through opencode | `commands/audit_epic/reviewer-glm.md` | `docs/epics/{epic-dir}/reviews/audit-NNN/glm-5.2.md` |
 
-Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
+Codex uses `gpt-5.6-terra` as the model id and `high` as reasoning effort. `gpt-5.6-terra-high` is only a review label/output filename and must never be passed to `codex --model`.
 
 These reviewers are read-only auditors. They do not edit files and do not decide what to fix. The orchestrating audit command merges their findings, removes duplicates, assigns severities, and produces the fix plan for the responsible implementation agent.
 
@@ -139,7 +139,7 @@ SOURCES:
 ├── Audit manifest: docs/epics/{epic-id}/audit-manifest.yaml
 ├── Audit verification matrix: docs/epics/{epic-id}/audit-verification-matrix.yaml
 ├── Issue ledger: docs/epics/{epic-id}/audit-issue-ledger.yaml
-├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.5-high.md
+├── Codex review if available: docs/epics/{epic-id}/reviews/audit-NNN/codex-gpt-5.6-terra-high.md
 ├── Claude review if available: docs/epics/{epic-id}/reviews/audit-NNN/claude-opus.md
 ├── Antigravity review if available: docs/epics/{epic-id}/reviews/audit-NNN/agy-gemini-3.1-pro-high.md
 ├── GLM review if opencode is available: docs/epics/{epic-id}/reviews/audit-NNN/glm-5.2.md
@@ -612,7 +612,7 @@ REVIEWER_PROMPT_DIR=$(find ./plugins/scope/commands/audit_epic ./.claude/command
 REVIEWER_CLAUDE_PEXPECT_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-claude-pexpect.py" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
-CODEX_MODEL_ID="${SCOPE_CODEX_MODEL_ID:-gpt-5.5}"
+CODEX_MODEL_ID="${SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra}"
 CODEX_REASONING_EFFORT="${SCOPE_CODEX_REASONING_EFFORT:-high}"
 CODEX_REVIEW_LABEL="${SCOPE_CODEX_REVIEW_LABEL:-${CODEX_MODEL_ID}-${CODEX_REASONING_EFFORT}}"
 AGY_REVIEW_MODEL="${SCOPE_AGY_MODEL:-Gemini 3.1 Pro (High)}"
@@ -715,7 +715,7 @@ run_codex_review() {
 
   if [[ "$CODEX_MODEL_ID" =~ -(low|medium|high)$ ]]; then
     echo "Codex model id appears to include a reasoning suffix: ${CODEX_MODEL_ID}" > "${ATTEMPT_DIR}/codex-unavailable.md"
-    echo "Use CODEX_MODEL_ID=gpt-5.5 and CODEX_REASONING_EFFORT=high." >> "${ATTEMPT_DIR}/codex-unavailable.md"
+    echo "Use CODEX_MODEL_ID=gpt-5.6-terra and CODEX_REASONING_EFFORT=high." >> "${ATTEMPT_DIR}/codex-unavailable.md"
     append_review_metadata "codex" "$CODEX_MODEL_ID" "exec" "" "failed" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" 0 "$REVIEW_TIMEOUT_SECONDS" 0 "${ATTEMPT_DIR}/codex-unavailable.md" "Codex model id includes reasoning suffix; use separate model id and reasoning effort" "$CODEX_REASONING_EFFORT" "$CODEX_REVIEW_LABEL"
     return 1
   fi
@@ -1077,7 +1077,7 @@ Residual findings must still be evidence-backed. Do not use the residual review 
 
 After reviewer execution finishes:
 
-1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.5-high.md`, `reviews/audit-NNN/claude-opus.md`, `reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `reviews/audit-NNN/agy-gemini-3.5-flash.md`, and optional `reviews/audit-NNN/glm-5.2.md` when opencode is available. Any required reviewer may be absent when the local tool is unavailable; GLM may be absent silently. For legacy attempts, also read any additional `reviews/audit-NNN/claude-opus*.md` review file if present.
+1. Read every completed review in the current attempt directory. Expected filenames are `reviews/audit-NNN/codex-gpt-5.6-terra-high.md`, `reviews/audit-NNN/claude-opus.md`, `reviews/audit-NNN/agy-gemini-3.1-pro-high.md` or fallback `reviews/audit-NNN/agy-gemini-3.5-flash.md`, and optional `reviews/audit-NNN/glm-5.2.md` when opencode is available. Any required reviewer may be absent when the local tool is unavailable; GLM may be absent silently. For legacy attempts, also read any additional `reviews/audit-NNN/claude-opus*.md` review file if present.
 2. Read `reviews/audit-NNN/review-metadata.yaml` and use it to report reviewer duration, timeout, retry count, transport, and status.
 3. Read `reviews/audit-NNN/exploratory-residual-review.md` if it exists.
 4. Merge reviewer row statuses into `audit-verification-matrix.yaml` under `reviewer_status`.
@@ -1705,7 +1705,7 @@ Write to: `docs/epics/{epic-dir}/epic_audit.md`
 **Date**: {date}
 **Auditor**: Scope audit command
 **Audit Attempt**: {audit-NNN}
-**External Reviewers**: Codex `gpt-5.5` with high reasoning, Claude Opus via local `opus` alias, Antigravity `Gemini 3.1 Pro (High)` or fallback `Gemini 3.5 Flash (High)`, optional GLM `zai-coding-plan/glm-5.2` when opencode is available
+**External Reviewers**: Codex `gpt-5.6-terra` with high reasoning, Claude Opus via local `opus` alias, Antigravity `Gemini 3.1 Pro (High)` or fallback `Gemini 3.5 Flash (High)`, optional GLM `zai-coding-plan/glm-5.2` when opencode is available
 **Status**: {PASS / FAIL / PASS WITH CONDITIONS}
 
 ---
@@ -1771,7 +1771,7 @@ Rows marked `fail`, required rows marked `unverified`, and blocked rows must app
 
 | Reviewer | Model | Transport | Session | Status | Duration | Retries | Findings Imported |
 |----------|-------|-----------|---------|--------|----------|---------|-------------------|
-| Codex | gpt-5.5 / high reasoning | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
+| Codex | gpt-5.6-terra / high reasoning | exec | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Claude | Opus via local alias | pexpect | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | Antigravity | {Gemini 3.1 Pro (High) / Gemini 3.5 Flash (High)} | agy-print | n/a | {completed/unavailable} | {from review-metadata.yaml} | {N} | {N} |
 | GLM | zai-coding-plan/glm-5.2 | opencode-run | n/a | {completed/not run} | {from review-metadata.yaml if present} | {N} | {N} |

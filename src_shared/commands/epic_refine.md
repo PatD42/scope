@@ -1130,12 +1130,12 @@ unresolved issues if the loop stopped.
 
 | Reviewer | Required model | Prompt source | Output |
 |----------|----------------|---------------|--------|
-| Codex | `gpt-5.5` with high reasoning | `commands/epic_refine/reviewer-architecture-codex.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/codex-gpt-5.5-high.md` |
+| Codex | `gpt-5.6-terra` with high reasoning | `commands/epic_refine/reviewer-architecture-codex.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/codex-gpt-5.6-terra-high.md` |
 | Claude | Opus via local `opus` alias | `commands/epic_refine/reviewer-architecture-claude.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/claude-opus.md` |
 | Antigravity | `Gemini 3.1 Pro (High)` with rate-limit fallback to `Gemini 3.5 Flash (High)` | `commands/epic_refine/reviewer-architecture-agy.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/agy-gemini-3.1-pro-high.md` or fallback `agy-gemini-3.5-flash.md` |
 | GLM | Optional `zai-coding-plan/glm-5.2` through opencode | `commands/epic_refine/reviewer-architecture-glm.md` | `docs/epics/{epic-dir}/reviews/refine-architecture-NNN/glm-5.2.md` |
 
-Codex uses `gpt-5.5` as the model id and `high` as reasoning effort. `gpt-5.5-high` is only a review label/output filename and must never be passed to `codex --model`.
+Codex uses `gpt-5.6-terra` as the model id and `high` as reasoning effort. `gpt-5.6-terra-high` is only a review label/output filename and must never be passed to `codex --model`.
 Claude uses the local Claude CLI `opus` alias by default. This is not pinned to a specific Claude release. To pin a specific Claude model id, set `SCOPE_CLAUDE_PEXPECT_COMMAND`.
 
 Use the transport appropriate to each reviewer:
@@ -1183,7 +1183,7 @@ REFINE_REVIEW_PROMPT_DIR=$(find ./plugins/scope/commands/epic_refine ./.claude/c
 REVIEWER_CLAUDE_PEXPECT_SCRIPT=$(find ./plugins/scope/scripts ./.claude/commands/scripts ./src_shared/scripts ~/.claude/commands/scripts -name "scope-reviewer-claude-pexpect.py" 2>/dev/null | head -1)
 REVIEW_TIMEOUT_SECONDS="${SCOPE_REVIEW_TIMEOUT_SECONDS:-3600}"
 REVIEW_RETRIES="${SCOPE_REVIEW_RETRIES:-1}"
-CODEX_MODEL_ID="${SCOPE_CODEX_MODEL_ID:-gpt-5.5}"
+CODEX_MODEL_ID="${SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra}"
 CODEX_REASONING_EFFORT="${SCOPE_CODEX_REASONING_EFFORT:-high}"
 CODEX_REVIEW_LABEL="${SCOPE_CODEX_REVIEW_LABEL:-${CODEX_MODEL_ID}-${CODEX_REASONING_EFFORT}}"
 AGY_REVIEW_MODEL="${SCOPE_AGY_MODEL:-Gemini 3.1 Pro (High)}"

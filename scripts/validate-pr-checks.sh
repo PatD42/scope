@@ -156,10 +156,12 @@ check_install() {
   test -f "$tmpdir/.claude/commands/wrap_epic.md"
   test -f "$tmpdir/.claude/commands/implement.md"
   test -f "$tmpdir/.claude/commands/audit_epic.md"
+  test -f "$tmpdir/.claude/agents/developer.md"
 
   test -f "$tmpdir/plugins/scope/commands/wrap_epic.md"
   test -f "$tmpdir/plugins/scope/commands/implement.md"
   test -f "$tmpdir/plugins/scope/commands/audit_epic.md"
+  test -f "$tmpdir/plugins/scope/agents/developer.md"
   test -f "$tmpdir/plugins/scope/.codex-plugin/plugin.json"
 
   test -d "$tmpdir/.claude/commands/audit_epic"
@@ -171,6 +173,13 @@ check_install() {
   grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "Path selection rule" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
   grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
+  grep -n '^model: sonnet$' "$tmpdir/.claude/agents/developer.md"
+  grep -n '^model: gpt-5.6-terra$' "$tmpdir/plugins/scope/agents/developer.md"
+  grep -n '^model_reasoning_effort: max$' "$tmpdir/plugins/scope/agents/developer.md"
+  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/.claude/commands/epic_refine/reviewer-architecture-codex.md"
+  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/.claude/commands/audit_epic/reviewer-codex.md"
+  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/plugins/scope/commands/epic_refine/reviewer-architecture-codex.md"
+  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/plugins/scope/commands/audit_epic/reviewer-codex.md"
 
   rm -rf "$tmpdir"
 }
@@ -232,10 +241,22 @@ check_codex_invocation() {
     fail "Codex exec no longer supports --ask-for-approval; use supported flags only"
   fi
 
+  if grep -R -n -F 'gpt-5.5' src_shared/commands/epic_refine.md src_shared/commands/epic_refine src_shared/commands/audit_epic.md src_shared/commands/audit_epic; then
+    fail "OpenAI architecture and audit reviewer defaults must use gpt-5.6-terra"
+  fi
+
   grep -n "codex exec" src_shared/commands/audit_epic.md
   grep -n -- "--sandbox read-only" src_shared/commands/audit_epic.md
   grep -n -- "--sandbox read-only" src_shared/commands/epic_refine.md
   grep -n "stale approval flags" src_shared/commands/epic_refine.md
+  grep -n 'SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra' src_shared/commands/audit_epic.md
+  grep -n 'SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra' src_shared/commands/epic_refine.md
+  grep -n 'SCOPE_CODEX_REASONING_EFFORT:-high' src_shared/commands/audit_epic.md
+  grep -n 'SCOPE_CODEX_REASONING_EFFORT:-high' src_shared/commands/epic_refine.md
+  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' src_shared/commands/audit_epic/reviewer-codex.md
+  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' src_shared/commands/epic_refine/reviewer-architecture-codex.md
+  grep -n '^model: gpt-5.6-terra$' src_codex/agents/developer.md
+  grep -n '^model_reasoning_effort: max$' src_codex/agents/developer.md
 }
 
 check_claude_invocation() {

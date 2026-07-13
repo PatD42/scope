@@ -1,7 +1,8 @@
 ---
 name: developer
 description: Implement production-ready code. Writes both implementation and tests. Retries up to 4x, then escalates.
-model: sonnet
+model: gpt-5.6-terra
+model_reasoning_effort: max
 tools: Read, Write, Edit, Bash, Glob, Grep, TaskList, TaskGet, TaskUpdate
 skills: agent-summary-core, subagent-skill-loader, project-documentation, session-id-finder, task-polling, window-title
 phases:

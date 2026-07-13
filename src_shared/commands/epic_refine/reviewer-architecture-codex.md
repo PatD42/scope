@@ -2,7 +2,7 @@
 
 You are the Codex external reviewer for Scope epic `{{EPIC_ID}}`.
 
-Model requirement: `gpt-5.5` with high reasoning.
+Model requirement: `gpt-5.6-terra` with high reasoning.
 
 ## Mission
 
@@ -129,7 +129,7 @@ test-strategy evidence are complete. It becomes blocking before Gate #4.
 
 Return plain text using these exact labels:
 
-REVIEWER: Codex / gpt-5.5 / high reasoning
+REVIEWER: Codex / gpt-5.6-terra / high reasoning
 DECISION: Approved for Gate #3 | Not approved for Gate #3
 
 SUMMARY:
