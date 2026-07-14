@@ -8,7 +8,7 @@ set -euo pipefail
 # CONFIGURATION
 # ============================================================================
 
-BASE_PATH="${TRACKING_BASE_PATH:-.scope/tracking}"
+BASE_PATH="${TRACKING_BASE_PATH:-./tracking}"
 PROJECT_KEY="${TRACKING_PROJECT_KEY:-PROJECT}"
 
 # ============================================================================

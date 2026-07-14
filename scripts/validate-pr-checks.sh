@@ -163,6 +163,16 @@ check_install() {
   test -f "$tmpdir/plugins/scope/commands/audit_epic.md"
   test -f "$tmpdir/plugins/scope/agents/developer.md"
   test -f "$tmpdir/plugins/scope/.codex-plugin/plugin.json"
+  test -f "$tmpdir/.scope/config.yaml"
+
+  grep -n '^  skill: local-tracking-bash' "$tmpdir/.scope/config.yaml"
+  grep -n '^  project_key: PROJECT' "$tmpdir/.scope/config.yaml"
+  grep -n '^  base_path: ./tracking' "$tmpdir/.scope/config.yaml"
+  grep -n '^  skill: project-documentation-file' "$tmpdir/.scope/config.yaml"
+  grep -n '^  docs_path: ./docs' "$tmpdir/.scope/config.yaml"
+  if grep -n -E 'MYPROJ|MYSPACE|jira|confluence' "$tmpdir/.scope/config.yaml"; then
+    fail "installed default config must not require Jira or Confluence setup"
+  fi
 
   test -d "$tmpdir/.claude/commands/audit_epic"
   test -d "$tmpdir/plugins/scope/commands/audit_epic"
@@ -173,6 +183,8 @@ check_install() {
   grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "Path selection rule" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
   grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
+  grep -n "do not ask for a" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
+  grep -n "Do not ask for a Jira project key" "$tmpdir/.claude/skills/project-tracking/SKILL.md"
   grep -n '^model: sonnet$' "$tmpdir/.claude/agents/developer.md"
   grep -n '^model: gpt-5.6-terra$' "$tmpdir/plugins/scope/agents/developer.md"
   grep -n '^model_reasoning_effort: max$' "$tmpdir/plugins/scope/agents/developer.md"

@@ -192,9 +192,9 @@ if /I "%INSTALL_TYPE%"=="project" (
         if errorlevel 1 goto :install_failed
         echo   [ok] Created .scope\config.yaml from template
         echo.
-        echo   Next: Edit .scope\config.yaml to set:
-        echo     - project.name
-        echo     - tracking.skill and tracking.project_key
+        echo   Local defaults are active:
+        echo     - documentation: .\docs
+        echo     - tracking: .\tracking
         echo.
     )
 )
@@ -212,13 +212,9 @@ if /I "%INSTALL_TYPE%"=="project" (
         echo 1. Navigate to the project:
         echo    cd /d "%INSTALL_DIR%"
         echo.
-        echo 2. Edit .scope\config.yaml with your project settings
-        echo.
-        echo 3. Start using SCOPE:
-    ) else (
-        echo 1. Edit .scope\config.yaml with your project settings
-        echo.
         echo 2. Start using SCOPE:
+    ) else (
+        echo 1. Start using SCOPE:
     )
     echo    Claude: /prd_create, /prd_refine, /prd_breakdown, /epic_refine {epic-id}, /implement {epic-id}
     echo    Codex:  scope:prd_create, scope:prd_refine, scope:prd_breakdown, scope:epic_refine E1, scope:implement E1

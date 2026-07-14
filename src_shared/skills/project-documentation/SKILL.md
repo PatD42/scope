@@ -5,7 +5,13 @@ description: Project documentation structure and templates for product, architec
 
 # Project Documentation
 
-Local markdown files. The architecture documentation follows Arc42 methodology. The product documentation follows Atlassian Product Documentation Blueprints. The provided templates will complement your internal knowledge
+Local markdown files. The architecture documentation follows Arc42 methodology. The product documentation follows Atlassian Product Documentation Blueprints. The provided templates will complement your internal knowledge.
+
+Local files are the default and require no external service configuration. The
+Atlassian name describes the product-documentation template format; it does not
+select Confluence. Unless the active configuration explicitly selects an
+external documentation backend, write under `./docs` and do not ask for a
+Confluence space key, Atlassian URL, or Jira project key.
 
 ---
 
@@ -14,7 +20,8 @@ Local markdown files. The architecture documentation follows Arc42 methodology. 
 ```yaml
 # .scope/config.yaml
 documentation:
-  root: ./docs
+  skill: project-documentation-file
+  docs_path: ./docs
 ```
 
 ---

@@ -7,14 +7,39 @@ description: Generic project tracking adapter - dispatches to configured backend
 
 This is a wrapper skill that dispatches to the configured tracking backend.
 
+## Backend Selection
+
+Local file tracking is the default. If `.scope/config.yaml` is missing, or its
+`tracking` section is missing, use these values without asking the user to
+choose a backend:
+
+```yaml
+tracking:
+  method: arc42-c4
+  skill: local-tracking-bash
+  project_key: PROJECT
+  base_path: ./tracking
+```
+
+Only use Jira when the active `tracking.skill` value explicitly names a Jira
+backend. Comments, examples, available MCP tools, and the presence of an
+Atlassian account do not select Jira. Do not ask for a Jira project key or
+Atlassian URL while local tracking is active.
+
 ## Usage
 
 **Step 1: Read config and infer guide**
 
 ```python
-config = read_yaml(".scope/config.yaml")
-backend_skill = config.tracking.skill  # e.g., "jira-sooperset-mcp" or "jira-atlassian-mcp"
-method = config.tracking.method        # e.g., "arc42-c4"
+config = read_yaml(".scope/config.yaml") if exists(".scope/config.yaml") else {}
+tracking = config.get("tracking") or {
+    "skill": "local-tracking-bash",
+    "method": "arc42-c4",
+    "project_key": "PROJECT",
+    "base_path": "./tracking",
+}
+backend_skill = tracking["skill"]
+method = tracking["method"]
 
 # Infer guide from method
 guide_name = f"tracking-guide-{method}.md"  # e.g., "tracking-guide-arc42-c4.md"
@@ -106,10 +131,13 @@ error:
   config_value: "{config.tracking.skill}"
 ```
 
-If config is missing:
+If an explicit, non-local config is incomplete:
 
 ```yaml
 error:
   type: configuration_error
-  message: "Missing 'tracking.skill' or 'tracking.guide' in .scope/config.yaml"
+  message: "The selected external tracking backend is missing required configuration"
 ```
+
+Do not raise a configuration error for a missing config file or missing
+`tracking` section; apply the local defaults above.

@@ -116,7 +116,7 @@ install.bat --user
 install.bat
 ```
 
-Both installers copy the same commands, agents, skills, governance files, and Codex plugin assets. For project installs, they also create `.scope/config.yaml` when it does not already exist; edit it to set your project name and tracking preferences.
+Both installers copy the same commands, agents, skills, governance files, and Codex plugin assets. Project installs also create `.scope/config.yaml` when it does not already exist. The installed configuration is ready to use with local Markdown documentation in `./docs` and local YAML tracking in `./tracking`; Jira and Confluence are not required.
 
 ## Quick Start
 

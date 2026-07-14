@@ -204,9 +204,9 @@ if [[ "$INSTALL_TYPE" == "project" ]]; then
         cp "${SHARED_SRC}/commands/config_example.yaml" "${INSTALL_DIR}/.scope/config.yaml"
         echo "  ✓ Created .scope/config.yaml from template"
         echo ""
-        echo -e "  ${YELLOW}Next: Edit .scope/config.yaml to set:${NC}"
-        echo "    - project.name"
-        echo "    - tracking.skill and tracking.project_key"
+        echo "  Local defaults are active:"
+        echo "    - documentation: ./docs"
+        echo "    - tracking: ./tracking"
         echo ""
     fi
 fi
@@ -224,13 +224,9 @@ if [[ "$INSTALL_TYPE" == "project" ]]; then
         echo "1. Navigate to the project:"
         echo "   cd ${INSTALL_DIR}"
         echo ""
-        echo "2. Edit .scope/config.yaml with your project settings"
-        echo ""
-        echo "3. Start using SCOPE:"
-    else
-        echo "1. Edit .scope/config.yaml with your project settings"
-        echo ""
         echo "2. Start using SCOPE:"
+    else
+        echo "1. Start using SCOPE:"
     fi
     echo "   Claude: /prd_create, /prd_refine, /prd_breakdown, /epic_refine {epic-id}, /implement {epic-id}"
     echo "   Codex:  scope:prd_create, scope:prd_refine, scope:prd_breakdown, scope:epic_refine E1, scope:implement E1"

@@ -16,8 +16,8 @@ This implementation expects these parameters from `.scope/config.yaml`:
 ```yaml
 tracking:
   skill: local-tracking-bash
-  base_path: .scope/tracking      # Base directory for tracking files
-  project_key: CODINT             # Prefix for display IDs
+  base_path: ./tracking           # Base directory for tracking files
+  project_key: PROJECT            # Prefix for display IDs
 ```
 
 The wrapper skill (`project-tracking/SKILL.md`) reads this config and sets environment variables for the bash script.
