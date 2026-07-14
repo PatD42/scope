@@ -20,3 +20,107 @@ jobs:
 
       - name: Validate Scope prompts
         run: ./scripts/validate-pr-checks.sh
+
+  validate-windows-installer:
+    name: Validate Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Exercise project and user installs
+        shell: pwsh
+        run: |
+          $projectTarget = Join-Path $env:RUNNER_TEMP "scope project target"
+          New-Item -ItemType Directory -Force -Path $projectTarget | Out-Null
+
+          & .\install.bat $projectTarget
+          if ($LASTEXITCODE -ne 0) { throw "Project install failed" }
+
+          $requiredProjectPaths = @(
+            ".claude/commands/implement.md",
+            ".claude/commands/audit_epic/reviewer-codex.md",
+            ".claude/commands/scripts/scope-reviewer-claude-pexpect.py",
+            ".claude/agents/developer.md",
+            ".claude/skills/project-documentation/SKILL.md",
+            ".claude/governance/developer-checklist.md",
+            "plugins/scope/commands/implement.md",
+            "plugins/scope/commands/audit_epic/reviewer-codex.md",
+            "plugins/scope/agents/developer.md",
+            "plugins/scope/skills/project-documentation/SKILL.md",
+            "plugins/scope/governance/developer-checklist.md",
+            "plugins/scope/docs/reverse-engineering-guide.md",
+            "plugins/scope/docs/SCOPE-README.md",
+            "plugins/scope/scripts/scope-reviewer-claude-pexpect.py",
+            "plugins/scope/scripts/scope-command",
+            "plugins/scope/.codex-plugin/plugin.json",
+            "plugins/scope/.mcp.json",
+            "plugins/scope/README.md",
+            ".scope/config.yaml"
+          )
+          foreach ($relativePath in $requiredProjectPaths) {
+            $path = Join-Path $projectTarget $relativePath
+            if (-not (Test-Path -LiteralPath $path)) { throw "Missing installed path: $relativePath" }
+          }
+
+          $configPath = Join-Path $projectTarget ".scope/config.yaml"
+          Set-Content -LiteralPath $configPath -Value "preserve: true"
+          $stalePaths = @(
+            ".claude/commands/scripts/scope-reviewer-tmux.sh",
+            ".claude/commands/audit_epic/reviewer-gemini.md",
+            ".claude/commands/epic_refine/reviewer-architecture-gemini.md",
+            "plugins/scope/scripts/scope-reviewer-tmux.sh",
+            "plugins/scope/commands/audit_epic/reviewer-gemini.md",
+            "plugins/scope/commands/epic_refine/reviewer-architecture-gemini.md"
+          )
+          foreach ($relativePath in $stalePaths) {
+            $path = Join-Path $projectTarget $relativePath
+            New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
+            Set-Content -LiteralPath $path -Value "obsolete"
+          }
+
+          & .\install.bat $projectTarget
+          if ($LASTEXITCODE -ne 0) { throw "Project reinstall failed" }
+          if ((Get-Content -Raw -LiteralPath $configPath).Trim() -ne "preserve: true") {
+            throw "Existing .scope/config.yaml was overwritten"
+          }
+          foreach ($relativePath in $stalePaths) {
+            if (Test-Path -LiteralPath (Join-Path $projectTarget $relativePath)) {
+              throw "Obsolete installed file was not removed: $relativePath"
+            }
+          }
+
+          $userTarget = Join-Path $env:RUNNER_TEMP "scope user target"
+          New-Item -ItemType Directory -Force -Path $userTarget | Out-Null
+          $env:USERPROFILE = $userTarget
+          & .\install.bat --user
+          if ($LASTEXITCODE -ne 0) { throw "User install failed" }
+          if (-not (Test-Path -LiteralPath (Join-Path $userTarget ".claude/commands/implement.md"))) {
+            throw "User Claude install is missing"
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $userTarget "plugins/scope/commands/implement.md"))) {
+            throw "User Codex install is missing"
+          }
+          if (Test-Path -LiteralPath (Join-Path $userTarget ".scope/config.yaml")) {
+            throw "User install must not create project config"
+          }
+
+          $currentTarget = Join-Path $env:RUNNER_TEMP "scope current target"
+          New-Item -ItemType Directory -Force -Path $currentTarget | Out-Null
+          Push-Location $currentTarget
+          try {
+            & (Join-Path $env:GITHUB_WORKSPACE "install.bat")
+            if ($LASTEXITCODE -ne 0) { throw "Current-directory install failed" }
+            if (-not (Test-Path -LiteralPath ".claude/commands/implement.md")) {
+              throw "Current-directory Claude install is missing"
+            }
+            if (-not (Test-Path -LiteralPath "plugins/scope/commands/implement.md")) {
+              throw "Current-directory Codex install is missing"
+            }
+            if (-not (Test-Path -LiteralPath ".scope/config.yaml")) {
+              throw "Current-directory project config is missing"
+            }
+          } finally {
+            Pop-Location
+          }

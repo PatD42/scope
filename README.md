@@ -63,14 +63,18 @@ SCOPE uses Claude Code or codex built-in features:
 - **TaskCreate/TaskUpdate** manage story dependencies and sequencing
 - **Git worktrees** isolate implementation from the main branch
 
-No external dependencies. No install scripts. No persistent state files.
+No external runtime dependencies. No persistent state files.
 
 ## Installation
+
+Clone Scope first:
 
 ```bash
 git clone https://github.com/PatD42/scope.git
 cd scope
 ```
+
+### macOS and Linux
 
 **Install to a project** (commands available only in that project):
 
@@ -90,7 +94,29 @@ cd scope
 ./install.sh
 ```
 
-The script copies commands, agents, skills, and a config template into `.claude/` and a AGENTS.md for Codex. For project installs, it also creates `.scope/config.yaml` — edit it to set your project name and tracking preferences.
+### Windows
+
+Run these commands from Command Prompt. In PowerShell, prefix the installer with `./` or `.\`.
+
+**Install to a project** (commands available only in that project):
+
+```bat
+install.bat "C:\path\to\your-project"
+```
+
+**Install to user directory** (commands available in all projects):
+
+```bat
+install.bat --user
+```
+
+**Install to current directory** (default):
+
+```bat
+install.bat
+```
+
+Both installers copy the same commands, agents, skills, governance files, and Codex plugin assets. For project installs, they also create `.scope/config.yaml` when it does not already exist; edit it to set your project name and tracking preferences.
 
 ## Quick Start
 

@@ -46,7 +46,7 @@ is_text_file() {
   esac
 
   case "$file" in
-    *.md|*.yaml|*.yml|*.json|*.toml|*.sh|*.py|*.txt|*.sql|*.html|*.css|*.js|*.ts|*.tsx)
+    *.md|*.yaml|*.yml|*.json|*.toml|*.sh|*.bat|*.cmd|*.ps1|*.py|*.txt|*.sql|*.html|*.css|*.js|*.ts|*.tsx)
       return 0
       ;;
   esac
@@ -184,10 +184,38 @@ check_install() {
   rm -rf "$tmpdir"
 }
 
+check_windows_installer() {
+  local batch_version
+  local required_path
+  local shell_version
+
+  section "Check Windows installer parity"
+
+  test -f install.bat
+  shell_version="$(sed -n 's/^VERSION="\([^"]*\)"/\1/p' install.sh)"
+  batch_version="$(sed -n 's/^set "VERSION=\([^"]*\)"/\1/p' install.bat)"
+  [[ -n "$shell_version" && "$batch_version" == "$shell_version" ]] || fail "install.sh and install.bat versions differ"
+  grep -n 'if /I "%~1"=="--user"' install.bat
+  grep -n 'set "INSTALL_DIR=%USERPROFILE%"' install.bat
+  grep -n 'set "CLAUDE_DIR=%~1\\.claude"' install.bat
+  grep -n 'set "CODEX_DIR=%~1\\plugins\\scope"' install.bat
+
+  for required_path in commands scripts skills agents governance docs .codex-plugin; do
+    grep -n "${required_path}" install.bat >/dev/null
+  done
+
+  grep -n 'config_example.yaml' install.bat
+  grep -n 'scope-reviewer-tmux.sh' install.bat
+  grep -n 'reviewer-gemini.md' install.bat
+  grep -n 'reviewer-architecture-gemini.md' install.bat
+  grep -n 'install.bat --user' README.md
+  grep -n 'install.bat "C:\\path\\to\\your-project"' README.md
+}
+
 check_codex_plugin_naming() {
   section "Check Codex plugin naming"
 
-  if grep -R -n -E "scope-for-codex|scope_for_codex" src_codex src_shared install.sh README.md CONTRIBUTING.md; then
+  if grep -R -n -E "scope-for-codex|scope_for_codex" src_codex src_shared install.sh install.bat README.md CONTRIBUTING.md; then
     fail "found stale Codex plugin naming; use 'scope'"
   fi
 
@@ -350,6 +378,7 @@ main() {
   check_generated_files
   check_mirrors "$range"
   check_install
+  check_windows_installer
   check_codex_plugin_naming
   check_codegraph_guidance
   check_codex_override_sources
