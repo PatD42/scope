@@ -261,8 +261,9 @@ for /R "%~2" %%F in (.DS_Store) do (
 exit /b 0
 
 :copy_file_if_exists
-if not exist "%~1" exit /b 0
-copy /Y "%~1" "%~2" >nul
+dir /B /A "%~1" >nul 2>&1
+if errorlevel 1 exit /b 0
+xcopy "%~1" "%~dp2" /H /Q /R /Y >nul
 if errorlevel 1 exit /b 1
 exit /b 0
 
