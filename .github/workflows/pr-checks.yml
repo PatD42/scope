@@ -55,7 +55,6 @@ jobs:
             "plugins/scope/scripts/scope-reviewer-claude-pexpect.py",
             "plugins/scope/scripts/scope-command",
             "plugins/scope/.codex-plugin/plugin.json",
-            "plugins/scope/.mcp.json",
             "plugins/scope/README.md",
             ".scope/config.yaml"
           )
