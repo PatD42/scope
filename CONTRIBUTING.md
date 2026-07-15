@@ -7,9 +7,10 @@ Thanks for helping improve Scope. This project accepts contributions through pul
 For public contributions, use the standard fork workflow:
 
 1. Fork the repository.
-2. Create a branch in your fork.
-3. Commit your change.
-4. Open a pull request against this repository.
+2. Activate the repository checks with `./scripts/setup-git-hooks.sh`.
+3. Create a branch in your fork.
+4. Commit your change and push the branch. The pre-push hook runs the same validation as CI.
+5. Open a pull request against this repository.
 
 Branch names should be short and descriptive:
 

@@ -224,6 +224,27 @@ check_windows_installer() {
   grep -n 'install.bat "C:\\path\\to\\your-project"' README.md
 }
 
+check_git_hooks() {
+  section "Check Git hook enforcement"
+
+  test -x .githooks/pre-push
+  test -x scripts/setup-git-hooks.sh
+  bash -n .githooks/pre-push scripts/setup-git-hooks.sh
+  grep -n 'validate-pr-checks.sh' .githooks/pre-push
+  grep -n 'core.hooksPath .githooks' scripts/setup-git-hooks.sh
+  grep -n 'setup-git-hooks.sh' AGENTS.md CONTRIBUTING.md
+}
+
+check_actions_runtime() {
+  section "Check GitHub Actions runtime"
+
+  if grep -R -n 'actions/checkout@v4' .github/workflows; then
+    fail "actions/checkout@v4 uses the deprecated Node 20 runtime"
+  fi
+
+  grep -n 'actions/checkout@v6' .github/workflows/pr-checks.yml
+}
+
 check_codex_plugin_naming() {
   section "Check Codex plugin naming"
 
@@ -391,6 +412,8 @@ main() {
   check_mirrors "$range"
   check_install
   check_windows_installer
+  check_git_hooks
+  check_actions_runtime
   check_codex_plugin_naming
   check_codegraph_guidance
   check_codex_override_sources

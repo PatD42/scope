@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+remote_name="${1:-origin}"
+repo_root="$(git rev-parse --show-toplevel)"
+zero_sha="0000000000000000000000000000000000000000"
+
+cd "$repo_root"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$local_ref" == refs/heads/* ]] || continue
+  [[ "$local_sha" != "$zero_sha" ]] || continue
+
+  if [[ "$remote_sha" == "$zero_sha" ]]; then
+    if git rev-parse --verify "${remote_name}/main" >/dev/null 2>&1; then
+      base_sha="$(git merge-base "$local_sha" "${remote_name}/main")"
+    elif git rev-parse --verify "${remote_name}/master" >/dev/null 2>&1; then
+      base_sha="$(git merge-base "$local_sha" "${remote_name}/master")"
+    else
+      base_sha="$(git rev-parse "${local_sha}^")"
+    fi
+  else
+    base_sha="$remote_sha"
+  fi
+
+  printf 'Validating outgoing changes for %s...\n' "$remote_ref"
+  ./scripts/validate-pr-checks.sh "${base_sha}...${local_sha}"
+done

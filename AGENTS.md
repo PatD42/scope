@@ -23,6 +23,14 @@ Use platform-specific files only for real platform differences.
 
 ## Validation
 
+Activate the repository's pre-push validation hook once per clone:
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+Do not bypass the hook with `git push --no-verify`.
+
 Before committing prompt or workflow changes, run:
 
 ```bash
