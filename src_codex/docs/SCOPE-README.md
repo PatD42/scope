@@ -23,10 +23,10 @@ No custom tooling. No MCP servers. Just Claude Code slash commands, agents, skil
 - **`/prd_create`** — Interview the user to create a lightweight first-pass PRD before refinement
 - **`/prd_refine`** — Interactively refine a product requirements document using a checklist-driven approach
 - **`/prd_breakdown`** — Break the PRD into implementable epics with architecture and dependency analysis
-- **`/epic_refine`** — Refine each epic through 4 approval gates: business validation, architecture design, spec generation, story breakdown with executable Python contracts
-- **`/implement`** — Implement an epic story-by-story in a git worktree. Developer writes code and tests. Architect scaffolds shared modules first
+- **`/epic_refine`** — Build a risk-appropriate product, architecture, native-contract, story, and proof handoff through four approval gates
+- **`/implement`** — Deliver validated stories sequentially, including tests, runtime proof, and audit remediation
 - **`/implement_tdd`** — Same as above, but SDET writes tests first, then developer implements to make them pass
-- **`/audit_epic`** — Audit the implementation against architecture, acceptance criteria, and specs. Auto-generates fix stories for all findings
+- **`/audit_epic`** — Perform a read-only evidence audit and one targeted verification after remediation
 - **`/sync_product`** — Update product documentation when implementation reveals scope changes
 
 ### Reverse Engineering (Code to Docs)
@@ -51,13 +51,15 @@ SCOPE uses Claude Code's built-in features:
 
 When running inside `./wip/{epic-id}`, use the `plugins/scope/` directory from that worktree checkout. Do not fall back to the main checkout.
 
-No external dependencies. No install scripts. No persistent state files.
+The v2 validators require Python 3 and PyYAML. Scope has no persistent service
+or database.
 
 ## Installation
 
 ```bash
 git clone https://github.com/PatD42/scope.git
 cd scope
+python3 -m pip install -r requirements.txt
 ```
 
 **Install to a project** (commands available only in that project):
@@ -126,11 +128,16 @@ your-project/
 
 ## Key Concepts
 
-**Contract-first development** — `/epic_refine` produces a `contracts.py` with Python Protocol classes. `mypy --strict` verifies every story implements the agreed interfaces. No more integration failures hidden by mocks.
+**Native contracts** — `/epic_refine` uses project-appropriate contracts such
+as OpenAPI, JSON Schema, SQL, language interfaces, and configuration schemas.
+Python Protocols are optional.
 
-**File plan intent** — Every file in a story has a 600-1200 char description covering WHAT, WHY, RESPONSIBILITIES, DEPENDENCIES, and RELATED MODULES. This is the source of truth for implementation.
+**Implementation boundaries** — Each `file-plan-story-*.yaml` records binding
+contracts, touchpoints, forbidden changes, and proof obligations. Candidate
+files remain advisory.
 
-**Audit loop** — After implementation, `/audit_epic` checks architecture compliance, acceptance criteria coverage, code quality, and stub detection. Fix stories are generated for all findings. Max 2 audit cycles, then escalate.
+**Bounded audit** — `/audit_epic` runs one full read-only audit. Implementation
+remediates findings, then audit performs one targeted verification.
 
 **Git worktrees** — Implementation happens in `./wip/{epic-id}` on branch `epic/{epic-id}`. Main branch stays clean. You merge when satisfied.
 

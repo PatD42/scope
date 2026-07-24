@@ -56,7 +56,9 @@ call :ensure_dir "%CLAUDE_DIR%\agents"
 if errorlevel 1 goto :install_failed
 call :ensure_dir "%CLAUDE_DIR%\governance"
 if errorlevel 1 goto :install_failed
-call :ensure_dir "%CLAUDE_DIR%\commands\scripts"
+call :ensure_dir "%CLAUDE_DIR%\config"
+if errorlevel 1 goto :install_failed
+call :ensure_dir "%CLAUDE_DIR%\scripts"
 if errorlevel 1 goto :install_failed
 
 call :ensure_dir "%CODEX_DIR%\commands"
@@ -71,6 +73,8 @@ call :ensure_dir "%CODEX_DIR%\docs"
 if errorlevel 1 goto :install_failed
 call :ensure_dir "%CODEX_DIR%\scripts"
 if errorlevel 1 goto :install_failed
+call :ensure_dir "%CODEX_DIR%\config"
+if errorlevel 1 goto :install_failed
 call :ensure_dir "%CODEX_DIR%\.codex-plugin"
 if errorlevel 1 goto :install_failed
 
@@ -79,6 +83,12 @@ echo   Created "%CODEX_DIR%\"
 
 rem Remove obsolete reviewer transports left by older Scope installations.
 call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\scope-reviewer-tmux.sh"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\scope-reviewer-claude-pexpect.py"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\validate-architecture-contracts.sh"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\validate-epic-docs.sh"
 if errorlevel 1 goto :install_failed
 call :delete_if_exists "%CODEX_DIR%\scripts\scope-reviewer-tmux.sh"
 if errorlevel 1 goto :install_failed
@@ -90,6 +100,18 @@ call :delete_if_exists "%CLAUDE_DIR%\commands\epic_refine\reviewer-architecture-
 if errorlevel 1 goto :install_failed
 call :delete_if_exists "%CODEX_DIR%\commands\epic_refine\reviewer-architecture-gemini.md"
 if errorlevel 1 goto :install_failed
+for %%R in (reviewer-codex reviewer-claude reviewer-agy reviewer-glm) do (
+    call :delete_if_exists "%CLAUDE_DIR%\commands\audit_epic\%%R.md"
+    if errorlevel 1 goto :install_failed
+    call :delete_if_exists "%CODEX_DIR%\commands\audit_epic\%%R.md"
+    if errorlevel 1 goto :install_failed
+)
+for %%R in (reviewer-architecture-codex reviewer-architecture-claude reviewer-architecture-agy reviewer-architecture-glm) do (
+    call :delete_if_exists "%CLAUDE_DIR%\commands\epic_refine\%%R.md"
+    if errorlevel 1 goto :install_failed
+    call :delete_if_exists "%CODEX_DIR%\commands\epic_refine\%%R.md"
+    if errorlevel 1 goto :install_failed
+)
 
 echo.
 echo Installing Claude Files
@@ -99,9 +121,11 @@ call :copy_overlay "%SHARED_SRC%\commands" "%CLAUDE_DIR%\commands"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%CLAUDE_SRC%\commands" "%CLAUDE_DIR%\commands"
 if errorlevel 1 goto :install_failed
-call :copy_overlay "%SHARED_SRC%\scripts" "%CLAUDE_DIR%\commands\scripts"
+call :copy_overlay "%SHARED_SRC%\scripts" "%CLAUDE_DIR%\scripts"
 if errorlevel 1 goto :install_failed
-call :copy_overlay "%CLAUDE_SRC%\scripts" "%CLAUDE_DIR%\commands\scripts"
+call :copy_overlay "%CLAUDE_SRC%\scripts" "%CLAUDE_DIR%\scripts"
+if errorlevel 1 goto :install_failed
+call :copy_overlay "%SHARED_SRC%\config" "%CLAUDE_DIR%\config"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%SHARED_SRC%\skills" "%CLAUDE_DIR%\skills"
 if errorlevel 1 goto :install_failed
@@ -155,11 +179,17 @@ call :copy_overlay "%SHARED_SRC%\scripts" "%CODEX_DIR%\scripts"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%CODEX_SRC%\scripts" "%CODEX_DIR%\scripts"
 if errorlevel 1 goto :install_failed
+call :copy_overlay "%SHARED_SRC%\config" "%CODEX_DIR%\config"
+if errorlevel 1 goto :install_failed
 call :copy_overlay "%CODEX_SRC%\.codex-plugin" "%CODEX_DIR%\.codex-plugin"
 if errorlevel 1 goto :install_failed
 call :copy_file_if_exists "%CODEX_SRC%\README.md" "%CODEX_DIR%\README.md"
 if errorlevel 1 goto :install_failed
 call :copy_file_if_exists "%CODEX_SRC%\.mcp.json" "%CODEX_DIR%\.mcp.json"
+if errorlevel 1 goto :install_failed
+call :copy_file_if_exists "%SCRIPT_DIR%requirements.txt" "%CLAUDE_DIR%\requirements.txt"
+if errorlevel 1 goto :install_failed
+call :copy_file_if_exists "%SCRIPT_DIR%requirements.txt" "%CODEX_DIR%\requirements.txt"
 if errorlevel 1 goto :install_failed
 
 echo   Plugin root:

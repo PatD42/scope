@@ -84,9 +84,8 @@ list_markdown_commands() {
 echo -e "${YELLOW}Creating Directory Structure${NC}"
 echo ""
 
-mkdir -p "${CLAUDE_DIR}/commands" "${CLAUDE_DIR}/skills" "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/governance"
-mkdir -p "${CODEX_DIR}/commands" "${CODEX_DIR}/skills" "${CODEX_DIR}/agents" "${CODEX_DIR}/governance" "${CODEX_DIR}/docs" "${CODEX_DIR}/scripts" "${CODEX_DIR}/.codex-plugin"
-mkdir -p "${CLAUDE_DIR}/commands/scripts"
+mkdir -p "${CLAUDE_DIR}/commands" "${CLAUDE_DIR}/skills" "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/governance" "${CLAUDE_DIR}/config" "${CLAUDE_DIR}/scripts"
+mkdir -p "${CODEX_DIR}/commands" "${CODEX_DIR}/skills" "${CODEX_DIR}/agents" "${CODEX_DIR}/governance" "${CODEX_DIR}/docs" "${CODEX_DIR}/scripts" "${CODEX_DIR}/config" "${CODEX_DIR}/.codex-plugin"
 
 echo "  Created ${CLAUDE_DIR}/"
 echo "  Created ${CODEX_DIR}/"
@@ -95,11 +94,22 @@ echo "  Created ${CODEX_DIR}/"
 # Claude reviewer now uses the pexpect file-output wrapper; leaving the old tmux
 # helper behind makes installed Scope trees ambiguous after upgrades.
 rm -f "${CLAUDE_DIR}/commands/scripts/scope-reviewer-tmux.sh"
+rm -f "${CLAUDE_DIR}/commands/scripts/scope-reviewer-claude-pexpect.py"
+rm -f "${CLAUDE_DIR}/commands/scripts/validate-architecture-contracts.sh"
+rm -f "${CLAUDE_DIR}/commands/scripts/validate-epic-docs.sh"
 rm -f "${CODEX_DIR}/scripts/scope-reviewer-tmux.sh"
 rm -f "${CLAUDE_DIR}/commands/audit_epic/reviewer-gemini.md"
 rm -f "${CODEX_DIR}/commands/audit_epic/reviewer-gemini.md"
 rm -f "${CLAUDE_DIR}/commands/epic_refine/reviewer-architecture-gemini.md"
 rm -f "${CODEX_DIR}/commands/epic_refine/reviewer-architecture-gemini.md"
+for reviewer in reviewer-codex reviewer-claude reviewer-agy reviewer-glm; do
+    rm -f "${CLAUDE_DIR}/commands/audit_epic/${reviewer}.md"
+    rm -f "${CODEX_DIR}/commands/audit_epic/${reviewer}.md"
+done
+for reviewer in reviewer-architecture-codex reviewer-architecture-claude reviewer-architecture-agy reviewer-architecture-glm; do
+    rm -f "${CLAUDE_DIR}/commands/epic_refine/${reviewer}.md"
+    rm -f "${CODEX_DIR}/commands/epic_refine/${reviewer}.md"
+done
 
 echo ""
 echo -e "${YELLOW}Installing Claude Files${NC}"
@@ -107,8 +117,9 @@ echo ""
 
 copy_overlay "${SHARED_SRC}/commands" "${CLAUDE_DIR}/commands"
 copy_overlay "${CLAUDE_SRC}/commands" "${CLAUDE_DIR}/commands"
-copy_overlay "${SHARED_SRC}/scripts" "${CLAUDE_DIR}/commands/scripts"
-copy_overlay "${CLAUDE_SRC}/scripts" "${CLAUDE_DIR}/commands/scripts"
+copy_overlay "${SHARED_SRC}/scripts" "${CLAUDE_DIR}/scripts"
+copy_overlay "${CLAUDE_SRC}/scripts" "${CLAUDE_DIR}/scripts"
+copy_overlay "${SHARED_SRC}/config" "${CLAUDE_DIR}/config"
 copy_overlay "${SHARED_SRC}/skills" "${CLAUDE_DIR}/skills"
 copy_overlay "${CLAUDE_SRC}/skills" "${CLAUDE_DIR}/skills"
 copy_overlay "${SHARED_SRC}/agents" "${CLAUDE_DIR}/agents"
@@ -157,9 +168,12 @@ copy_overlay "${SHARED_SRC}/docs" "${CODEX_DIR}/docs"
 copy_overlay "${CODEX_SRC}/docs" "${CODEX_DIR}/docs"
 copy_overlay "${SHARED_SRC}/scripts" "${CODEX_DIR}/scripts"
 copy_overlay "${CODEX_SRC}/scripts" "${CODEX_DIR}/scripts"
+copy_overlay "${SHARED_SRC}/config" "${CODEX_DIR}/config"
 copy_overlay "${CODEX_SRC}/.codex-plugin" "${CODEX_DIR}/.codex-plugin"
 copy_file_if_exists "${CODEX_SRC}/README.md" "${CODEX_DIR}/README.md"
 copy_file_if_exists "${CODEX_SRC}/.mcp.json" "${CODEX_DIR}/.mcp.json"
+copy_file_if_exists "${SCRIPT_DIR}/requirements.txt" "${CLAUDE_DIR}/requirements.txt"
+copy_file_if_exists "${SCRIPT_DIR}/requirements.txt" "${CODEX_DIR}/requirements.txt"
 
 echo "  Plugin root:"
 [[ -f "${CODEX_DIR}/README.md" ]] && echo "    ✓ README.md"

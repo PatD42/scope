@@ -179,8 +179,8 @@ Create PRD draft or run /prd_create
 /prd_breakdown                 Convert PRD → epics
        │                       (architecture, dependency analysis)
        ▼
-/epic_refine {epic-id}         Contract-first epic refinement
-       │                       (4 approval gates, contracts.py)
+/epic_refine {epic-id}         Adaptive epic refinement
+       │                       (4 approval gates, native contracts)
        ▼
 ┌──────┴──────┐
 │             │
@@ -190,8 +190,8 @@ Create PRD draft or run /prd_create
 └──────┬──────┘
        │
        ▼
-/audit_epic {epic-id}          Audit implementation
-       │                       (max 2 cycles, then escalate)
+/audit_epic {epic-id}          Read-only evidence audit
+       │                       (one full + one targeted verification)
        ▼
 User merges worktree           Manual merge when satisfied
 ```
@@ -261,9 +261,9 @@ Task(
 ```
 
 The command workflow controls sequencing:
-- **Story 0:** Architect scaffolds (contracts.py, shared modules)
-- **Stories 1-N:** Developer implements (or SDET → Developer in TDD mode)
-- **Fix stories:** Architect creates fix stories after audit, developer implements
+- **Story 0:** Optional architect-authored content or shared scaffolding
+- **Stories 1-N:** Developer implements in declared dependency order
+- **Audit remediation:** Developer corrects named findings before targeted verification
 
 ### Agent Constraints
 
@@ -314,23 +314,12 @@ tracking:
 
 ## 7. Core Concepts
 
-### 7.1 Contract-First Development
+### 7.1 Native Contracts
 
-**Problem:** File plans with method signatures in YAML prose lead to integration failures hidden by mocks.
-
-**Solution:**
-- Story 0 creates `contracts.py` with Python Protocol classes
-- Method signatures are executable code, not YAML descriptions
-- `mypy --strict` catches interface mismatches statically after each story
-- File plans reference contracts as source of truth for cross-story calls
-
-**Flow:**
-```
-/epic_refine → Story 0 (architect creates contracts.py)
-                  → Story 1 (developer implements against contracts)
-                  → mypy --strict (verifies interface compliance)
-                  → Story 2 ...
-```
+Scope uses the contract mechanism appropriate to each boundary: OpenAPI, JSON
+Schema, SQL, event schemas, configuration schemas, language interfaces, or
+project-native validators. Python Protocols and `mypy` are optional, not
+workflow requirements.
 
 ### 7.2 Git Worktrees
 
@@ -357,16 +346,13 @@ TaskUpdate(taskId: "1", addBlockedBy: ["0"])  # story-1 blocked by story-0
 
 ### 7.4 Story Sizing
 
-| Constraint | Value |
-|-----------|-------|
-| Max non-trivial files per story | 7 |
-| Target LOC per story | ~600 |
-| Stories per epic | 5-8 |
-| File plan intent length | 600-1200 chars (5-part template) |
+Create the fewest independently verifiable stories that preserve useful
+dependency, rollout, and proof boundaries. Scope does not impose a fixed story
+count, file count, or line count.
 
 ### 7.5 Inter-Story Dependencies
 
-Parsed from `# Dependencies:` comments in implementation boundary plan headers. Commands read these and set up TaskUpdate `addBlockedBy` relationships.
+Parsed from each boundary plan's YAML `depends_on` field.
 
 ### 7.6 Test-as-Soon-as-Possible
 
@@ -397,7 +383,9 @@ Tests organized by user journey, not by epic.
 
 ### 7.9 Audit Loop Guard
 
-`/audit_epic` runs at most 2 cycles (initial audit + one fix cycle). If issues remain after 2 cycles, the command escalates to the user rather than looping. Fix stories are created for ALL findings (critical, major, and minor).
+`/audit_epic` runs one full read-only audit. Implementation remediates named
+findings, then audit performs one targeted verification. Additional full audits
+require a material approved boundary change or explicit user authorization.
 
 ### 7.10 Context Window Optimization
 
@@ -412,69 +400,65 @@ Tests organized by user journey, not by epic.
 
 ### 8.1 Refinement (`/epic_refine`)
 
-Contract-first epic refinement with 4 approval gates:
+Adaptive epic refinement with four approval gates:
 
 ```
-Phase 1: Product Owner validates epic
-  → Acceptance criteria, error scenarios, e2e test scenarios
+Phase 0: Intent and risk profile
   → USER APPROVAL GATE #1
 
-Phase 2: Architect analyzes system context
-  → Technical risks, affected components, ADRs
+Phase 1: Product contract
   → USER APPROVAL GATE #2
 
-Phase 3: Architect generates technical specifications
-  → API contracts, schemas in docs/architecture/13-specs/
+Phase 2: Repository-grounded architecture and native contracts
   → USER APPROVAL GATE #3
 
-Phase 4: Story breakdown
-  → File plans per story with intent documentation
-  → contracts.py with Protocol classes (Story 0)
-  → Story sizing constraints enforced
+Phase 3: Story boundaries, ownership, traceability, and proof obligations
+
+Phase 4: Deterministic validation and risk-directed independent review
   → USER APPROVAL GATE #4
 ```
 
-**Output:** Per-story implementation boundary plans (`file-plan-story-*.yaml`), `contracts.py`, acceptance criteria, architecture docs, ADRs
+**Output:** A v2 refinement profile and manifest, native contracts, per-story
+boundary plans, acceptance traceability, findings, and approval record.
 
 ### 8.2 Implementation (`/implement` or `/implement_tdd`)
 
 **`/implement` (non-TDD):**
 ```
-Story 0: Architect scaffolds (contracts.py, shared modules)
-Story 1-N: Developer implements + writes tests
-  → Each story: read implementation boundary plan → implement → run tests → mypy --strict
-After all stories: Epic-wide lint (ruff + vulture + mypy)
+Optional Story 0: Architect-authored content or shared scaffolding
+Story 1-N: Developer implements and proves each boundary-plan obligation
+After all stories: Project-native tests, static checks, runtime proof, and audit
 ```
 
 **`/implement_tdd`:**
 ```
-Story 0: Architect scaffolds (contracts.py, shared modules)
+Optional Story 0: Architect-authored content or shared scaffolding
 Story 1-N:
   SDET writes tests first (from implementation boundary plan + acceptance criteria)
     → Developer implements to make tests pass
-  → Each story: mypy --strict verification
-After all stories: Epic-wide lint (ruff + vulture + mypy)
+  → Each story: project-native contract and proof verification
+After all stories: Project-native regression, runtime proof, and audit
 ```
 
 **Orchestration:** Claude Code uses TaskCreate to create tasks for each story with proper `addBlockedBy` dependencies, then processes them in order.
 
 ### 8.3 Audit (`/audit_epic`)
 
-7 audit phases:
-1. Architecture compliance
-2. ADR compliance
-3. Acceptance criteria coverage
-4. Auto Claude spec alignment
-5. Code quality
-6. Stub/placeholder detection
-7. Lint & contract compliance (mypy --strict)
+Audit is read-only and evidence based:
+
+1. validate the v2 implementation handoff;
+2. derive one verification row per traceability item;
+3. run project-native evidence gates;
+4. execute risk-directed reviewer roles in fresh contexts;
+5. merge stable findings and return `PASS`, `FAIL`, or `BLOCKED`;
+6. after remediation, verify named findings in one targeted attempt.
 
 **Output:** `docs/epics/{epic-dir}/epic_audit.md`
 
-**Post-audit loop:**
-1. Architect creates fix stories from ALL audit findings (critical, major, minor)
-2. Developer implements fixes
-3. Final audit (max 2 cycles total, then escalate)
+**Post-audit flow:**
+1. Implementation remediates `remediation_required` findings.
+2. The user resolves decision-gated findings.
+3. Audit performs one targeted verification.
 
 ### 8.4 Supporting Operations
 
@@ -597,9 +581,10 @@ docs/epics/{epic-id}/
 
 Commands are self-contained workflows. Claude Code executes them step-by-step, manages tasks via TaskCreate/TaskUpdate/TaskList, and spawns agents via the Task tool. No separate orchestrator agent, planner, or execution engine.
 
-### 10.2 Contract-First over Prose Descriptions
+### 10.2 Native Contracts over Generic Prose
 
-Epic refinement produces executable `contracts.py` with Python Protocol classes. `mypy --strict` catches interface mismatches statically. Agents implement against machine-verifiable contracts, not YAML prose.
+Epic refinement selects a project-appropriate machine-verifiable contract for
+each important boundary. No language-specific contract type is mandatory.
 
 ### 10.3 Local Files for Documentation
 

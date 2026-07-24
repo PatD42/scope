@@ -1,1116 +1,578 @@
 ---
 name: implement
-description: Implement an epic story-by-story until value is delivered. Includes tests, rollout/backfill tasks, audit fixes, and completion artifacts.
+description: Deliver a refined epic sequentially from validated boundary plans through tests, runtime proof, audit remediation, and completion evidence.
 args: "{epic-id}"
-skills: project-documentation
+skills: project-documentation, scope-workflows
 agents: architect, developer
 ---
 
-# /implement
+# scope:implement
 
-Implement an epic story-by-story using a single developer agent.
+Implement and deliver a refined epic in a git worktree. This is a delivery
+workflow, not merely a coding workflow.
 
-**Syntax:** `/implement {epic-id}`
-
-## Prerequisites
-
-Before running, the epic MUST have completed `/epic_refine`:
-- `docs/epics/{epic-dir}/acceptance-criteria.md` exists
-- `docs/epics/{epic-dir}/acceptance-traceability.yaml` exists
-- `docs/epics/{epic-dir}/architecture.md` exists
-- `docs/epics/{epic-dir}/file-plan-story-*.yaml` exists
-- Epic status is "ready-for-implementation"
-
-## Refinement Stop Conditions
-
-Do not let the Developer invent missing decisions during implementation:
-- If the Developer must decide what the system should do, business requirements were incomplete and implementation must stop until the Product Owner clarifies them.
-- If the Developer must decide how the system should be designed, architecture was incomplete and implementation must stop until refinement returns to the Architect.
+**Syntax:** `scope:implement {epic-id}`
 
 ## Completion Contract
 
-`/implement` is a **delivery workflow**, not a coding workflow.
+Report `delivery-complete` only when:
 
-Do not report the epic complete when code merely exists. The epic is complete only when:
-- All planned stories are implemented
-- All binding implementation boundary plan obligations are satisfied, not just written
-- All epic tests pass (unit, integration, e2e when the epic calls for them)
-- One-time operational tasks are run and validated when the epic includes them
-  (examples: migrations, backfills, seed/bootstrap scripts, reindex jobs, onboarding runs)
-- The intended environment is verified ready (`.env`, schema/migrations, required services)
-- `audit_epic` has been run, fix stories implemented, and the final audit is acceptable
-- `implementation-evidence.yaml` is updated before the first audit with the concrete proof gathered during implementation
-- `audit-verification-matrix.yaml` is populated before the first audit with implementation, test, and runtime evidence for every required/high-risk row
-- After implementation verification is green, the agent must automatically run `audit_epic`,
-  fix all findings from critical through minor unless the user explicitly approves a defer,
-  and rerun `audit_epic` until it passes or a maximum of 3 audit runs has been reached
-- `docs/epics/{epic-dir}/implementation-summary.md` is updated
-- Documentation follow-up decisions are surfaced explicitly instead of silently deferred
-- The user-facing value promised by the epic is demonstrated with concrete system-state checks
+- the refinement handoff is valid;
+- all stories and binding boundary-plan obligations are complete;
+- required native contracts and integration touchpoints are satisfied;
+- unit, integration, end-to-end, static, runtime, and operational proof required
+  by the epic has passed;
+- acceptance traceability and implementation evidence contain actual evidence;
+- the intended user/business outcome is demonstrated;
+- the real installed `scope:audit_epic` workflow passes after any remediation;
+- `implementation-summary.md` records the delivered outcome and residual risks.
 
-If any of the above are still pending, the command must say the epic is **implementation-complete but not delivery-complete**.
+Otherwise report one of:
 
-No downstream command may declare the epic complete, or stop at an intermediate checkpoint, until implementation is finished and `audit_epic` passes.
-Until then, only report:
-- in progress
-- blocked
-- implementation-complete but not delivery-complete
+- `in-progress`;
+- `blocked`;
+- `implementation-complete, proof-pending`;
+- `implementation-complete, rollout-pending`;
+- `implementation-complete, audit-pending`;
+- `implementation-complete, documentation-decision-pending`.
 
-### Nested Audit Command Requirement
+Never call an epic complete because code exists or unit tests pass.
 
-`audit_epic` means the real Scope audit command workflow (`scope:audit_epic {epic-id}` / `/audit_epic {epic-id}`), not an informal audit, local summary, or hand-written `epic_audit.md`.
+## Installed Sources
 
-When `/implement` reaches an audit step, it must load and execute `commands/audit_epic.md` from the current checkout or worktree and follow that command's phases, attempt accounting, reviewer collection or unavailable-recording, deterministic review, issue ledger, remediation loop, and output requirements.
+Use only the active checkout or implementation worktree:
 
-`/implement` must not write or overwrite `docs/epics/{epic-dir}/epic_audit.md` directly as a substitute for `audit_epic`; that file is produced or updated by the audit workflow.
+- command: `plugins/scope/commands/implement.md`;
+- nested audit: `plugins/scope/commands/audit_epic.md`;
+- developer role: `plugins/scope/agents/developer.md`;
+- architect role: `plugins/scope/agents/architect.md`;
+- governance: `plugins/scope/governance/*.md`;
+- policy: `plugins/scope/config/refinement-policy.yaml`;
+- validator: `plugins/scope/scripts/validate-refinement.py`.
 
-Implementation completion proof must include:
-- latest `reviews/audit-NNN/` attempt id created after implementation verification began
-- path to `reviews/audit-NNN/review-metadata.yaml`
-- path to `implementation-evidence.yaml`
-- path to `audit-verification-matrix.yaml`
-- path to `audit-issue-ledger.yaml`
-- reviewer coverage: completed or unavailable for Codex, Claude, and Antigravity
-- final audit status after remediation
+Do not read `.claude/` or another checkout as an override. After entering the
+worktree, use `plugins/scope/` from that worktree only.
 
-If no new `reviews/audit-NNN/` directory was created after implementation verification began, `/implement` must not report `delivery-complete`.
+## Execution Model
 
----
+Codex performs architect and developer roles sequentially in the current
+session. Do not spawn sub-agents unless the user explicitly requests delegation.
 
-## Orchestration Model
+Implement stories in topological `depends_on` order. Work on one story at a
+time. Do not make speculative changes for later stories.
 
-```
-Story 0 (if exists):
-  architect-story-0
+Candidate files are advisory. These boundary-plan fields are binding:
 
-Story 1:
-  dev-story-1 (blocked by architect-story-0 if exists)
+- `required_contracts`;
+- `required_touchpoints`;
+- `forbidden_changes`;
+- `proof_obligations`.
 
-Story 2 (depends on Story 1):
-  dev-story-2 (blocked by dev-story-1)  ← respects declared dependencies
-
-Story N:
-  dev-story-N (blocked by dev tasks of declared dependencies)
-
-After all complete:
-  /audit_epic {epic-id}
-  Create fix stories from audit recommendations
-  Implement fix stories
-  Run all epic tests
-  Final audit
-  Repeat audit/remediation until audit passes, up to 3 total audit runs
-```
-
-**Key rules:**
-- **ONE developer agent at a time** — concurrent writes to the same worktree cause race conditions and inconsistent state
-- Developer tasks respect inter-story implementation dependencies
-- The developer agent processes tasks sequentially, picking the lowest-ID unblocked dev task
-- Story 0 (scaffolding) is done by the architect before any dev work
-- Developer writes BOTH production code AND tests for each story
+If implementation would require a new product or architecture decision, stop
+and return to refinement. Do not hide the decision in code.
 
 ---
 
-## Execution
-
-### Step 0: Initialize
+## Step 0 — Locate and Validate the Handoff
 
 ```bash
 EPIC_ID="{epic-id}"
+PROJECT_ROOT="$(pwd)"
+EPIC_DIR="$(find docs/epics -mindepth 1 -maxdepth 1 -type d \
+  -iname "*${EPIC_ID}*" -print | sort | head -1)"
 
-# Find epic directory
-EPIC_DIR=$(ls docs/epics/ | grep -i "^${EPIC_ID}" | head -1)
 if [ -z "$EPIC_DIR" ]; then
-  echo "Epic not found in docs/epics/"
+  echo "Epic not found under docs/epics: ${EPIC_ID}"
   exit 1
 fi
 
-# Verify prerequisites
-if [ ! -f "docs/epics/${EPIC_DIR}/file-plan-story-01.yaml" ]; then
-  echo "No implementation boundary plans found. Run /epic_refine first."
+EPIC_SLUG="$(basename "$EPIC_DIR")"
+V2_VALIDATOR="plugins/scope/scripts/validate-refinement.py"
+
+if [ -n "${SCOPE_PYTHON:-}" ]; then
+  PYTHON_CMD="$SCOPE_PYTHON"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_CMD="python"
+else
+  echo "Scope v2 requires Python 3. Install Python and set SCOPE_PYTHON."
   exit 1
 fi
 
-# Ensure refinement artifacts are committed before creating worktree
-EPIC_FILES=$(git status --porcelain "docs/epics/${EPIC_DIR}/" "docs/architecture/13-specs/" 2>/dev/null)
-if [ -n "$EPIC_FILES" ]; then
-  echo "Uncommitted refinement artifacts detected:"
-  echo "$EPIC_FILES"
-  echo ""
-  echo "Committing refinement artifacts..."
-  git add "docs/epics/${EPIC_DIR}/"
-  git add "docs/architecture/13-specs/" 2>/dev/null || true  # May not exist for all epics
-  git commit -m "refine(${EPIC_ID}): refinement artifacts for implementation"
+if ! "$PYTHON_CMD" -c "import yaml" >/dev/null 2>&1; then
+  echo "Scope v2 requires PyYAML. Run: $PYTHON_CMD -m pip install 'PyYAML>=6,<7'"
+  exit 1
 fi
+```
 
-# Create worktree for implementation
-PROJECT_ROOT_ABS="$(pwd)"
-WORKTREE_DIR="./wip/${EPIC_ID}"
+Run the v2 handoff validator:
+
+```bash
+"$PYTHON_CMD" "$V2_VALIDATOR" "$EPIC_DIR" \
+  --phase handoff \
+  --repo-root "$PROJECT_ROOT"
+```
+
+Read:
+
+- `refinement-profile.yaml`;
+- `refinement-manifest.yaml`;
+- `refinement-findings.yaml`;
+- `refinement-review.md`;
+- `acceptance-traceability.yaml`;
+- all `file-plan-story-*.yaml`;
+- the authored sources and native contracts cited by the manifest.
+
+Stop if validation fails. Do not repair an invalid refinement handoff inside
+implementation.
+
+### Refinement change check
+
+Resolve the exact refinement paths:
+
+- the epic directory;
+- manifest artifact paths.
+
+Run `git status --short -- <resolved paths>`. If refinement paths are dirty:
+
+1. show the exact scoped list;
+2. confirm they are refinement artifacts rather than unrelated work;
+3. stage only those paths;
+4. commit them as `refine({epic-id}): implementation handoff`;
+5. leave every unrelated dirty path untouched.
+
+Creating the worktree from stale refinement artifacts is not allowed.
+
+---
+
+## Step 1 — Create or Resume the Worktree
+
+Scope compatibility requires this branch and directory convention:
+
+```bash
 BRANCH_NAME="epic/${EPIC_ID}"
+WORKTREE_DIR="${PROJECT_ROOT}/wip/${EPIC_ID}"
 
 if [ -d "$WORKTREE_DIR" ]; then
-  echo "Worktree already exists at ${WORKTREE_DIR}. Resuming."
+  git worktree list --porcelain | rg -F "worktree ${WORKTREE_DIR}"
 else
-  git branch "$BRANCH_NAME" 2>/dev/null || true  # Branch may already exist
+  git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}" \
+    || git branch "$BRANCH_NAME"
   git worktree add "$WORKTREE_DIR" "$BRANCH_NAME"
 fi
 
-# All subsequent work happens in the worktree
 cd "$WORKTREE_DIR"
-WORKTREE_DIR_ABS="$(pwd)"
-
-# Keep local credentials visible from the implementation worktree without
-# copying secrets. Do not overwrite an existing worktree-specific .env.
-if [ ! -e ".env" ]; then
-  if [ -f "${PROJECT_ROOT_ABS}/.env" ]; then
-    ln -s "${PROJECT_ROOT_ABS}/.env" ".env"
-    echo "Linked worktree .env -> ${PROJECT_ROOT_ABS}/.env"
-  else
-    echo "NOTICE: project root has no .env to link into the worktree."
-  fi
-elif [ -L ".env" ]; then
-  echo "Worktree .env symlink already exists: $(readlink .env)"
-else
-  echo "NOTICE: worktree already has a .env file; leaving it unchanged."
-fi
-
-cat > AGENTS.md <<EOF
-# Epic Worktree Instructions
-
-You are working inside the implementation worktree for ${EPIC_ID}.
-
-CRITICAL:
-- Stay in this directory for all implementation reads, writes, tests, and git status checks:
-  ${WORKTREE_DIR_ABS}
-- Do not write implementation files in the main repository root.
-- If you need the main repository root, use it only for explicit merge/wrap operations.
-EOF
-
-# CodeGraph is cwd-local. During implementation, initialize and sync the
-# worktree's own index so CodeGraph sees in-progress code changes.
-if [ ! -d ".codegraph" ]; then
-  codegraph init .
-  codegraph index .
-else
-  codegraph sync-if-dirty . || codegraph sync .
-fi
 ```
 
-### Step 0a: Environment Readiness Gate
+Do not overwrite or regenerate `AGENTS.md` in the worktree. It belongs to the
+repository.
 
-Before creating any tasks, verify the implementation environment inside the worktree.
+If the main project has `.env` and the worktree has no `.env`, create a symlink
+to the explicit main-project file. Never overwrite a worktree-specific `.env`.
 
 ```bash
-# 1. Env visibility
-if [ ! -e ".env" ]; then
-  echo "NOTICE: worktree has no .env. The worktree setup should link project-root .env automatically when present."
+if [ ! -e .env ] && [ -f "${PROJECT_ROOT}/.env" ]; then
+  ln -s "${PROJECT_ROOT}/.env" .env
 fi
-
-# 2. Schema / migration readiness
-# If the project has a schema ensure/apply command, run it now.
-# For IntelAgent this means the local sagara schema must include epic tables/columns
-# before any integration/e2e or rollout work is considered valid.
-
-# 3. Dependency readiness
-# Verify any required keys / services referenced by the epic are available.
-# If the epic includes live rollout tasks (backfill/bootstrap/onboarding), do not wait
-# until the end to discover missing credentials or stale schema.
 ```
 
-If the environment is not ready, fix it before starting story work or explicitly tell the user what is blocked.
+Read the worktree's `AGENTS.md`, Scope role, and governance files again. All
+subsequent source/test work occurs in the worktree.
 
-### Step 0b: Check for Unwrapped Epic
+### CodeGraph
 
-```python
-# If another epic has a worktree but hasn't been wrapped, warn the user
-existing_worktrees = Glob("./wip/*/")
-for wt in existing_worktrees:
-    other_epic = wt.split("/")[1]
-    if other_epic != EPIC_ID:
-        wrap_markers = Glob(f".scope/tracking/commands/wrap_epic-*{other_epic}*.jsonl")
-        if not wrap_markers:
-            print(f"WARNING: Epic {other_epic} has an active worktree at ./wip/{other_epic}/ but hasn't been wrapped.")
-            print(f"Run /wrap_epic {other_epic} first to capture decisions and lessons?")
-            print("[yes — wrap first / no — proceed with {EPIC_ID}]")
-            # If user says yes, run /wrap_epic for the other epic first
+CodeGraph is worktree-local during implementation:
+
+```bash
+if command -v codegraph >/dev/null 2>&1; then
+  if [ ! -d .codegraph ]; then
+    codegraph init .
+    codegraph index .
+  else
+    codegraph sync-if-dirty . || codegraph sync .
+  fi
+  codegraph status .
+fi
 ```
 
-### Step 0c: Load Context Enrichment
+Use it for dependency discovery, then confirm decisions with direct source and
+test evidence.
 
-```python
-# 1. Load project lessons learned
-lessons_index = Read("docs/lessons-learned/INDEX.md")
-if lessons_index:
-    lessons_context = lessons_index
-    print(f"Loaded {lessons_index.count('- [')} lessons learned for developer context.")
-else:
-    lessons_context = ""
+---
 
-# 2. Load system-level ADRs (not just epic ADRs)
-system_adrs = Read("docs/architecture/09-adr-summary.md")
-system_adr_context = system_adrs if system_adrs else ""
+## Step 2 — Build the Story Graph
 
-# 3. CodeGraph context enrichment (recommended)
-mcp_context = ""
+Read every `file-plan-story-*.yaml` from the epic directory in the worktree.
+Parse YAML fields, not comments:
 
-# CodeGraph rule:
-# - We are now inside ./wip/{epic-id}.
-# - Use this worktree as CodeGraph projectPath.
-# - Do not query the main repo CodeGraph DB for implementation changes.
-# - If ./.codegraph is missing, initialize and index it before querying.
-# - Sync the worktree index before relying on dependency/caller/callee context.
+- `story_id`;
+- `story_title`;
+- `depends_on`;
+- binding obligations;
+- candidate files;
+- proof obligations.
 
-# Use CodeGraph when present. Prefer CodeGraph MCP when available. If MCP is
-# unavailable or unhealthy, use the CLI fallback from the active worktree.
-#
-# CLI fallback examples with JSON output:
-#   if [ ! -d ".codegraph" ]; then codegraph init .; codegraph index .; else codegraph sync-if-dirty . || codegraph sync .; fi
-#   codegraph query "SymbolName" --path . --json
-#   codegraph context "story behavior or call path" --path . --format json --max-nodes 80 --max-code 20
-#   codegraph files --path . --json
-#
-# Use CodeGraph output as discovery context only. Implementation decisions,
-# findings, and task completion still require direct source/test evidence.
-boundary_plans = Glob(f"docs/epics/{EPIC_DIR}/file-plan-story-*.yaml")
-candidate_files = extract_candidate_file_paths(boundary_plans)
-print(f"CodeGraph is recommended for dependency context across {len(candidate_files)} candidate files. Prefer MCP when available; use CLI fallback otherwise.")
+Validate:
 
-# If Obsidian MCP is available, query for relevant lessons and decisions
-if mcp_available("obsidian"):
-    epic_title = Read(f"docs/epics/{EPIC_DIR}/details.md").split("\n")[0]
-    obsidian_notes = obsidian.search(epic_title)
-    if obsidian_notes:
-        mcp_context += f"\n# Obsidian context: {obsidian_notes}"
-        print(f"Loaded {len(obsidian_notes)} relevant notes from Obsidian vault.")
-```
+- story IDs are unique;
+- every dependency exists;
+- no story depends on itself;
+- the dependency graph is acyclic;
+- each v2 manifest `owner_story` exists;
+- every traceability row references an existing story.
 
-### Step 1: Discover Stories
+Produce a topological story order. Story filename order is only a tie-breaker
+between otherwise independent stories.
 
-Find all `file-plan-story-*.yaml` implementation boundary plans in the epic directory and sort them to ensure story-00, story-01, story-02... order.
+Create or update the Codex plan with one in-progress story at a time. Do not use
+parallel writers.
 
-For each boundary plan:
-1. Read the YAML content to extract `story_id` and `story_title`
-2. Extract the story number from the filename (e.g., `file-plan-story-02.yaml` → `"02"`)
-3. Look for a `# Dependencies: Stories 01a, 01b, 02` comment line in the file and parse the referenced story numbers into a list (e.g., `["01a", "01b", "02"]`)
-4. Record whether this is a scaffolding story (number `"00"`)
+Present:
 
-Build a list of story objects with: `number`, `story_id`, `story_title`, `boundary_plan_path`, `dependencies`, `is_scaffolding`.
+- story count and order;
+- Story 0 presence and actual purpose;
+- dependency edges;
+- capability modules involved;
+- runtime/operational stories;
+- high-risk proof obligations.
 
-Check if the first story is Story 0 (scaffolding).
+---
 
-### Step 2: Create Tasks
+## Step 3 — Environment Readiness
 
-Create all tasks upfront with dependencies, then launch agent.
+Before editing code, verify the prerequisites named by the active stories:
 
-```python
-task_ids = {}  # Track task IDs for dependency wiring
+- required environment variables are visible without printing secrets;
+- local schemas and migrations are current enough to run tests;
+- required services or containers are reachable;
+- configured interpreters, package managers, and test tools exist;
+- credentials needed for runtime proof are present;
+- external provider or model limits that can block the epic are understood.
 
-# --- Story 0: Architect scaffolding (if exists) ---
-if has_story_0:
-    story_0 = stories[0]
-    task_ids["architect-story-00"] = TaskCreate(
-        subject=f"architect: Implement scaffolding for {epic_id}",
-        description=f"""
-epic_id: {epic_id}
-phase: scaffolding
-story_id: {story_0['story_id']}
-story_title: {story_0['story_title']}
-boundary_plan: {story_0['boundary_plan_path']}
-terminate_upon_completion: no
+Do not defer predictable environment blockers until the audit. If a prerequisite
+cannot be satisfied, identify affected stories and proof rows and report
+`blocked` or `proof-pending`.
 
-Instructions:
-- Read the implementation boundary plan at {story_0['boundary_plan_path']}
-- Create all directories, modules, config files, and base classes listed
-- If contracts.py is required by the boundary plan, create it with Protocol classes
-  that define the interfaces between components. Verify with:
-  `python -c "from <module>.contracts import *"` and `mypy --strict contracts.py`
-- Do NOT implement business logic — only scaffolding
-- Verify the skeleton compiles/imports correctly
-- DOCUMENTATION UPDATES: Read the epic's architecture.md for the documentation
-  update plan. Update product-level architecture docs as specified by the architect
-  during refinement. This includes:
-  - backend/13-specs/ (if backend API/schema/database/error contracts change)
-  - backend/05-building-blocks.md (if backend service landscape changes)
-  - backend/06-runtime.md (if backend runtime/orchestration changes)
-  - frontend/13-specs/ (if frontend API/state/view-model contracts change)
-  - frontend/05-building-blocks.md (if frontend component structure changes)
-  - frontend/06-runtime.md (if frontend routing/state/runtime behavior changes)
-  - 05-building-blocks.md (if new components are planned)
-  - 03-context.md (if new external dependencies)
-  - 08-cross-cutting/domain.md (if new domain entities)
-  - 12-glossary.md (if new technical terms)
-  - 09-adr-summary.md (roll up epic ADRs)
-  - product/decisions.md (roll up epic PDRs)
-  Use the project-documentation skill templates for any new files.
-  These updates reflect the DESIGNED architecture — before implementation.
-  The developer must NOT update these docs during implementation to avoid
-  laundering divergence.
-  If legacy docs exist in backend/overview.md, backend/services.md,
-  backend/data.md, frontend/overview.md, frontend/structure.md, or
-  frontend/patterns.md, read them as context before updating architecture docs,
-  but do not create or extend those legacy files.
-  Do not create 14-schema; schemas belong under the applicable 13-specs/schemas/
-  directory.
-""",
-        activeForm="Implementing scaffolding"
-    )
+---
 
-# --- For each implementation story ---
-impl_stories = [s for s in stories if not s["is_scaffolding"]]
+## Step 4 — Execute Stories Sequentially
 
-for story in impl_stories:
-    num = story["number"]
+For each story in topological order, follow this loop.
 
-    # Developer task: implement + write tests
-    dev_blocked_by = []
-    if has_story_0 and num == impl_stories[0]["number"]:
-        # First dev task depends on scaffolding
-        dev_blocked_by.append(task_ids["architect-story-00"])
+### 4.1 Load the minimum sufficient context
 
-    dev_task_id = TaskCreate(
-        subject=f"developer: Implement story {num} - {story['story_title']}",
-        description=f"""
-epic_id: {epic_id}
-phase: implementation
-story_id: {story['story_id']}
-story_title: {story['story_title']}
-boundary_plan: {story['boundary_plan_path']}
-terminate_upon_completion: no
+Read:
 
-Context to load:
-- Read the implementation boundary plan at {story['boundary_plan_path']}
-- Read acceptance criteria from docs/epics/{epic_dir}/acceptance-criteria.md
-- Read acceptance traceability from docs/epics/{epic_dir}/acceptance-traceability.yaml
-- Read architecture from docs/epics/{epic_dir}/architecture.md
-- Read ADRs from docs/epics/{epic_dir}/adr.md (epic-level decisions)
-- Read system ADRs from docs/architecture/09-adr-summary.md (project-wide decisions)
-- Read test strategy from docs/epics/{epic_dir}/test-strategy.md
-- Read lessons learned from docs/lessons-learned/INDEX.md (if exists) — these are
-  hard-won patterns and anti-patterns from previous work. Apply any relevant lessons
-  as constraints during implementation. Violating a documented lesson is a bug.
+- the active boundary plan;
+- relevant acceptance criteria;
+- manifest rows whose `owner_story` is the active story;
+- matching traceability rows;
+- relevant architecture and ADR sections;
+- relevant native contracts;
+- the test-strategy sections for this story;
+- applicable project lessons and governance.
 
-{f"MCP context:{chr(10)}{mcp_context}" if mcp_context else ""}
+Do not reload every epic artifact when stable IDs provide a smaller context.
 
-Instructions:
-- If contracts.py exists in the epic source, import Protocol types from it and
-  use them as type annotations for parameters, return types, and dependency
-  injection. The contracts define the agreed interfaces — implementations MUST
-  satisfy them. Run `mypy --strict` on your files to verify compliance.
-- Before writing code, produce a concise implementation strategy and include it
-  in the agent summary and `implementation-evidence.yaml`: current code paths
-  inspected, selected approach, binding obligations, candidate files accepted or
-  skipped, developer-discovered files, and planned proof commands.
-- Implement PRODUCTION-READY code that satisfies the boundary plan's binding
-  obligations: `required_contracts`, `required_touchpoints`,
-  `forbidden_changes`, and `proof_obligations`.
-- Treat `candidate_files` as advisory investigation hints, not mandatory edit
-  targets. If a relevant candidate is skipped, record why and what source
-  evidence led to the chosen path.
-- Match required contract signatures and required touchpoint behavior exactly.
-- Write tests (unit + integration as appropriate) for the code you implement
-- Update docs/epics/{epic_dir}/acceptance-traceability.yaml for this story:
-  add actual implementation files, actual test functions/classes, runtime
-  evidence commands/results, and set each affected row to implemented, tested,
-  verified, blocked, or deferred.
-- Before marking the story complete, write an acceptance-proof summary for every
-  affected acceptance criterion and boundary-plan obligation. Include:
-  promise verified, traceability row ID(s), verification method, real runtime path
-  used yes/no, representative data used yes/no, observable result, and any
-  remaining unproven work.
-- If the story adds or changes an adapter, mapper, importer, writer, parser,
-  service call, queue/worker path, scheduled job, backfill, migration, CLI,
-  dashboard/API integration, or other side-effecting component, unit tests are
-  not enough. Prove the intended entrypoint calls it, upstream inputs are
-  available there, and downstream output/state is produced.
-- If the story promises output, persisted rows, generated files, extracted
-  items, metrics, events, or side effects, run a representative check showing
-  non-zero output unless the acceptance criteria or boundary plan explicitly says
-  zero is valid. If a threshold is named, measure it.
-- Use `complete` only when the promised value is observed through the intended
-  path. If proof is partial, use a non-complete status such as
-  `implementation_complete_unverified`, `unit_verified`, `integration_verified`,
-  `runtime_verified`, or `blocked_missing_runtime_input`.
-- If the story/boundary plan includes an operational deliverable (migration, bootstrap,
-  backfill, seed, sync, onboarding run, reindex, CLI execution), execute it and
-  validate the resulting system state unless the boundary plan explicitly says dry-run only
-- If any affected `acceptance-traceability.yaml` row has
-  `runtime_evidence.required: true`, create or update the smoke checker that
-  exercises the real local/cloud dependency or end-to-end value path, run it,
-  and record command, environment, result, and evidence before marking the story
-  complete. Do not leave live smoke wiring for `/audit_epic`.
-- If contracts.py exists, include tests that verify implementations satisfy the
-  Protocol interfaces. Import Protocol types and assert structural compatibility.
-- Run all tests after implementation — all must pass
-- CRITICAL: If a boundary-plan obligation describes external I/O (API calls, HTTP
-  requests, database operations, file system writes), the implementation MUST
-  contain real I/O code — not hardcoded return values or placeholder stubs.
-  If a dependency is unavailable for unit testing, implement the real code
-  and let tests mock around it. The implementation itself must be production-ready.
-- A "# Placeholder", "# TODO", or "# Stub" comment in production code is a FAILURE.
+### 4.2 Inspect before writing
 
-Decision tracking:
-- If you make an unplanned architectural choice (different pattern, different
-  library, different approach than the boundary plan), flag it in your agent summary
-  under concerns with type: "decision_candidate" and explain why.
-- If you deviate from a system ADR, flag it as type: "adr_deviation".
-- These will be surfaced by /wrap_epic for formal recording.
+Inspect:
 
-Pre-completion review (MANDATORY before marking story done):
-READ the full checklist from plugins/scope/governance/developer-checklist.md before marking complete.
-Do NOT rely on memory of the checklist. Do NOT summarize it. READ THE FILE from disk.
-The checklist includes: acceptance-proof summary, runtime-path proof,
-non-zero/threshold proof for promised outputs, intent match, no dead code,
-pattern consistency,
-lesson compliance, unplanned changes, contract compliance, scope check, no hardcoded
-values, LIVE SMOKE TEST for new services, operational deliverables executed,
-value-path verified, no redundant tests, documentation/follow-up captured.
+- candidate files and actual implementation alternatives;
+- immediate callers and consumers;
+- shared utilities;
+- current tests and fixtures;
+- source/native contract definitions;
+- protected surfaces from `forbidden_changes`.
 
-{f"Project lessons:{chr(10)}{lessons_context}" if lessons_context else ""}
-""",
-        activeForm=f"Implementing story {num}"
-    )
-    task_ids[f"dev-story-{num}"] = dev_task_id
+State a concise implementation strategy:
 
-    # Wire dependencies
-    if dev_blocked_by:
-        TaskUpdate(taskId=dev_task_id, addBlockedBy=dev_blocked_by)
+- current path inspected;
+- selected approach and why;
+- binding contracts/touchpoints;
+- accepted or skipped candidate files with evidence;
+- developer-discovered files;
+- proof commands;
+- assumptions or blockers.
 
-# --- Second pass: wire inter-story implementation dependencies ---
-for story in impl_stories:
-    num = story["number"]
-    dev_task_id = task_ids[f"dev-story-{num}"]
+If the strategy materially changes architecture, stop and return to refinement.
 
-    for dep_num in story["dependencies"]:
-        dep_key = f"dev-story-{dep_num}"
-        if dep_key in task_ids:
-            TaskUpdate(taskId=dev_task_id, addBlockedBy=[task_ids[dep_key]])
-```
+### 4.3 Implement the smallest complete change
 
-### Step 3: Launch Agents
+- Match existing project patterns.
+- Reuse maintained libraries and existing utilities when appropriate.
+- Do not add compatibility layers, abstractions, or adjacent cleanup that the
+  story does not need.
+- Preserve forbidden behavior and interfaces.
+- Satisfy every native `required_contracts` obligation using its listed
+  verification mechanism. Do not assume mypy unless the plan names it.
+- Wire real entrypoints, upstream inputs, and downstream effects.
+- Do not leave placeholder, mock-only, TODO, or dead production behavior.
+- Keep production values in the project's configured configuration system.
 
-```python
-# Spawn agents using Task tool — all in ONE message
+### 4.4 Prove the story
 
-# 1. Architect (if Story 0 exists)
-if has_story_0:
-    Task(
-        prompt="Take the role of architect agent. Find and execute your scaffolding task.",
-        subagent_type="general-purpose",
-        description="Architect: scaffolding",
-        run_in_background=True
-    )
+Run all proof obligations from the boundary plan and traceability rows:
 
-# 2. Developer agent — SINGLE agent, sequential execution
-# 🚨 NEVER spawn more than ONE developer agent. Multiple developers writing to
-#    the same worktree causes race conditions, merge conflicts, and corrupted state.
-#    If you need to re-launch after failure, wait for the current one to finish first.
-#
-# 🚨 CRITICAL: The agent launch prompt MUST reference the governance checklist file.
-#    Do NOT summarize the checklist — the agent must READ the file from disk.
-#    This ensures instructions survive context summarization and compaction.
-Task(
-    prompt="""Take the role of developer agent.
-    Process dev tasks ONE AT A TIME in dependency order:
-    1. Check TaskList for the lowest-ID dev task that is pending and has NO blockedBy
-    2. If none available, STOP — you will be re-launched when tasks unblock
-    3. Read the task description — it contains boundary plan path, context to load, and constraints
-    4. Implement production-ready code AND write tests
-    5. Execute any operational deliverables required by the story/boundary plan and verify the real side effects
-    6. For every affected acceptance-traceability row with runtime_evidence.required=true,
-       create/update the live smoke checker, run it against the intended local/cloud
-       dependency, and record command/result/evidence before marking the story complete.
-       If credentials or infrastructure are missing, leave the story non-complete as
-       blocked_missing_runtime_input and report the blocker.
-    7. Run all tests — all must pass
-    8. BEFORE marking complete: Read and verify ALL items in the developer checklist file.
-       Look for it at: plugins/scope/governance/developer-checklist.md (or src_shared/governance/developer-checklist.md in the SCOPE repo)
-       Do NOT skip this step. Do NOT rely on memory of the checklist. READ THE FILE.
-    9. Only mark completed if the promised value is observed through the intended path.
-       If proof is partial, leave the story non-complete and report one of:
-       implementation_complete_unverified, unit_verified, integration_verified,
-       runtime_verified, or blocked_missing_runtime_input.
-    10. Check TaskList again for next unblocked dev task
-    11. Repeat until no more dev tasks available
+- focused unit tests;
+- integration tests at real component boundaries;
+- end-to-end tests for vertical behavior;
+- native schema/static contract checks;
+- live smoke or representative runtime commands;
+- migrations, backfills, seeds, reindexes, syncs, or other one-time operations;
+- negative and partial-state probes;
+- non-zero output or threshold measurements when the promise requires them.
 
-    CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
-    You are responsible for BOTH implementation AND tests — there is no SDET.
-    The checklist includes: acceptance-proof summary, runtime-path proof for
-    integration work, non-zero/threshold proof for promised outputs, intent match,
-    no dead code, pattern consistency, lesson compliance, unplanned changes,
-    contract compliance, scope check, no hardcoded values, LIVE SMOKE TEST for
-    new services and runtime-required rows, operational deliverables executed, value-path verified,
-    no redundant tests, documentation/follow-up captured.""",
-    subagent_type="general-purpose",
-    description="Developer: implement",
-    run_in_background=True
-)
-```
+Unit tests do not prove an external adapter, database write, queue path, command,
+worker, migration, generated artifact, or user-facing outcome by themselves.
 
-**Tell user:**
-```
-Implementing {epic-id} with {N} stories (no SDET):
+If runtime proof is required but an external dependency is unavailable:
 
-🏗️ Architect: Story 0 scaffolding (if applicable)
-💻 Developer: Implementing + testing sequentially (story 1 → 2 → ... → N)
+1. keep the row non-complete;
+2. record the concrete blocker and attempted command;
+3. report it immediately;
+4. do not relabel it as not applicable.
 
-Agent is working. I'll only call this epic complete after rollout/operational
-deliverables, epic tests, audit closure, and completion artifacts are done.
-```
+### 4.5 Update evidence transactionally
 
-### Step 4: Wait for Completion
+After each story, update `acceptance-traceability.yaml`:
 
-**STOP after spawning agents.** Wait for all background tasks to complete.
+- `actual_files`;
+- `actual_tests` with concrete test identifiers;
+- runtime commands and evidence paths;
+- status: `implemented`, `tested`, `verified`, `blocked`, or `deferred`;
+- audit notes.
 
-When all tasks are done (all marked `completed` in TaskList):
-
-### Step 4b: Epic-Wide Lint Check
-
-Run ruff and vulture across ALL files created/modified in this epic. Developer already linted per-story, but this catches cross-story issues (e.g., an import added in story 1 that becomes unused after story 3 refactors it).
-
-1. Collect production file paths from implementation evidence, changed files, and boundary plan `candidate_files`/required touchpoint paths where present.
-2. Run `ruff check --fix` and `ruff format` on all collected Python files (auto-fix what you can)
-3. Run `vulture` on collected production Python files to detect dead code
-4. If `contracts.py` exists in the epic source, run `mypy --strict` on all collected Python files
-5. Re-run ruff and vulture to check what remains unfixed
-6. If any remaining violations exist, write them to `docs/epics/{epic-dir}/lint_findings.yaml` as a YAML dict with keys: `ruff_violations`, `vulture_dead_code`, `mypy_errors`
-7. Re-run all tests to confirm auto-fixes didn't break anything
-
-Any remaining lint violations that couldn't be auto-fixed are written to `lint_findings.yaml` and will be picked up by the audit in the next step.
-
-### Step 4c: Epic-Wide Operational Verification
-
-Before the first audit, verify whether the epic includes runtime/ops deliverables that must be executed.
-
-Examples:
-- schema migrations
-- bootstrap scripts
-- backfill scripts
-- seed scripts
-- onboarding jobs
-- reindex/sync jobs
-- one-time CLI routines that produce the actual value of the epic
-- live smoke checkers for every `acceptance-traceability.yaml` row with
-  `runtime_evidence.required: true`
-
-Procedure:
-1. Scan all boundary plans for operational proof obligations and verbs: `bootstrap`, `backfill`, `migrate`, `seed`, `sync`, `reindex`, `onboard`, `rollout`
-2. Scan `acceptance-traceability.yaml` for all rows where `runtime_evidence.required: true`
-3. For every runtime-required row, verify a concrete smoke checker/command exists and is wired into the project test or smoke command structure
-4. Build an execution checklist of operational deliverables and runtime-required smoke checkers
-5. Execute each deliverable/checker in the intended local or cloud environment unless the epic explicitly says dry-run only
-6. Validate the resulting state with concrete checks:
-   - DB rows/counts/columns
-   - files/artifacts created
-   - API/system behavior
-   - log or status evidence
-7. Update `docs/epics/{epic-dir}/acceptance-traceability.yaml` so every runtime-required row has:
-   - command/checker path
-   - environment used
-   - result
-   - evidence path or concise output
-   - status `verified` or `blocked`
-8. If credentials, schema, or runtime dependencies are missing, stop before `audit_epic`; do not let audit be the first place this is discovered. Report:
-   - what was implemented in code
-   - what value-delivery step is still blocked
-   - what concrete prerequisite is missing
-   - which runtime-required traceability rows remain blocked
-
-If the epic changes no runtime state and is purely code-path work, record that explicitly and continue.
-
-`/implement` must not start Step 5 while any runtime-required row lacks a wired checker/command and a passing result, unless the row is blocked by a concrete external dependency that has been reported to the user. Missing live smoke wiring is an implementation gap, not an audit finding.
-
-### Step 4d: Build Implementation Evidence Package
-
-Before the first audit, create or update `docs/epics/{epic-dir}/implementation-evidence.yaml`.
-
-This artifact is the implementation handoff to audit. It prevents reviewers from
-rediscovering basic missing proof and keeps audit focused on verifying claims
-instead of reconstructing them.
-
-Required shape:
+Create or update `implementation-evidence.yaml`:
 
 ```yaml
-epic_id: {epic-id}
-generated_at: YYYY-MM-DDTHH:MM:SSZ
+schema_version: 2
+epic_id: "{epic-id}"
 stories:
-  - story_id: story-01
-    status: complete
-    acceptance_rows: []
+  - story_id: "story-01"
+    status: "complete | implementation_complete_unverified | blocked"
+    acceptance_rows: ["AC-001"]
+    strategy:
+      inspected_paths: []
+      selected_approach: ""
+      candidate_files_used: []
+      candidate_files_skipped: []
+      discovered_files: []
     files_changed: []
     tests_added_or_updated: []
+    contract_checks: []
     commands_run:
-      - command: "pytest ..."
-        status: pass
-        evidence: "docs/epics/{epic-dir}/reviews/audit-001/pytest-output.txt"
+      - command: "exact command"
+        status: "pass | fail | blocked"
+        evidence: "repo-relative evidence path or concise captured result"
     runtime_evidence: []
-    value_proof: ""
+    value_proof: "Observable story outcome"
     remaining_unproven_work: []
 epic_level:
-  tests:
-    unit: {status: pass, evidence: ""}
-    integration: {status: pass, evidence: ""}
-    e2e: {status: not_applicable, evidence: ""}
-    live_smoke: {status: pass, evidence: ""}
-  coverage:
-    measured: true
-    percent: 0
-    evidence: ""
+  tests: {}
+  coverage: {}
   operational_deliverables: []
   blocked_rows: []
-audit_ready: true
+audit_ready: false
 ```
 
-Rules:
-- Every completed story must have at least one changed implementation/doc file,
-  one verification method, and one mapped acceptance-traceability row unless the
-  story is explicitly scaffolding.
-- Every runtime-required row must have command/result/evidence or be listed in
-  `blocked_rows` with the external blocker already reported to the user.
-- Every promised output, row, file, metric, event, side effect, or user-visible
-  behavior must have representative proof or an explicit statement that zero/no-op
-  is valid by acceptance criteria or boundary plan.
-- `audit_ready` must be false if any required/high-risk row still lacks proof.
+Every completed story needs mapped acceptance rows, actual changed files,
+verification evidence, and no remaining required proof. Story 0 may omit
+acceptance rows only when it is pure scaffolding and its boundary plan proves
+the scaffolding outcome.
 
-### Step 4e: Build Pre-Audit Verification Matrix
+### 4.6 Story checkpoint
 
-Before the first audit, create or update
-`docs/epics/{epic-dir}/audit-verification-matrix.yaml` from:
+Before advancing:
 
-- `acceptance-traceability.yaml`
-- `implementation-evidence.yaml`
-- all `file-plan-story-*.yaml`
-- changed files
-- runtime/operational evidence from Step 4c
+- read `plugins/scope/governance/developer-checklist.md` from the worktree;
+- run the focused checks again after the final edit;
+- confirm traceability and evidence are current;
+- summarize what is complete, verified, blocked, and left.
 
-The matrix may be refined by `audit_epic`, but `/implement` must not enter audit
-with an empty or evidence-free matrix.
-
-Pre-audit gate:
-- Every `required`, `runtime_required`, and `high_risk` row must have actual
-  implementation files or an explicit not-applicable reason.
-- Every `required`, `runtime_required`, and `high_risk` row must have actual
-  tests or runtime evidence appropriate to the requirement.
-- Every runtime-required row must have a passing command and evidence path unless
-  blocked by a reported external dependency.
-- Every row with a partial proof must be marked `unverified`, `blocked`, or
-  `deferred`; do not mark it `pass` or `verified`.
-
-If this gate fails, stop before Step 5 and report `implementation-complete but
-not delivery-complete`. Missing proof is an implementation handoff failure, not
-something to discover for the first time during external audit.
-
-### Step 5: Audit
-
-`audit_epic` initializes/syncs CodeGraph before launching external reviewers. Do not ask reviewers to run CodeGraph maintenance commands; they use query mode only.
-
-Execute the real Scope audit command workflow now. Load `commands/audit_epic.md` from the active checkout/worktree and follow its required initialization, attempt numbering, reviewer orchestration, deterministic review, remediation classification, and artifact rules.
-
-```python
-# Run the real nested audit command workflow, not an audit-like local substitute
-Skill(skill="audit_epic", args=epic_id)
-
-# Read audit results
-audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
-
-# Present to user
-Output: f"""
-Implementation work finished for {epic_id}. Final delivery is still pending audit closure.
-
-Audit results:
-- Status: {audit.status}
-- Critical issues: {audit.critical_count}
-- Major issues: {audit.major_count}
-- Minor issues: {audit.minor_count}
-"""
-```
-
-If audit status is PASS with no findings → skip to Step 8.
-
-### Step 6: Create Fix Stories from Audit
-
-Convert ALL audit findings (critical, major, minor) into additional stories with implementation boundary plans. The architect agent handles this.
-
-```python
-if not audit.has_findings:
-    # Skip to Step 8
-    pass
-else:
-    # Number fix stories continuing from last story number
-    last_story_num = impl_stories[-1]["number"]  # e.g., "07"
-
-    fix_task_id = TaskCreate(
-        subject=f"architect: Create fix stories from audit for {epic_id}",
-        description=f"""
-epic_id: {epic_id}
-phase: audit_fix_planning
-audit_report: docs/epics/{epic_dir}/epic_audit.md
-last_story_number: {last_story_num}
-
-Instructions:
-- Read the audit report at docs/epics/{epic_dir}/epic_audit.md
-- Create fix stories ONLY for Phase 1-7 findings (code issues).
-  Do NOT create fix stories for Phase 8 (Documentation Sync) findings —
-  those are recommendations that require user approval before any doc changes.
-  Phase 8 findings will be handled by the user via /wrap_epic or manually.
-- For each Phase 1-7 finding (critical, major, AND minor), create a fix story
-- Group related findings into the same story when they affect the same files
-- If audit found code divergence from architecture, fix the CODE to match
-  the design — do NOT update docs to match divergent code (that launders
-  the divergence and makes drift invisible)
-- Number fix stories continuing from {last_story_num} (e.g., story-{next_num}, story-{next_num+1}...)
-- For each fix story, create a file-plan-story-NN.yaml implementation boundary plan with:
-  - required_contracts, required_touchpoints, forbidden_changes, and proof_obligations
-  - candidate_files as advisory investigation hints only
-  - dependencies on existing stories (most fixes depend on the story they're fixing)
-- Write fix stories to docs/epics/{epic_dir}/acceptance-criteria.md (append)
-- Write boundary plans to docs/epics/{epic_dir}/file-plan-story-NN.yaml
-""",
-        activeForm="Creating fix stories from audit"
-    )
-
-    # Wait for architect to finish
-    # (This runs synchronously — do NOT launch in background)
-```
-
-### Step 7: Implement Fix Stories
-
-Once the architect creates fix stories, run them through the developer pipeline (no SDET).
-
-```python
-    # Discover new fix stories (boundary plans created by architect in Step 6)
-    new_boundary_plans = Glob(f"docs/epics/{epic_dir}/file-plan-story-*.yaml")
-    new_boundary_plans.sort()
-
-    fix_stories = []
-    for plan_path in new_boundary_plans:
-        story_num = extract_story_number(plan_path)
-        if int(story_num) > int(last_story_num):  # Only new stories
-            plan_content = Read(plan_path)
-            plan = read_yaml(plan_path)
-            dep_line = [l for l in plan_content.split('\n') if l.startswith('# Dependencies:')]
-            story_deps = parse_story_refs(dep_line)
-
-            fix_stories.append({
-                "number": story_num,
-                "story_id": plan["story_id"],
-                "story_title": plan["story_title"],
-                "boundary_plan_path": plan_path,
-                "dependencies": story_deps,
-                "is_scaffolding": False
-            })
-
-    if not fix_stories:
-        # Architect determined no fix stories needed — skip to Step 8
-        pass
-    else:
-        # Create tasks for fix stories
-        for story in fix_stories:
-            num = story["number"]
-
-            dev_task_id = TaskCreate(
-                subject=f"developer: Implement fix story {num} - {story['story_title']}",
-                description=f"""
-epic_id: {epic_id}
-phase: implementation
-story_id: {story['story_id']}
-story_title: {story['story_title']}
-boundary_plan: {story['boundary_plan_path']}
-terminate_upon_completion: no
-
-Context to load:
-- Read the implementation boundary plan at {story['boundary_plan_path']}
-- Read the audit report at docs/epics/{epic_dir}/epic_audit.md for context
-- Read acceptance traceability from docs/epics/{epic_dir}/acceptance-traceability.yaml
-- Read system ADRs from docs/architecture/09-adr-summary.md
-- Read lessons learned from docs/lessons-learned/INDEX.md (if exists)
-
-Instructions:
-- This is a FIX story from audit findings
-- Implement PRODUCTION-READY code that fixes the audit finding
-- Satisfy binding boundary-plan obligations and record implementation strategy/evidence
-- If contracts.py exists, ensure fixes maintain Protocol compliance. Import
-  Protocol types for type annotations and run `mypy --strict` to verify.
-- If this is a documentation update story, update files in docs/architecture/ to
-  reflect the actual implementation accurately
-- Write tests that verify the audit finding is fixed
-- Update docs/epics/{epic_dir}/acceptance-traceability.yaml for every affected
-  row with actual files, actual tests, runtime evidence, and status changes.
-- Before marking the fix story complete, write an acceptance-proof summary for
-  every affected acceptance criterion, matrix row, audit finding, and file-plan
-  promise. Include promise verified, traceability row ID(s), verification method,
-  real runtime path used yes/no, representative data used yes/no, observable
-  result, and any remaining unproven work.
-- If the fix affects integration or side effects, prove the intended entrypoint
-  calls the fixed path, upstream inputs are available there, and downstream
-  output/state is produced. Unit tests alone are insufficient for integration work.
-- If the fix promises output, persisted rows, generated files, extracted items,
-  metrics, events, or side effects, provide representative non-zero or threshold
-  evidence unless zero is explicitly valid.
-- If the fix affects a row with `runtime_evidence.required: true`, create or
-  update the live smoke checker, run it against the intended local/cloud
-  dependency, and record command/result/evidence before marking the fix story
-  complete.
-- If contracts.py exists, include tests that assert Protocol compliance for
-  interfaces affected by the fix
-- Run all tests after implementation — all must pass
-- CRITICAL: No stubs, no placeholders, no TODOs in production code
-
-Decision tracking:
-- If the fix requires an unplanned architectural choice, flag it in your
-  agent summary under concerns with type: "decision_candidate".
-
-Pre-completion review:
-READ the full checklist from plugins/scope/governance/developer-checklist.md before marking complete.
-Do NOT rely on memory. READ THE FILE.
-""",
-                activeForm=f"Implementing fix story {num}"
-            )
-            task_ids[f"dev-story-{num}"] = dev_task_id
-
-        # Wire inter-story dependencies for fix stories
-        for story in fix_stories:
-            num = story["number"]
-            dev_task_id = task_ids[f"dev-story-{num}"]
-            for dep_num in story["dependencies"]:
-                dep_key = f"dev-story-{dep_num}"
-                if dep_key in task_ids:
-                    TaskUpdate(taskId=dev_task_id, addBlockedBy=[task_ids[dep_key]])
-
-        # 🚨 NEVER spawn more than ONE developer agent.
-        Task(
-            prompt="""Take the role of developer agent.
-            Process dev tasks ONE AT A TIME in dependency order:
-            1. Check TaskList for the lowest-ID dev task that is pending and has NO blockedBy
-            2. If none available, STOP — you will be re-launched when tasks unblock
-            3. Implement it AND write tests
-            4. Run all tests — all must pass
-            5. Only mark completed if the promised value is observed through the intended path.
-               If proof is partial, leave the story non-complete and report one of:
-               implementation_complete_unverified, unit_verified, integration_verified,
-               runtime_verified, or blocked_missing_runtime_input.
-            6. Check TaskList again for next unblocked dev task
-            7. Repeat until no more dev tasks available
-
-            CRITICAL: Only work on tasks where ALL blockedBy tasks show status=completed.
-            You are responsible for BOTH implementation AND tests — there is no SDET.""",
-            subagent_type="general-purpose",
-            description="Developer: fix stories",
-            run_in_background=True
-        )
-
-        # Wait for fix story agent to complete
-```
-
-### Step 8: Run All Epic Tests
-
-After all stories (original + fixes) are implemented, run the full epic test suite.
-
-Before running tests, verify `docs/epics/{epic_dir}/acceptance-traceability.yaml` is current:
-- every implemented row has `actual_files`
-- every tested row has `actual_tests`
-- every required runtime evidence row has command/result evidence or is marked `blocked`
-- no row remains `planned` unless it is explicitly out of scope or deferred with a reason
-
-```python
-# Collect ALL test files from implementation evidence and acceptance traceability
-all_boundary_plans = Glob(f"docs/epics/{epic_dir}/file-plan-story-*.yaml")
-test_files = []
-evidence = read_yaml(f"docs/epics/{epic_dir}/implementation-evidence.yaml")
-traceability = read_yaml(f"docs/epics/{epic_dir}/acceptance-traceability.yaml")
-test_files.extend(extract_test_paths(evidence))
-test_files.extend(extract_test_paths(traceability))
-test_files = sorted(set(test_files))
-
-# Run all epic tests
-Bash(f"run_tests {' '.join(test_files)}")  # Adapt to project test runner
-
-if all_passed:
-    Output: f"""
-    All {len(test_files)} test files pass.
-    """
-else:
-    Output: f"""
-    {failed_count} test failures detected.
-    Failing tests: {failing_tests}
-
-    Investigating failures...
-    """
-    # Debug and fix remaining failures
-    # Re-run tests until all pass or escalate to user
-```
-
-### Step 8b: Value Delivery Check
-
-Before the final audit, answer these questions from evidence, not inference:
-- What user/business value was the epic meant to deliver?
-- What can now be done in the real system that could not be done before?
-- What concrete state proves that value exists?
-
-Examples of acceptable proof:
-- query results showing new graph relationships
-- rows present in a new catalog table
-- signals resolved/backfilled for a real target entity
-- successfully completed onboarding/backfill run
-- verified API/UI behavior against the intended environment
-
-If the answer is still "the code exists but the one-time rollout wasn't run", the epic is not done.
-
-### Step 9: Final Audit
-
-Re-run audit to confirm all findings are resolved.
-This call happens after fix stories are implemented, so `audit_epic` must resync CodeGraph before launching reviewers. Reviewers remain query-only.
-This is again the real nested Scope audit command workflow, not a hand-written update to `epic_audit.md`.
-
-```python
-Skill(skill="audit_epic", args=epic_id)
-audit = Read(f"docs/epics/{epic_dir}/epic_audit.md")
-
-if audit.status == "PASS":
-    Output: f"""
-    Epic {epic_id} delivery complete.
-    Audit: PASS
-    All tests: PASS
-    """
-    # Proceed to Step 10 (completion artifacts)
-else:
-    Output: f"""
-    Epic {epic_id} still has open findings after fix stories.
-    Remaining: {audit.critical_count} critical, {audit.major_count} major, {audit.minor_count} minor
-    Review docs/epics/{epic_dir}/epic_audit.md for details.
-    """
-    # If fewer than 3 total audit runs have happened, loop back through
-    # fix planning and remediation. Otherwise escalate to the user.
-```
-
-**Max audit iterations: 3 total audit runs.** The initial audit (Step 5) plus up to two remediation cycles (Steps 6-9) is the limit. If the third audit still has findings, present them to the user and stop. Do not create a fourth round of fix stories without explicit user approval.
-
-If the final audit does not pass, the epic is not complete. Use one of the non-complete status outcomes from Step 10 instead of completion language.
-
-### Step 10: Completion Artifacts and Documentation Closure
-
-Before declaring the epic complete:
-
-1. Update `docs/epics/{epic-dir}/implementation-summary.md`
-   - stories implemented
-   - per-story completion state: `complete`, `implementation_complete_unverified`,
-     `unit_verified`, `integration_verified`, `runtime_verified`, or
-     `blocked_missing_runtime_input`
-   - per-story acceptance-proof summary mapping each acceptance criterion and
-     boundary-plan obligation to verification method, runtime-path yes/no,
-     representative-data yes/no, observable result, and remaining unproven work
-   - tests run and results
-   - operational deliverables executed
-   - value delivered and proof
-   - environment/setup issues encountered
-   - residual risks / follow-up items
-
-2. Review documentation implications from the final audit
-   - If docs are stale because implementation drifted, surface this explicitly
-   - Do not silently launder drift by pretending docs are current
-   - Record whether doc updates are:
-     - approved now
-     - deferred to `/wrap_epic`
-     - blocked on user decision
-
-3. Report epic status using one of these exact outcomes:
-   - `delivery-complete` — code, rollout, tests, audit, and completion artifacts all done
-   - `implementation-complete, rollout-pending`
-   - `implementation-complete, documentation-decision-pending`
-   - `blocked`
-
-### Step 11: Worktree Cleanup
-
-After the final audit passes (or after presenting unresolved findings to the user), do not clean up the worktree. The user will instruct you to merge and remove the worktree when he is satisfied with the quality.
-
-### Wrap Epic Guidance
-
-**When the user asks to commit or merge this epic's work:**
-- Ask: "Would you like to run `/wrap_epic {epic-id}` first? It captures undocumented decisions and lessons learned, generates an implementation summary, and updates architecture docs before committing."
-
-**When the user runs `/implement` for a different epic while this one has an active worktree:**
-- Step 0b checks for unwrapped epics and prompts the user (see above).
-
-**Write tracking marker** so `/decision` and `/lesson` know when implementation completed:
-```bash
-mkdir -p .scope/tracking/commands
-echo '{"command":"implement","epic_id":"'"$EPIC_ID"'","completed_at":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","stories_completed":{N},"audit_status":"'"$AUDIT_STATUS"'"}' >> ".scope/tracking/commands/implement-$(date +%Y%m%d-%H%M%S).jsonl"
-```
+Do not continue from a state that cannot be described and reproduced.
 
 ---
 
-## Task Dependency Diagram
+## Step 5 — Epic-Wide Verification
 
-For stories where Story 3 depends on Stories 1 and 2:
+After all planned stories are implemented:
 
-```
-architect-story-00
-       ↓
-dev-story-01 ──────────┐
-                        │
-dev-story-02 ──────────┤
-                        │
-dev-story-03 ←─────────┘  (blocked by dev-01 AND dev-02)
-       ↓
-audit_epic (after all complete)
-```
+### Source and contract checks
 
-Developer tasks respect declared inter-story dependencies.
+Run project-appropriate commands named by test strategy, boundary plans, native
+contracts, and repository governance. Examples may include formatting, lint,
+type checks, schema parsing, API validation, SQL validation, dead-code checks,
+or frontend builds. Do not impose a language-specific tool that the project does
+not use.
 
-**Concurrency timeline (single developer agent, sequential):**
-```
-Time →
-                    ┌─── Implementation Phase ──────────────────┐  ┌── Fix Phase ──────────────┐
-architect:  [==story-0==][                                      ]  [==fix planning==]
-developer:               [==story-1==][==story-2==][==story-3==]                    [==fix-08==][==fix-09==]
-audit:                                                            [==audit==]                    [==final==]
-tests:                                                                                           [==all==]
-```
+### Test checks
 
-**Full flow:**
-```
-Stories 01-N → Audit → Fix stories (if needed) → All epic tests → Final audit
-```
+Collect tests from:
+
+- traceability `actual_tests` and `expected_files`;
+- implementation evidence;
+- boundary-plan proof commands;
+- changed modules and their existing regression tests.
+
+Run focused tests first, then the appropriate broader regression suite. Report
+pass/fail/error/skip counts and measured coverage. A skipped required test is a
+failure unless the user approved a documented exception.
+
+### Runtime and operational checks
+
+For every runtime-required row:
+
+- run the wired checker/command;
+- record environment, result, and evidence;
+- validate resulting state or artifact;
+- measure non-zero or threshold outcomes where applicable.
+
+Execute required migrations, backfills, seeds, reindexes, onboarding, syncs, or
+rollout steps. Code for an operational task is not proof that the task ran.
+
+### Value delivery check
+
+Answer from evidence:
+
+1. What user/business outcome was promised?
+2. What can the real system do now that it could not do before?
+3. Which concrete state, output, measurement, or interaction proves it?
+
+If the answer is only “the code and tests exist,” delivery proof is incomplete.
+
+### Pre-audit evidence package
+
+Complete `implementation-evidence.yaml` and set `audit_ready: true` only when all
+required/high-risk rows have appropriate proof.
+
+Before handing off to audit, every required/high-risk traceability row must
+identify:
+
+- requirement and risk;
+- actual implementation files;
+- required assertions and actual tests;
+- runtime requirement, command, and evidence;
+- final implementation-evidence status.
+
+Stop before audit if the package is mechanically incomplete. Missing evidence is
+an implementation handoff failure, not something reviewers should discover.
+
+Do not create `audit-verification-matrix.yaml`. The installed audit tool derives
+it one-to-one from acceptance traceability so implementation cannot silently
+change audit scope.
 
 ---
 
-## Error Handling
+## Step 6 — Run the Real Scope Audit
 
-**If a task fails:**
-- The agent informs the orchestrator (ie.: this command) of the failure through TaskList
-- Dependent tasks remain blocked
-- The orchestrator (this command) detects the failure when checking TaskList
-- Present failure to user with the agent's error message
-- Ask: "Fix and retry? [yes / skip story / abort]"
+Audit means executing the installed command workflow, not writing an informal
+review or directly editing `epic_audit.md`.
 
-**If developer can't pass tests:**
-- Developer returns `status: failure` with details
-- Common cause: boundary-plan contracts or proof obligations don't match actual requirements
-- Fix: return to refinement, update the boundary plan, re-run developer for that story
+1. Read `plugins/scope/commands/audit_epic.md` from the active worktree.
+2. Record the highest existing `reviews/audit-NNN` attempt.
+3. Execute `scope:audit_epic {epic-id}` exactly as that command specifies.
+4. Confirm a new attempt directory, `audit-attempt.yaml`, the attempt and
+   published matrices, `audit-findings.yaml`, required reviewer-role outputs,
+   and `epic_audit.md` were produced.
+5. Confirm the audit completion validator passed.
 
----
+If no new audit attempt exists, report `implementation-complete, audit-pending`.
 
-## Compaction Survival
-
-If context is summarized during implementation, the orchestrator MUST re-read these files to recover state — do NOT rely on memory:
-
-1. **Task state**: `TaskList()` — shows which stories are pending/in_progress/completed
-2. **Epic context**: `docs/epics/{EPIC_DIR}/` — all refinement artifacts
-3. **Agent summaries**: `.scope/{EPIC_DIR}/agent_summaries.jsonl` — what agents have done
-4. **Developer checklist**: `plugins/scope/governance/developer-checklist.md` — MUST be re-read before any completion
-5. **Lessons learned**: `docs/lessons-learned/INDEX.md` — project constraints
-6. **System ADRs**: `docs/architecture/09-adr-summary.md` — architectural decisions
-
-**Critical rule for spawning agents after compaction:** When re-launching a developer agent after context summarization, include the full agent launch prompt from Step 3 above — including the checklist file reference. Do NOT write a shortened version from memory.
+Do not substitute a local summary, same-agent code review, or hand-written audit
+artifact for the nested command.
 
 ---
 
-## Communication Style
+## Step 7 — Remediate Audit Findings
 
-**Progress indicators:**
-- "Implementing {epic-id}: Story 0/N complete"
-- "Developer: Implementing story 1/N"
+Read `audit-findings.yaml` and `epic_audit.md`.
 
-**After completion:**
-- Summary of all stories implemented (original + fix)
-- Audit results (initial + final)
-- Fix stories created and their status
-- Test results (all epic tests)
+- For `PASS`, proceed to completion.
+- Implement findings with disposition `remediation_required` within the approved
+  implementation boundary.
+- Group corrections by root cause and affected surface.
+- Inspect sibling surfaces identified by the audit; do not patch only the named
+  symptom.
+- Add or update tests/runtime evidence that would have caught the defect.
+- Update implementation evidence and actual traceability evidence mappings, but
+  do not edit the audit matrix directly; the audit tool derives a fresh matrix.
+- Set corrected findings to `remediated_pending_verification` only after their
+  stated closure tests are ready.
+- Ask the user for `user_decision` and `documentation_decision` findings and for
+  product, architecture, security, destructive, credential, or scope decisions.
+- Do not change approved documentation merely to make divergent code appear
+  compliant.
+
+After remediation, rerun the real `scope:audit_epic` command once. It must select
+targeted mode for the named findings, affected acceptance rows, closure tests,
+and directly coupled sibling surfaces. The audit command owns reviewer scope;
+`implement` must not create extra informal review rounds or another broad audit.
+
+If targeted verification remains `FAIL` or `BLOCKED`, report `blocked` with the
+remaining finding IDs and evidence. Another full audit requires a material
+approved scope/boundary change or explicit user authorization. Do not declare
+delivery complete.
+
+---
+
+## Step 8 — Completion Artifacts
+
+When tests, runtime proof, operational work, and audit are green, update
+`implementation-summary.md` with:
+
+- approved intent and delivered value;
+- stories and actual completion states;
+- acceptance-proof summary by stable row ID;
+- implementation and test files;
+- native contract checks;
+- test counts and measured coverage;
+- runtime and representative-data evidence;
+- operational deliverables executed;
+- audit attempts, corrections, and final status;
+- residual risks and documentation decisions;
+- environment or setup issues encountered.
+
+Review documentation implications from implementation and audit. Surface each
+as:
+
+- approved update now;
+- deferred to `scope:wrap_epic`;
+- blocked on user decision.
+
+Do not silently launder implementation drift into architecture documentation.
+
+Write the implementation command marker under `.scope/tracking/commands/` with
+the epic ID, completed time, story count, proof status, and final audit status.
+
+Do not merge, remove, or clean the worktree. The user controls wrap/merge.
+
+## Completion Output
+
+Report:
+
+- exact delivery status;
+- worktree and branch;
+- stories completed/blocked;
+- test pass/fail/error/skip counts and coverage;
+- native contract checks;
+- runtime and operational evidence;
+- value-delivery proof;
+- audit attempt IDs, reviewer coverage, and final status;
+- completion-summary path;
+- residual risks or documentation decisions;
+- recommended next command: `scope:wrap_epic {epic-id}` when delivery is complete.
+
+## Compaction Recovery
+
+Resume from artifacts rather than conversation memory:
+
+1. validate the refinement handoff again;
+2. inspect the worktree and branch;
+3. read story graph and traceability statuses;
+4. read `implementation-evidence.yaml` for story proof and blockers;
+5. read the audit matrix, findings ledger, report, and latest attempt metadata;
+6. continue from the first non-verified requirement or open audit finding.
+
+Never infer story or delivery completion from changed files alone.

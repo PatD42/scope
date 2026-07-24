@@ -96,9 +96,9 @@ Also inspect likely Scope artifacts when present:
 - `docs/epics/*/acceptance-traceability.yaml`
 - `docs/epics/*/implementation-evidence.yaml`
 - `docs/epics/*/audit-verification-matrix.yaml`
-- `docs/epics/*/audit-issue-ledger.yaml`
+- `docs/epics/*/audit-findings.yaml`
 - `docs/epics/*/epic_audit.md`
-- `docs/epics/*/reviews/audit-*/review-metadata.yaml`
+- `docs/epics/*/reviews/audit-*/audit-attempt.yaml`
 - `.scope/*/*summaries*.jsonl`
 - `session-handoff.md` if it already exists
 

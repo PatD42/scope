@@ -1,0 +1,108 @@
+schema_version: 1
+attempt_version: 2
+matrix_version: 2
+findings_version: 2
+
+allowed_modes:
+  - full
+  - targeted
+
+attempt_statuses:
+  - pending
+  - pass
+  - fail
+  - blocked
+
+gate_statuses:
+  - pending
+  - pass
+  - fail
+  - blocked
+  - not_applicable
+
+row_statuses:
+  - pending
+  - pass
+  - fail
+  - unverified
+  - blocked
+  - not_applicable
+
+row_priorities:
+  - required
+  - runtime_required
+  - high_risk
+  - optional
+  - documentation
+
+review_decisions:
+  - pass
+  - findings
+  - blocked
+  - unverified
+
+roles:
+  implementation_integrity:
+    description: Real call paths, negative behavior, integration touchpoints, stubs, and delivered value.
+  contract_and_evidence:
+    description: Requirement, native-contract, code, test, runtime-evidence, and forbidden-change coherence.
+  capability_specialist:
+    description: Selected high-risk capability and directly coupled sibling surfaces only.
+
+risk_review_policy:
+  low:
+    roles:
+      - implementation_integrity
+  medium:
+    roles:
+      - implementation_integrity
+      - contract_and_evidence
+  high:
+    roles:
+      - implementation_integrity
+      - contract_and_evidence
+      - capability_specialist
+  critical:
+    roles:
+      - implementation_integrity
+      - contract_and_evidence
+      - capability_specialist
+
+review_budget:
+  maximum_full_attempts: 1
+  maximum_targeted_attempts: 1
+
+finding:
+  severities:
+    - blocking
+    - major
+    - minor
+  categories:
+    - implementation
+    - architecture_contract
+    - native_contract
+    - testability
+    - runtime_evidence
+    - operations
+    - security
+    - data_integrity
+    - documentation
+    - mechanical
+    - specialist
+  dispositions:
+    - remediation_required
+    - user_decision
+    - documentation_decision
+    - accepted_risk
+    - false_positive
+  statuses:
+    - open
+    - remediated_pending_verification
+    - verified
+    - accepted_risk
+    - rejected
+
+terminal_finding_statuses:
+  - verified
+  - accepted_risk
+  - rejected

@@ -60,7 +60,8 @@ If the nested command cannot be executed, the parent command is not delivery-com
 
 ## Role Mapping
 
-Codex should usually perform Scope roles sequentially in the main session:
+Codex performs product, architecture, and implementation roles sequentially in
+the main session:
 
 - `product-owner`: validate business requirements, acceptance criteria, and product docs.
 - `architect`: architecture, ADRs, specs, contracts, and implementation boundary plans.
@@ -71,6 +72,10 @@ Codex should usually perform Scope roles sequentially in the main session:
 - `reverse-engineer-ops`: operations/runbook reverse engineering.
 
 Only spawn Codex sub-agents when the user explicitly asks for parallel agents or delegation. When spawned, pass the relevant Scope role file and a bounded task.
+
+Independent refinement and audit reviewer roles are the exception: their
+commands require fresh `codex exec` processes using `gpt-5.6-terra` with high
+reasoning. Never perform those reviewer roles in the orchestrating context.
 
 ## Codex Adaptations
 

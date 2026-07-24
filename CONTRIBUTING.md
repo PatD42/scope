@@ -45,6 +45,12 @@ Do not edit generated install output as the source of truth. Update the files un
 
 ## Verification
 
+Install the Python validation dependencies once:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+```
+
 Before opening a PR, run:
 
 ```bash
@@ -53,7 +59,8 @@ Before opening a PR, run:
 
 This runs the same checks as GitHub Actions, including whitespace checks for
 staged and untracked files, mirrored Claude/Codex file changes, generated-file
-rejection, and the install smoke test.
+rejection, install smoke, the focused v2 validator suite, and its coverage
+threshold.
 
 For quick manual install checks, you can also verify that installation propagates
 the files correctly:

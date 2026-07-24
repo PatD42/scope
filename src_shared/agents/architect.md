@@ -57,6 +57,22 @@ You design technical solutions for epics: components, APIs, data models, ADRs, i
 - **Epic docs are documentation only** — `docs/epics/{epic-dir}/` may contain only `.md` and `.yaml`; source files such as `contracts.py` belong in the source package, not in epic docs.
 - **Epic artifact minimum** — every epic must end refinement with `details.md`, `acceptance-criteria.md`, `system-context.md`, `architecture.md`, `adr.md`, `pdr.md`, `test-strategy.md`, and at least one `file-plan-story-*.yaml`.
 
+### Scope Epic Refine V2 precedence
+
+When this role is invoked by `scope:epic_refine`, the installed
+`commands/epic_refine.md` phase model and readiness rules take precedence over
+standalone role phases below. In particular:
+
+- do not create or update deprecated `architecture-claims.yaml` or
+  `architecture-contract-self-check.yaml` artifacts;
+- use the compact `reviews/refine-v2-001/pre-review-audit.yaml` contract
+  challenge required by the command;
+- create the fewest independently verifiable stories rather than forcing a
+  numeric range;
+- treat Story 0 as optional;
+- never mark the epic ready before independent review, final user approval, and
+  handoff validation.
+
 ---
 
 ## Context Loading Before Epic Work
@@ -246,61 +262,29 @@ spec tree instead: `docs/architecture/backend/13-specs/` or
 `docs/architecture/frontend/13-specs/`. Do not create `14-schema`; schemas live
 under `13-specs/schemas/`.
 
-### Claims Ledger Before Specs
+### Epic Refine V2 Pre-review Contract Challenge
 
-Before generating OpenAPI, JSON Schema, SQL, or error contracts, create
-`docs/epics/{epic-dir}/architecture-claims.yaml`.
+For `scope:epic_refine`, do not recreate the deprecated claims and self-check
+matrices. After native contracts, story plans, and traceability are complete,
+perform the command's bounded pre-review challenge and record it under the
+review evidence directory.
 
-The claims ledger is the contract source. Extract every enforceable claim from
-accepted ACs, PDRs, ADRs, and architecture decisions before writing specs.
-Include claims that imply required fields, exact counts, thresholds,
-conditional behavior, fail-closed behavior, idempotency, resumability,
-supersession, ownership, generated outputs, metrics, reports, operator-visible
-state, or split-runtime constraints.
+The architect must:
 
-For each claim, identify expected contract surfaces and the intended enforcement
-shape. If the correct enforcement is unclear, mark the claim `user_question` and
-return to the owning phase before writing specs. Do not generate contracts from
-ambiguous prose.
+1. prove every implementation requirement has a canonical ID, owning story,
+   story proof, and trace assertion;
+2. trace each high-risk contract from authority through producer, transport,
+   state ownership, consumer, and proof;
+3. construct hostile counterexamples and identify the exact mechanism that
+   rejects them;
+4. complete every common and selected-capability challenge from
+   `config/refinement-policy.yaml`;
+5. run applicable native validation and retain exact command evidence.
 
-Keep rows compact and enforceable. A good row names one promise, its source, the
-surfaces it must affect, and the enforcement shape. Example: an AC saying
-"export must fail closed when required invoice lines are missing" becomes one
-claim tied to the export API, result schema, persistence surface, error code,
-test strategy, and a fail-closed invariant. Do not create separate rows for
-minor implementation details unless they are independent promises.
-
-### Contract Self-Gate Before Review
-
-Before handing specs to Phase 3.5 review, create
-`docs/epics/{epic-dir}/architecture-contract-self-check.yaml`.
-
-The architect owns this gate. External reviewers should not be the first agents
-to discover that generated API/schema/SQL/error contracts fail to enforce the
-accepted AC/PDR/ADR rules.
-
-For every acceptance criterion and accepted PDR/ADR claim containing or implying
-`must`, `only`, `never`, `all`, `every`, `exact`, thresholds, fail-closed
-behavior, required reasons, conditional behavior, idempotency, resumability,
-supersession, ownership, generated outputs, metrics, reports, or operator-visible
-state:
-
-1. Identify the generated contract surface that must enforce it.
-2. State the enforcement mechanism: required field, enum, exact cardinality,
-   conditional rule, invariant, SQL constraint, error contract, test strategy, or
-   explicit not-applicable rationale.
-3. Provide a negative case: a payload/state that should be rejected or fail.
-4. Mark the row `pass`, `fail`, `user_question`, or `not_applicable`.
-
-Do not mark the gate pass when behavior is only described in prose. If a
-contract-valid payload/state could violate an accepted requirement, the row is
-`fail` and must be fixed before external review. If the correct enforcement is
-not clear from approved requirements, return to the Product Owner or earlier
-architecture phase instead of guessing.
-
-The self-check should prove each claims-ledger row with one concise row that
-names the actual contract surfaces, mechanism, and negative case. It is not a
-second architecture document; it is a focused pre-review gate.
+Do not mark the challenge passed when behavior is only described in prose. If a
+contract-valid payload or state can violate an accepted requirement, correct
+the native contract before independent review. If the correct behavior is not
+approved, return to the Product Owner or user gate instead of guessing.
 
 Also run these structural checks before external review:
 
@@ -330,16 +314,11 @@ Also run these structural checks before external review:
   must be applied consistently across endpoints, commands, reports, manifests,
   and persistence surfaces.
 
-When the validation script is installed, run:
+Run the V2 validator after updating the challenge input fingerprint:
 
 ```bash
-plugins/scope/scripts/validate-architecture-contracts.sh docs/epics/{epic-dir}
-```
-
-or the Claude-installed equivalent:
-
-```bash
-.claude/commands/scripts/validate-architecture-contracts.sh docs/epics/{epic-dir}
+python3 plugins/scope/scripts/validate-refinement.py \
+  docs/epics/{epic-dir} --phase pre_review --repo-root "$(pwd)"
 ```
 
 ---
@@ -348,20 +327,23 @@ or the Claude-installed equivalent:
 
 **Trigger**: After specs approved
 
-1. Break epic into 5-8 implementable stories (10+ is a red flag)
-2. Each story: max 7 non-trivial files, ~600 LOC
-3. Identify Story 0 (scaffolding) — for EACH file in every story, classify:
-   - "Can a test be written for this?" No → Story 0
-   - "Is the primary value CONTENT or CODE?" Content → Story 0
+1. Create the fewest independently verifiable stories that preserve useful
+   dependency and proof boundaries. Do not force a numeric range.
+2. Keep each story small enough for focused implementation and verification;
+   split when unrelated outcomes, unavailable prerequisites, rollout boundaries,
+   or hidden integration risk would otherwise be mixed.
+3. Create Story 0 only when architect-authored content or real cross-story
+   scaffolding must exist before implementation. Do not create it solely to
+   satisfy a workflow convention.
 
    | File Type | Owner | Rationale |
    |-----------|-------|-----------|
-   | Config content (.yaml values) | Story 0 (architect) | Content authoring, not code |
-   | JSON schemas | Story 0 (architect) | Structural definition |
-   | Base classes / scaffolding | Story 0 (architect) | Skeleton before implementation |
-   | contracts.py (Protocol classes) | Story 0 (architect) | Interface definition |
-   | Documentation updates (Doc Update Plan) | Story 0 (architect) | Architect owns docs |
-   | ruff + mypy config in pyproject.toml | Story 0 (architect) | Tooling setup |
+| Config content (.yaml values) | Architect before review or optional Story 0 | Authored semantic content |
+| JSON schemas | Architect before review or optional Story 0 | Native contract definition |
+| Base classes / scaffolding | Optional Story 0 | Only when a real shared boundary needs it |
+| contracts.py (Protocol classes) | Optional Story 0 | Only for a useful cross-story interface |
+| Documentation updates (Doc Update Plan) | Architect before review or optional Story 0 | Architect owns docs |
+| ruff + mypy config in pyproject.toml | Optional Story 0 | Only when the epic genuinely adds tooling |
    | Pydantic models with logic | Dev stories | Business logic |
    | Service implementations | Dev stories | Code requiring tests |
    | Test fixtures / factories | Dev stories | Test support code |
@@ -372,7 +354,8 @@ or the Claude-installed equivalent:
 5. Define inter-story dependencies
 6. Write acceptance criteria per story
 
-**Note:** Do NOT transition epic to "ready-for-implementation" yet — that happens after implementation boundary plans are complete (Phase 6).
+**Note:** Do not transition the epic to `ready-for-implementation`. The owning
+workflow may do that only after its review, user approval, and handoff checks.
 
 ---
 
@@ -437,10 +420,8 @@ required_touchpoints:
 - [ ] Candidate files are marked advisory
 - [ ] Story 0 includes Doc Update Plan obligations when documentation updates are required
 
-**After all boundary plans are saved:** Transition epic to "ready-for-implementation":
-```python
-Skill(skill="project-tracking", args=f"transition_epic {epic_id} ready-for-implementation")
-```
+After all boundary plans are saved, return control to the owning workflow for
+pre-review challenge, independent review, user approval, and final transition.
 
 ---
 

@@ -18,6 +18,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install validation dependencies
+        run: python -m pip install -r requirements-dev.txt
+
       - name: Validate Scope prompts
         run: ./scripts/validate-pr-checks.sh
 
@@ -40,20 +49,32 @@ jobs:
 
           $requiredProjectPaths = @(
             ".claude/commands/implement.md",
-            ".claude/commands/audit_epic/reviewer-codex.md",
-            ".claude/commands/scripts/scope-reviewer-claude-pexpect.py",
+            ".claude/commands/epic_refine/reviewer-refinement.md",
+            ".claude/commands/audit_epic/reviewer-audit.md",
             ".claude/agents/developer.md",
             ".claude/skills/project-documentation/SKILL.md",
             ".claude/governance/developer-checklist.md",
+            ".claude/config/refinement-policy.yaml",
+            ".claude/config/audit-policy.yaml",
+            ".claude/scripts/validate-refinement.py",
+            ".claude/scripts/audit-artifacts.py",
+            ".claude/scripts/scope-reviewer-claude-pexpect.py",
+            ".claude/requirements.txt",
             "plugins/scope/commands/implement.md",
-            "plugins/scope/commands/audit_epic/reviewer-codex.md",
+            "plugins/scope/commands/epic_refine/reviewer-refinement.md",
+            "plugins/scope/commands/audit_epic/reviewer-audit.md",
             "plugins/scope/agents/developer.md",
             "plugins/scope/skills/project-documentation/SKILL.md",
             "plugins/scope/governance/developer-checklist.md",
+            "plugins/scope/config/refinement-policy.yaml",
+            "plugins/scope/config/audit-policy.yaml",
             "plugins/scope/docs/reverse-engineering-guide.md",
             "plugins/scope/docs/SCOPE-README.md",
+            "plugins/scope/scripts/validate-refinement.py",
+            "plugins/scope/scripts/audit-artifacts.py",
             "plugins/scope/scripts/scope-reviewer-claude-pexpect.py",
             "plugins/scope/scripts/scope-command",
+            "plugins/scope/requirements.txt",
             "plugins/scope/.codex-plugin/plugin.json",
             "plugins/scope/README.md",
             ".scope/config.yaml"
@@ -67,11 +88,30 @@ jobs:
           Set-Content -LiteralPath $configPath -Value "preserve: true"
           $stalePaths = @(
             ".claude/commands/scripts/scope-reviewer-tmux.sh",
+            ".claude/commands/scripts/scope-reviewer-claude-pexpect.py",
+            ".claude/commands/scripts/validate-architecture-contracts.sh",
+            ".claude/commands/scripts/validate-epic-docs.sh",
             ".claude/commands/audit_epic/reviewer-gemini.md",
             ".claude/commands/epic_refine/reviewer-architecture-gemini.md",
+            ".claude/commands/audit_epic/reviewer-codex.md",
+            ".claude/commands/audit_epic/reviewer-claude.md",
+            ".claude/commands/audit_epic/reviewer-agy.md",
+            ".claude/commands/audit_epic/reviewer-glm.md",
+            ".claude/commands/epic_refine/reviewer-architecture-codex.md",
+            ".claude/commands/epic_refine/reviewer-architecture-claude.md",
+            ".claude/commands/epic_refine/reviewer-architecture-agy.md",
+            ".claude/commands/epic_refine/reviewer-architecture-glm.md",
             "plugins/scope/scripts/scope-reviewer-tmux.sh",
             "plugins/scope/commands/audit_epic/reviewer-gemini.md",
-            "plugins/scope/commands/epic_refine/reviewer-architecture-gemini.md"
+            "plugins/scope/commands/epic_refine/reviewer-architecture-gemini.md",
+            "plugins/scope/commands/audit_epic/reviewer-codex.md",
+            "plugins/scope/commands/audit_epic/reviewer-claude.md",
+            "plugins/scope/commands/audit_epic/reviewer-agy.md",
+            "plugins/scope/commands/audit_epic/reviewer-glm.md",
+            "plugins/scope/commands/epic_refine/reviewer-architecture-codex.md",
+            "plugins/scope/commands/epic_refine/reviewer-architecture-claude.md",
+            "plugins/scope/commands/epic_refine/reviewer-architecture-agy.md",
+            "plugins/scope/commands/epic_refine/reviewer-architecture-glm.md"
           )
           foreach ($relativePath in $stalePaths) {
             $path = Join-Path $projectTarget $relativePath

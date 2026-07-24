@@ -22,6 +22,13 @@ Codex should read the matching file in `commands/`, load any referenced role fil
 
 When running inside `wip/{epic-id}`, Codex should use the `plugins/scope/` directory from that worktree checkout. Do not fall back to the main checkout's plugin copy.
 
+The v2 refinement and audit validators require Python 3 and PyYAML. Install the
+runtime dependency with:
+
+```bash
+python3 -m pip install -r plugins/scope/requirements.txt
+```
+
 ## Porting Model
 
 - `commands/` contains the original Scope command playbooks.

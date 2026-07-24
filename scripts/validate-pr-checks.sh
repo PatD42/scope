@@ -147,6 +147,7 @@ check_mirrors() {
 
 check_install() {
   local tmpdir
+  local obsolete
 
   section "Install smoke test"
 
@@ -156,12 +157,28 @@ check_install() {
   test -f "$tmpdir/.claude/commands/wrap_epic.md"
   test -f "$tmpdir/.claude/commands/implement.md"
   test -f "$tmpdir/.claude/commands/audit_epic.md"
+  test -f "$tmpdir/.claude/commands/epic_refine/reviewer-refinement.md"
+  test -f "$tmpdir/.claude/commands/audit_epic/reviewer-audit.md"
   test -f "$tmpdir/.claude/agents/developer.md"
+  test -f "$tmpdir/.claude/config/refinement-policy.yaml"
+  test -f "$tmpdir/.claude/config/audit-policy.yaml"
+  test -f "$tmpdir/.claude/scripts/validate-refinement.py"
+  test -f "$tmpdir/.claude/scripts/audit-artifacts.py"
+  test -f "$tmpdir/.claude/scripts/scope-reviewer-claude-pexpect.py"
+  test -f "$tmpdir/.claude/requirements.txt"
 
   test -f "$tmpdir/plugins/scope/commands/wrap_epic.md"
   test -f "$tmpdir/plugins/scope/commands/implement.md"
   test -f "$tmpdir/plugins/scope/commands/audit_epic.md"
+  test -f "$tmpdir/plugins/scope/commands/epic_refine/reviewer-refinement.md"
+  test -f "$tmpdir/plugins/scope/commands/audit_epic/reviewer-audit.md"
   test -f "$tmpdir/plugins/scope/agents/developer.md"
+  test -f "$tmpdir/plugins/scope/config/refinement-policy.yaml"
+  test -f "$tmpdir/plugins/scope/config/audit-policy.yaml"
+  test -f "$tmpdir/plugins/scope/scripts/validate-refinement.py"
+  test -f "$tmpdir/plugins/scope/scripts/audit-artifacts.py"
+  test -f "$tmpdir/plugins/scope/scripts/scope-reviewer-claude-pexpect.py"
+  test -f "$tmpdir/plugins/scope/requirements.txt"
   test -f "$tmpdir/plugins/scope/.codex-plugin/plugin.json"
   test -f "$tmpdir/.scope/config.yaml"
 
@@ -188,10 +205,19 @@ check_install() {
   grep -n '^model: sonnet$' "$tmpdir/.claude/agents/developer.md"
   grep -n '^model: gpt-5.6-terra$' "$tmpdir/plugins/scope/agents/developer.md"
   grep -n '^model_reasoning_effort: max$' "$tmpdir/plugins/scope/agents/developer.md"
-  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/.claude/commands/epic_refine/reviewer-architecture-codex.md"
-  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/.claude/commands/audit_epic/reviewer-codex.md"
-  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/plugins/scope/commands/epic_refine/reviewer-architecture-codex.md"
-  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' "$tmpdir/plugins/scope/commands/audit_epic/reviewer-codex.md"
+
+  for obsolete in \
+    commands/audit_epic/reviewer-codex.md \
+    commands/audit_epic/reviewer-claude.md \
+    commands/audit_epic/reviewer-agy.md \
+    commands/audit_epic/reviewer-glm.md \
+    commands/epic_refine/reviewer-architecture-codex.md \
+    commands/epic_refine/reviewer-architecture-claude.md \
+    commands/epic_refine/reviewer-architecture-agy.md \
+    commands/epic_refine/reviewer-architecture-glm.md; do
+    test ! -e "$tmpdir/.claude/$obsolete"
+    test ! -e "$tmpdir/plugins/scope/$obsolete"
+  done
 
   rm -rf "$tmpdir"
 }
@@ -212,14 +238,15 @@ check_windows_installer() {
   grep -n 'set "CLAUDE_DIR=%~1\\.claude"' install.bat
   grep -n 'set "CODEX_DIR=%~1\\plugins\\scope"' install.bat
 
-  for required_path in commands scripts skills agents governance docs .codex-plugin; do
+  for required_path in commands scripts skills agents governance config docs .codex-plugin; do
     grep -n "${required_path}" install.bat >/dev/null
   done
 
   grep -n 'config_example.yaml' install.bat
+  grep -n 'requirements.txt' install.bat
   grep -n 'scope-reviewer-tmux.sh' install.bat
-  grep -n 'reviewer-gemini.md' install.bat
-  grep -n 'reviewer-architecture-gemini.md' install.bat
+  grep -n 'reviewer-codex reviewer-claude reviewer-agy reviewer-glm' install.bat
+  grep -n 'reviewer-architecture-codex reviewer-architecture-claude reviewer-architecture-agy reviewer-architecture-glm' install.bat
   grep -n 'install.bat --user' README.md
   grep -n 'install.bat "C:\\path\\to\\your-project"' README.md
 }
@@ -258,13 +285,9 @@ check_codex_plugin_naming() {
 check_codegraph_guidance() {
   section "Check CodeGraph guidance"
 
-  if grep -R -n -E 'Do not use CodeGraph MCP|CodeGraph MCP is intentionally disabled|not MCP' src_shared/commands src_claude/commands src_codex/commands src_codex/skills; then
-    fail "found stale CodeGraph MCP prohibition"
-  fi
-
-  grep -n "Prefer CodeGraph MCP" src_shared/commands/epic_refine.md
-  grep -n "Prefer CodeGraph MCP" src_claude/commands/implement.md
-  grep -n "Prefer CodeGraph MCP" src_codex/commands/implement.md
+  grep -n "CodeGraph" src_shared/commands/epic_refine.md
+  grep -n "CodeGraph" src_claude/commands/implement.md
+  grep -n "CodeGraph" src_codex/commands/implement.md
 }
 
 check_codex_override_sources() {
@@ -276,23 +299,6 @@ check_codex_override_sources() {
 
   grep -n "Do not read \`.claude/\`" src_codex/skills/scope-workflows/SKILL.md
   grep -n "Follow repository instructions in \`AGENTS.md\`" src_codex/skills/scope-workflows/SKILL.md
-}
-
-check_agy_invocation() {
-  section "Check Antigravity invocation"
-
-  if grep -R -n -E 'SCOPE_AGY_MODEL:-gemini-|SCOPE_AGY_FALLBACK_MODEL:-gemini-|AGY_REVIEW_MODEL=.*gemini-|AGY_FALLBACK_MODEL=.*gemini-' src_shared src_claude src_codex; then
-    fail "Antigravity model defaults must use exact display labels from agy models"
-  fi
-
-  if grep -R -n -E 'agy[[:space:]]+--print[[:space:]]+--' src_shared src_claude src_codex; then
-    fail "Antigravity --print must receive prompt text, not another flag"
-  fi
-
-  grep -n 'Gemini 3.1 Pro (High)' src_shared/commands/audit_epic.md
-  grep -n 'Gemini 3.1 Pro (High)' src_shared/commands/epic_refine.md
-  grep -n -- '--print "$prompt_text"' src_shared/commands/audit_epic.md
-  grep -n -- '--print "$AGY_PROMPT_TEXT"' src_shared/commands/epic_refine.md
 }
 
 check_codex_invocation() {
@@ -307,15 +313,15 @@ check_codex_invocation() {
   fi
 
   grep -n "codex exec" src_shared/commands/audit_epic.md
+  grep -n "codex exec" src_shared/commands/epic_refine.md
   grep -n -- "--sandbox read-only" src_shared/commands/audit_epic.md
   grep -n -- "--sandbox read-only" src_shared/commands/epic_refine.md
-  grep -n "stale approval flags" src_shared/commands/epic_refine.md
+  grep -n "fresh reviewer process" src_shared/commands/audit_epic.md
+  grep -n "fresh process" src_shared/commands/epic_refine.md
   grep -n 'SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra' src_shared/commands/audit_epic.md
   grep -n 'SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra' src_shared/commands/epic_refine.md
   grep -n 'SCOPE_CODEX_REASONING_EFFORT:-high' src_shared/commands/audit_epic.md
   grep -n 'SCOPE_CODEX_REASONING_EFFORT:-high' src_shared/commands/epic_refine.md
-  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' src_shared/commands/audit_epic/reviewer-codex.md
-  grep -n 'Model requirement: `gpt-5.6-terra` with high reasoning.' src_shared/commands/epic_refine/reviewer-architecture-codex.md
   grep -n '^model: gpt-5.6-terra$' src_codex/agents/developer.md
   grep -n '^model_reasoning_effort: max$' src_codex/agents/developer.md
 }
@@ -331,75 +337,64 @@ check_claude_invocation() {
     fail "Claude reviewer automation must use --dangerously-skip-permissions to avoid interactive permission prompts"
   fi
 
-  grep -n "claude-opus.md" src_shared/commands/audit_epic.md
-  grep -n "claude-opus.md" src_shared/commands/epic_refine.md
   grep -n "Claude Opus (local alias)" src_shared/commands/audit_epic.md
   grep -n "Claude Opus (local alias)" src_shared/commands/epic_refine.md
   grep -n -- "--dangerously-skip-permissions" src_shared/commands/audit_epic.md
   grep -n -- "--dangerously-skip-permissions" src_shared/commands/epic_refine.md
-  grep -n "Before manually treating Claude as hung" src_shared/commands/audit_epic.md
-  grep -n "Before manually treating Claude as hung" src_shared/commands/epic_refine.md
   grep -n "Before terminating Claude, inspected PTY log" src_shared/scripts/scope-reviewer-claude-pexpect.py
   grep -n "Last PTY log lines before termination" src_shared/scripts/scope-reviewer-claude-pexpect.py
-  grep -n "Bash(grep:\\*)" src_shared/commands/audit_epic.md
-  grep -n "Bash(grep:\\*)" src_shared/commands/epic_refine.md
-  grep -n "Bash(echo:\\*)" src_shared/commands/audit_epic.md
-  grep -n "Bash(echo:\\*)" src_shared/commands/epic_refine.md
-  grep -n "Bash(printf:\\*)" src_shared/commands/audit_epic.md
-  grep -n "Bash(printf:\\*)" src_shared/commands/epic_refine.md
-  grep -n "Bash(for:\\*)" src_shared/commands/audit_epic.md
-  grep -n "Bash(for:\\*)" src_shared/commands/epic_refine.md
-  grep -n "Bash(which:\\*)" src_shared/commands/audit_epic.md
-  grep -n "Bash(which:\\*)" src_shared/commands/epic_refine.md
-  grep -n "Bash(python -c:\\*)" src_shared/commands/audit_epic.md
-  grep -n "Bash(python -c:\\*)" src_shared/commands/epic_refine.md
 }
 
 check_command_expectations() {
   local command
-  local reviewer
 
-  section "Check mirrored command expectations"
+  section "Check v2 command expectations"
 
   for command in implement wrap_epic; do
     test -f "src_claude/commands/${command}.md"
     test -f "src_codex/commands/${command}.md"
   done
 
-  for reviewer in reviewer-codex reviewer-claude reviewer-agy reviewer-glm; do
-    test -f "src_shared/commands/audit_epic/${reviewer}.md"
-    grep -n "not the Scope orchestrator" "src_shared/commands/audit_epic/${reviewer}.md"
-    grep -n "any other reviewer" "src_shared/commands/audit_epic/${reviewer}.md"
-  done
-
-  for reviewer in reviewer-architecture-codex reviewer-architecture-claude reviewer-architecture-agy reviewer-architecture-glm; do
-    test -f "src_shared/commands/epic_refine/${reviewer}.md"
-    grep -n "not the Scope orchestrator" "src_shared/commands/epic_refine/${reviewer}.md"
-    grep -n "any other reviewer" "src_shared/commands/epic_refine/${reviewer}.md"
-  done
+  test -f src_shared/commands/audit_epic/reviewer-audit.md
+  test -f src_shared/commands/epic_refine/reviewer-refinement.md
+  grep -n "Do not invoke another reviewer" src_shared/commands/audit_epic/reviewer-audit.md
+  grep -n "invoke another reviewer" src_shared/commands/epic_refine/reviewer-refinement.md
+  grep -n "Reviewer identity" src_shared/commands/audit_epic/reviewer-audit.md
+  grep -n "Reviewer identity" src_shared/commands/epic_refine/reviewer-refinement.md
 
   grep -n "Nested Scope Command Execution" src_codex/skills/scope-workflows/SKILL.md
-  grep -n "zai-coding-plan/glm-5.2" src_shared/commands/audit_epic.md
-  grep -n "zai-coding-plan/glm-5.2" src_shared/commands/epic_refine.md
-  grep -n -- '--variant "high"' src_shared/commands/audit_epic.md
-  grep -n -- '--variant "high"' src_shared/commands/epic_refine.md
-  grep -n "glm-5.2.md" src_shared/commands/audit_epic.md
-  grep -n "glm-5.2.md" src_shared/commands/epic_refine.md
-  grep -n "skip GLM silently" src_shared/commands/audit_epic.md
-  grep -n "skip GLM silently" src_shared/commands/epic_refine.md
-  grep -n "not an informal audit" src_claude/commands/implement.md
-  grep -n "not an informal audit" src_codex/commands/implement.md
-  grep -n "review-metadata.yaml" src_claude/commands/implement.md
-  grep -n "review-metadata.yaml" src_codex/commands/implement.md
-  grep -n "runtime_evidence.required: true" src_claude/commands/implement.md
-  grep -n "runtime_evidence.required: true" src_codex/commands/implement.md
-  grep -n "Missing live smoke wiring is an implementation gap" src_claude/commands/implement.md
-  grep -n "Missing live smoke wiring is an implementation gap" src_codex/commands/implement.md
-  grep -n "Runtime-required rows not deferred to audit" src_shared/governance/developer-checklist.md
-  grep -n "Audit Boundary and Artifact Policy" src_shared/commands/audit_epic.md
-  grep -n "Never delete, rename, compact, or rewrite" src_shared/commands/audit_epic.md
+  grep -n "audit-findings.yaml" src_claude/commands/implement.md
+  grep -n "audit-findings.yaml" src_codex/commands/implement.md
+  grep -n "targeted_verification_count" src_shared/commands/epic_refine.md
+  grep -n "targeted-verification-NNN" src_shared/commands/epic_refine.md
   grep -n "tmp_debug/scope-audit" src_shared/commands/audit_epic.md
   grep -n "tmp_debug.*scope-reviewer-logs" src_shared/scripts/scope-reviewer-claude-pexpect.py
+
+  if grep -R -n -E 'LEGACY_VALIDATOR|legacy input mode|maximum_followups|minimum_followups|followup_count|followup-[0-9N]' \
+    src_shared/commands/epic_refine.md \
+    src_shared/commands/audit_epic.md \
+    src_claude/commands/implement.md \
+    src_codex/commands/implement.md; then
+    fail "v2 commands must not contain legacy workflow fallbacks or old follow-up names"
+  fi
+}
+
+check_v2_tests() {
+  local python_cmd
+
+  section "Run v2 validator tests and coverage"
+
+  python_cmd="${SCOPE_PYTHON:-python3}"
+  command -v "$python_cmd" >/dev/null 2>&1 || fail "Python is required; set SCOPE_PYTHON to a Python 3 executable"
+  "$python_cmd" -c 'import coverage, pytest, yaml' >/dev/null 2>&1 ||
+    fail "Missing Python dependencies; run: python3 -m pip install -r requirements-dev.txt"
+
+  mkdir -p tmp_debug
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-v2 "$python_cmd" -m coverage erase
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-v2 "$python_cmd" -m coverage run -m pytest -q tests/unit
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-v2 "$python_cmd" -m coverage report \
+    --fail-under=90 \
+    --include='*/src_shared/scripts/validate-refinement.py,*/src_shared/scripts/audit-artifacts.py'
 }
 
 main() {
@@ -417,10 +412,10 @@ main() {
   check_codex_plugin_naming
   check_codegraph_guidance
   check_codex_override_sources
-  check_agy_invocation
   check_codex_invocation
   check_claude_invocation
   check_command_expectations
+  check_v2_tests
 
   section "All PR checks passed"
 }

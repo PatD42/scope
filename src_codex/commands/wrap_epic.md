@@ -197,15 +197,15 @@ Execute `/lesson` in auto-detect mode (no args):
   blocked states, unplanned modifications, workaround notes, completion-state gaps.
 - `{EPIC_DOC_DIR}/epic_audit.md`: critical/major findings, repeated misses,
   false-complete stories, severity corrections.
-- `{EPIC_DOC_DIR}/audit-issue-ledger.yaml`: `missed_previous_audit`,
-  `introduced_by_fix`, repeated root causes, and false positives with evidence.
+- `{EPIC_DOC_DIR}/audit-findings.yaml`: v2 finding fingerprints, dispositions,
+  targeted-verification status, repeated root causes, and residual risk.
 - `{EPIC_DOC_DIR}/audit-verification-matrix.yaml`: rows that were `fail`,
   `unverified`, `blocked`, or required runtime proof late.
 - `{EPIC_DOC_DIR}/acceptance-traceability.yaml`: acceptance criteria where
   proof was missing, runtime evidence was blocked, or implementation/test mapping changed.
 - `{EPIC_DOC_DIR}/implementation-summary.md`: delivery gaps, operational issues,
   rollout/backfill/test evidence, and residual risks.
-- `{EPIC_DOC_DIR}/reviews/**`: Codex, Claude, and Antigravity reviewer findings,
+- `{EPIC_DOC_DIR}/reviews/**`: role-based reviewer findings,
   disagreements, unavailable reviewers, and repeated findings across audit attempts.
 - Raw outputs in `{EPIC_DOC_DIR}/reviews/audit-NNN/`: failing tests, lint,
   mypy, vulture, smoke-test failures, CodeGraph failures, and missing evidence.
