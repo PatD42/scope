@@ -1,23 +1,16 @@
-epic_id: "{epic-id}"
-generated_at: "YYYY-MM-DD"
-status: draft
-
+schema_version: 3
+epic_id: EPIC-ID
 acceptance_items:
-  - id: "AC1.1"
-    story: "Story 1"
-    requirement: "Plain-language expected behavior."
+  - id: AC-001
+    story: story-01
     source:
-      doc: "docs/epics/{epic-dir}/acceptance-criteria.md"
-      section: "Story 1"
+      artifact: acceptance-criteria.md
+      anchor: AC-001
+    proof_obligation_ids:
+      - proof-001
     implementation:
-      expected_files:
-        - "src/package/module.py"
       actual_files: []
     tests:
-      expected_files:
-        - "tests/test_module.py"
-      required_assertions:
-        - "Specific behavior the test must prove."
       actual_tests: []
     runtime_evidence:
       required: false

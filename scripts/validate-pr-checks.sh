@@ -195,7 +195,9 @@ check_install() {
   test -d "$tmpdir/plugins/scope/commands/audit_epic"
 
   test -f "$tmpdir/.claude/skills/project-documentation/SKILL.md"
+  test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/design.md"
   test -f "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
+  test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/design.md"
   grep -n "Path selection rule" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "Path selection rule" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
@@ -214,7 +216,12 @@ check_install() {
     commands/epic_refine/reviewer-architecture-codex.md \
     commands/epic_refine/reviewer-architecture-claude.md \
     commands/epic_refine/reviewer-architecture-agy.md \
-    commands/epic_refine/reviewer-architecture-glm.md; do
+    commands/epic_refine/reviewer-architecture-glm.md \
+    skills/project-documentation/templates-technical-arc42-c4/epic/system-context.md \
+    skills/project-documentation/templates-technical-arc42-c4/epic/architecture.md \
+    skills/project-documentation/templates-technical-arc42-c4/epic/adr.md \
+    skills/project-documentation/templates-technical-arc42-c4/epic/pdr.md \
+    skills/project-documentation/templates-technical-arc42-c4/epic/test-strategy.md; do
     test ! -e "$tmpdir/.claude/$obsolete"
     test ! -e "$tmpdir/plugins/scope/$obsolete"
   done
@@ -247,6 +254,7 @@ check_windows_installer() {
   grep -n 'scope-reviewer-tmux.sh' install.bat
   grep -n 'reviewer-codex reviewer-claude reviewer-agy reviewer-glm' install.bat
   grep -n 'reviewer-architecture-codex reviewer-architecture-claude reviewer-architecture-agy reviewer-architecture-glm' install.bat
+  grep -n 'system-context architecture adr pdr test-strategy' install.bat
   grep -n 'install.bat --user' README.md
   grep -n 'install.bat "C:\\path\\to\\your-project"' README.md
 }
@@ -348,7 +356,7 @@ check_claude_invocation() {
 check_command_expectations() {
   local command
 
-  section "Check v2 command expectations"
+  section "Check v3 command expectations"
 
   for command in implement wrap_epic; do
     test -f "src_claude/commands/${command}.md"
@@ -360,13 +368,20 @@ check_command_expectations() {
   grep -n "Do not invoke another reviewer" src_shared/commands/audit_epic/reviewer-audit.md
   grep -n "invoke another reviewer" src_shared/commands/epic_refine/reviewer-refinement.md
   grep -n "Reviewer identity" src_shared/commands/audit_epic/reviewer-audit.md
-  grep -n "Reviewer identity" src_shared/commands/epic_refine/reviewer-refinement.md
+  grep -n "REVIEW_PROVIDER" src_shared/commands/epic_refine/reviewer-refinement.md
+  grep -n "REVIEW_MISSION" src_shared/commands/epic_refine/reviewer-refinement.md
+  grep -n "semantic_core" src_shared/commands/epic_refine/reviewer-refinement.md
+  grep -n "capability_specialist" src_shared/commands/epic_refine/reviewer-refinement.md
 
   grep -n "Nested Scope Command Execution" src_codex/skills/scope-workflows/SKILL.md
   grep -n "audit-findings.yaml" src_claude/commands/implement.md
   grep -n "audit-findings.yaml" src_codex/commands/implement.md
   grep -n "targeted_verification_count" src_shared/commands/epic_refine.md
-  grep -n "targeted-verification-NNN" src_shared/commands/epic_refine.md
+  grep -n "Launch all required assignment commands before waiting" src_shared/commands/epic_refine.md
+  grep -n -- "--ignore-user-config" src_shared/commands/epic_refine.md
+  grep -n -- "--safe-mode" src_shared/commands/epic_refine.md
+  grep -n -- "--retries 0" src_shared/commands/epic_refine.md
+  grep -n "design.md" src_shared/commands/epic_refine.md
   grep -n "tmp_debug/scope-audit" src_shared/commands/audit_epic.md
   grep -n "tmp_debug.*scope-reviewer-logs" src_shared/scripts/scope-reviewer-claude-pexpect.py
 
@@ -375,14 +390,14 @@ check_command_expectations() {
     src_shared/commands/audit_epic.md \
     src_claude/commands/implement.md \
     src_codex/commands/implement.md; then
-    fail "v2 commands must not contain legacy workflow fallbacks or old follow-up names"
+    fail "Scope commands must not contain legacy workflow fallbacks or old follow-up names"
   fi
 }
 
-check_v2_tests() {
+check_validator_tests() {
   local python_cmd
 
-  section "Run v2 validator tests and coverage"
+  section "Run validator tests and coverage"
 
   python_cmd="${SCOPE_PYTHON:-python3}"
   command -v "$python_cmd" >/dev/null 2>&1 || fail "Python is required; set SCOPE_PYTHON to a Python 3 executable"
@@ -390,9 +405,9 @@ check_v2_tests() {
     fail "Missing Python dependencies; run: python3 -m pip install -r requirements-dev.txt"
 
   mkdir -p tmp_debug
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-v2 "$python_cmd" -m coverage erase
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-v2 "$python_cmd" -m coverage run -m pytest -q tests/unit
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-v2 "$python_cmd" -m coverage report \
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-validators "$python_cmd" -m coverage erase
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-validators "$python_cmd" -m coverage run -m pytest -q tests/unit
+  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-validators "$python_cmd" -m coverage report \
     --fail-under=90 \
     --include='*/src_shared/scripts/validate-refinement.py,*/src_shared/scripts/audit-artifacts.py'
 }
@@ -415,7 +430,7 @@ main() {
   check_codex_invocation
   check_claude_invocation
   check_command_expectations
-  check_v2_tests
+  check_validator_tests
 
   section "All PR checks passed"
 }

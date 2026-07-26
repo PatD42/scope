@@ -1,1 +1,2 @@
 PyYAML>=6.0,<7
+pexpect>=4.9,<5

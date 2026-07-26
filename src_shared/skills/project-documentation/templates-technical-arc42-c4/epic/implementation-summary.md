@@ -15,9 +15,9 @@
 
 **Required Context (must exist before this document)**:
 - [{epic-id}: Epic Details](link) - Original plan to compare against
-- [{epic-id}: Architecture](link) - Design to compare against actual implementation
+- [{epic-id}: Design](link) - Approved design to compare against actual implementation
 - [{epic-id}: Implementation Boundary Plans](link) - Binding obligations and candidate files vs. actual implementation
-- [{epic-id}: Test Strategy](link) - Planned tests vs. actual test results
+- [{epic-id}: Design Verification Strategy](link) - Planned proof vs. actual test and runtime evidence
 - Development Phase: Completed code, tests, reviews
 
 **Provides Context For (documents that depend on this)**:
@@ -97,7 +97,7 @@
 
 ## Reviewer Concerns and Recommendations
 
-<!-- Aggregated from Claude Flow implementation feedback -->
+<!-- Aggregated from implementation and audit findings. -->
 
 ### Critical Concerns
 

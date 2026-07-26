@@ -1,9 +1,8 @@
-schema_version: 1
-profile_version: 2
-manifest_version: 2
-findings_version: 1
-traceability_version: 2
-pre_review_audit_version: 1
+schema_version: 2
+profile_version: 3
+manifest_version: 3
+findings_version: 2
+traceability_version: 3
 
 allowed_architecture_scopes:
   - none
@@ -18,6 +17,10 @@ allowed_risk_levels:
   - high
   - critical
 
+allowed_author_providers:
+  - claude
+  - codex
+
 phase_required_artifacts:
   profile:
     - details.md
@@ -26,37 +29,25 @@ phase_required_artifacts:
     - details.md
     - refinement-profile.yaml
     - acceptance-criteria.md
-    - pdr.md
+    - design.md
   architecture:
     - details.md
     - refinement-profile.yaml
     - acceptance-criteria.md
-    - pdr.md
-    - system-context.md
-    - architecture.md
-    - adr.md
-    - test-strategy.md
+    - design.md
     - refinement-manifest.yaml
-  pre_review:
+  reconcile:
     - details.md
     - refinement-profile.yaml
     - acceptance-criteria.md
-    - pdr.md
-    - system-context.md
-    - architecture.md
-    - adr.md
-    - test-strategy.md
+    - design.md
     - refinement-manifest.yaml
     - acceptance-traceability.yaml
   review:
     - details.md
     - refinement-profile.yaml
     - acceptance-criteria.md
-    - pdr.md
-    - system-context.md
-    - architecture.md
-    - adr.md
-    - test-strategy.md
+    - design.md
     - refinement-manifest.yaml
     - refinement-findings.yaml
     - acceptance-traceability.yaml
@@ -64,55 +55,66 @@ phase_required_artifacts:
     - details.md
     - refinement-profile.yaml
     - acceptance-criteria.md
-    - pdr.md
-    - system-context.md
-    - architecture.md
-    - adr.md
-    - test-strategy.md
+    - design.md
     - refinement-manifest.yaml
     - refinement-findings.yaml
     - refinement-review.md
     - acceptance-traceability.yaml
 
-risk_review_policy:
+review_topology:
   low:
-    roles:
-      - implementation_readiness
-    minimum_completed_roles: 1
-    minimum_full_reviews: 1
+    semantic_core: alternate_author
+    capability_specialist: false
     maximum_full_reviews: 1
-    minimum_targeted_verifications: 1
     maximum_targeted_verifications: 1
   medium:
-    roles:
-      - architecture_coherence
-      - implementation_readiness
-    minimum_completed_roles: 2
-    minimum_full_reviews: 1
+    semantic_core:
+      - claude
+      - codex
+    capability_specialist: false
     maximum_full_reviews: 1
-    minimum_targeted_verifications: 1
     maximum_targeted_verifications: 1
   high:
-    roles:
-      - architecture_coherence
-      - implementation_readiness
-      - capability_specialist
-    minimum_completed_roles: 3
-    minimum_full_reviews: 1
+    semantic_core:
+      - claude
+      - codex
+    capability_specialist: true
+    specialist_provider: author_provider
     maximum_full_reviews: 1
-    minimum_targeted_verifications: 2
     maximum_targeted_verifications: 2
   critical:
-    roles:
-      - architecture_coherence
-      - implementation_readiness
-      - capability_specialist
-    minimum_completed_roles: 3
-    minimum_full_reviews: 1
+    semantic_core:
+      - claude
+      - codex
+    capability_specialist: true
+    specialist_provider: author_provider
     maximum_full_reviews: 1
-    minimum_targeted_verifications: 2
     maximum_targeted_verifications: 2
     explicit_user_residual_risk_approval: true
+
+review_missions:
+  - semantic_core
+  - capability_specialist
+
+design:
+  required_headings:
+    - Current State and Evidence
+    - Product and Architecture Decisions
+    - Architecture and Ownership
+    - Failure and Partial States
+    - Capability Challenges
+    - Hostile Cases
+    - Verification Strategy
+  evidence_marker: "EVIDENCE"
+  flow_required_risks:
+    - high
+    - critical
+  hostile_case_required_risks:
+    - high
+    - critical
+  advisory_content_budgets:
+    details_words: 1200
+    design_words: 4000
 
 capabilities:
   api_interface:
@@ -211,9 +213,6 @@ manifest:
     - open
     - resolved
     - user_question
-  implementation_required_values:
-    - true
-    - false
 
 findings:
   severities:
@@ -245,16 +244,7 @@ traceability:
     - blocked
     - deferred
 
-pre_review_audit:
-  canonical_requirement_source: acceptance-criteria.md
-  flow_required_risks:
-    - high
-    - critical
-  counterexample_required_risks:
-    - high
-    - critical
-
-pre_review_challenges:
+architecture_challenges:
   common:
     - authority-and-ownership
     - producer-consumer-flow

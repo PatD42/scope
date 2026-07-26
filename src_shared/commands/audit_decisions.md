@@ -81,18 +81,17 @@ system_adrs = Glob("docs/architecture/adr/*.md")
 backend_adrs = Glob("docs/architecture/backend/adr/*.md")
 frontend_adrs = Glob("docs/architecture/frontend/adr/*.md")
 
-# Epic-level ADRs
-epic_adrs = Glob("docs/epics/*/adr.md")
-implemented_adrs = Glob("docs/epics/_implemented/*/adr.md")
-# Read each, extract ADR titles and technologies
+# Epic-level decisions
+epic_designs = Glob("docs/epics/*/design.md")
+implemented_designs = Glob("docs/epics/_implemented/*/design.md")
+# Read each, extract ADR and PDR titles and technologies
 
 # ADR summary (cross-check)
 adr_summary = Read("docs/architecture/09-adr-summary.md")
 
 # Product decisions / PDRs
 product_decisions = Read("docs/product/decisions.md")
-epic_pdrs = Glob("docs/epics/*/pdr.md")
-implemented_pdrs = Glob("docs/epics/_implemented/*/pdr.md")
+# Epic PDRs are in the same epic_designs/implemented_designs inventory.
 
 # Product docs (strategy, definition — contain implicit decisions)
 product_strategy = Read("docs/product/strategy.md")

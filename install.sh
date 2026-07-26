@@ -110,6 +110,10 @@ for reviewer in reviewer-architecture-codex reviewer-architecture-claude reviewe
     rm -f "${CLAUDE_DIR}/commands/epic_refine/${reviewer}.md"
     rm -f "${CODEX_DIR}/commands/epic_refine/${reviewer}.md"
 done
+for removed_template in system-context architecture adr pdr test-strategy; do
+    rm -f "${CLAUDE_DIR}/skills/project-documentation/templates-technical-arc42-c4/epic/${removed_template}.md"
+    rm -f "${CODEX_DIR}/skills/project-documentation/templates-technical-arc42-c4/epic/${removed_template}.md"
+done
 
 echo ""
 echo -e "${YELLOW}Installing Claude Files${NC}"

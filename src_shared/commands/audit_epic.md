@@ -53,7 +53,8 @@ override.
 Read the project documentation skill first. Then use, in order:
 
 1. `refinement-profile.yaml` and `refinement-manifest.yaml`;
-2. acceptance criteria, PDRs, ADRs, and the applicable architecture tree;
+2. acceptance criteria, epic `design.md`, native contracts, and the applicable
+   architecture tree;
 3. `acceptance-traceability.yaml`;
 4. `file-plan-story-*.yaml` boundary plans;
 5. native contracts cited by the manifest and boundary plans;

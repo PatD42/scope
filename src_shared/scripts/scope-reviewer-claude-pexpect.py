@@ -40,7 +40,9 @@ def append_metadata(
     duration_seconds: int,
     timeout_seconds: int,
     retry_count: int,
+    prompt_file: Path,
     output_file: Path,
+    cwd: Path,
     error: str,
 ) -> None:
     metadata_file.parent.mkdir(parents=True, exist_ok=True)
@@ -50,8 +52,15 @@ def append_metadata(
     def q(value: Any) -> str:
         return json.dumps(str(value))
 
+    try:
+        durable_output = output_file.resolve().relative_to(cwd.resolve())
+    except ValueError:
+        durable_output = output_file
+
     with metadata_file.open("a", encoding="utf-8") as handle:
         handle.write(f"  - reviewer: {q(reviewer)}\n")
+        handle.write("    provider: \"claude\"\n")
+        handle.write(f"    mission: {q(reviewer)}\n")
         handle.write(f"    model: {q(model)}\n")
         handle.write(f"    transport: {q(transport)}\n")
         handle.write(f"    session: {q(session)}\n")
@@ -61,7 +70,13 @@ def append_metadata(
         handle.write(f"    duration_seconds: {duration_seconds}\n")
         handle.write(f"    timeout_seconds: {timeout_seconds}\n")
         handle.write(f"    retry_count: {retry_count}\n")
-        handle.write(f"    output_file: {q(output_file)}\n")
+        handle.write(
+            f"    prompt_bytes: {prompt_file.stat().st_size if prompt_file.is_file() else 0}\n"
+        )
+        handle.write(
+            f"    output_bytes: {output_file.stat().st_size if output_file.is_file() else 0}\n"
+        )
+        handle.write(f"    output_file: {q(durable_output)}\n")
         handle.write(f"    error: {q(error)}\n")
 
 
@@ -132,13 +147,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reviewer", default="claude")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--claude-command", default="claude --model opus")
+    parser.add_argument(
+        "--claude-command",
+        default=(
+            "claude --model opus --safe-mode --strict-mcp-config "
+            "--mcp-config '{}' --dangerously-skip-permissions --no-chrome"
+        ),
+    )
     parser.add_argument("--prompt-file", required=True, type=Path)
     parser.add_argument("--output-file", required=True, type=Path)
     parser.add_argument("--metadata-file", required=True, type=Path)
     parser.add_argument("--cwd", required=True, type=Path)
     parser.add_argument("--timeout-seconds", type=int, default=3600)
-    parser.add_argument("--retries", type=int, default=1)
+    parser.add_argument("--retries", type=int, default=0)
     parser.add_argument("--log-file", type=Path)
     args = parser.parse_args()
 
@@ -167,7 +188,9 @@ def main() -> int:
             duration_seconds=duration_seconds,
             timeout_seconds=args.timeout_seconds,
             retry_count=0,
+            prompt_file=args.prompt_file,
             output_file=args.output_file,
+            cwd=args.cwd,
             error=error,
         )
         return 127
@@ -195,7 +218,9 @@ def main() -> int:
             duration_seconds=duration_seconds,
             timeout_seconds=args.timeout_seconds,
             retry_count=0,
+            prompt_file=args.prompt_file,
             output_file=args.output_file,
+            cwd=args.cwd,
             error=error,
         )
         return 127
@@ -300,7 +325,9 @@ Return the complete requested review report in the output file, not in the conso
         duration_seconds=duration_seconds,
         timeout_seconds=args.timeout_seconds,
         retry_count=retry_count,
+        prompt_file=prompt_file,
         output_file=output_file,
+        cwd=cwd,
         error=error,
     )
 

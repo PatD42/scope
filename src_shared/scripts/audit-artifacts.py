@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare and validate Scope Audit Epic v2 artifacts."""
+"""Prepare and validate Scope Audit Epic artifacts from a v3 refinement handoff."""
 
 from __future__ import annotations
 
@@ -133,20 +133,24 @@ def _next_attempt_dir(epic_dir: Path) -> tuple[str, Path]:
 def _profile(epic_dir: Path) -> dict[str, Any]:
     path = epic_dir / "refinement-profile.yaml"
     profile = _load_yaml(path, "refinement profile")
-    if profile.get("schema_version") != 2:
-        raise ValueError(f"refinement profile must use schema_version 2: {path}")
+    if profile.get("schema_version") != 3:
+        raise ValueError(f"refinement profile must use schema_version 3: {path}")
     return profile
 
 
 def _traceability(epic_dir: Path) -> dict[str, Any]:
-    return _load_yaml(epic_dir / "acceptance-traceability.yaml", "acceptance traceability")
+    path = epic_dir / "acceptance-traceability.yaml"
+    traceability = _load_yaml(path, "acceptance traceability")
+    if traceability.get("schema_version") != 3:
+        raise ValueError(f"acceptance traceability must use schema_version 3: {path}")
+    return traceability
 
 
 def _manifest(epic_dir: Path) -> dict[str, Any]:
     path = epic_dir / "refinement-manifest.yaml"
     manifest = _load_yaml(path, "refinement manifest")
-    if manifest.get("schema_version") != 2:
-        raise ValueError(f"refinement manifest must use schema_version 2: {path}")
+    if manifest.get("schema_version") != 3:
+        raise ValueError(f"refinement manifest must use schema_version 3: {path}")
     return manifest
 
 
@@ -258,17 +262,19 @@ def _derive_matrix(
             {
                 "id": row_id,
                 "story": str(item.get("story", "")),
-                "requirement": str(item.get("requirement", "")),
-                "source": item.get("source", {}),
+                "requirement": str(requirement.get("summary", "")),
+                "source": requirement.get("source", {}),
                 "priority": priority,
                 "risk_level": row_risk,
                 "implementation": {
-                    "expected_files": _string_list(implementation.get("expected_files")),
+                    "expected_files": [],
                     "actual_files": _string_list(implementation.get("actual_files")),
                 },
                 "tests": {
-                    "expected_files": _string_list(tests.get("expected_files")),
-                    "required_assertions": _string_list(tests.get("required_assertions")),
+                    "expected_files": [],
+                    "required_assertions": _string_list(
+                        requirement.get("proof_obligations")
+                    ),
                     "actual_tests": _string_list(tests.get("actual_tests")),
                 },
                 "runtime_evidence": {

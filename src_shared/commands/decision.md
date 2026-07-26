@@ -53,8 +53,8 @@ Does this change what the user sees or can do?
 
 | Type | Destination |
 |------|-------------|
-| **ADR** | `docs/epics/{epic}/adr.md` or `docs/architecture/adr/` |
-| **PDR** | `docs/epics/{epic}/pdr.md` or `docs/product/decisions.md` |
+| **ADR** | `docs/epics/{epic}/design.md` or `docs/architecture/adr/` |
+| **PDR** | `docs/epics/{epic}/design.md` or `docs/product/decisions.md` |
 
 If still unclear after applying the decision tree, ask: "Does this decision change what the user experiences, or how the system is built?"
 
@@ -104,7 +104,8 @@ Ask the user these questions (adapt based on what the initial description alread
 
 **Save ONLY the structured decision** — not the interview conversation.
 
-**For ADR** — append to the appropriate adr.md:
+**For an epic ADR** — append under `## Product and Architecture Decisions`
+in the epic's `design.md`. For a system ADR, use the architecture ADR folder:
 
 ```markdown
 ## ADR-{NNN}: {Title}
@@ -132,7 +133,8 @@ Ask the user these questions (adapt based on what the initial description alread
 {Key tradeoffs — 2-3 bullet points}
 ```
 
-**For PDR** — append to the appropriate pdr.md or decisions.md:
+**For an epic PDR** — append under `## Product and Architecture Decisions`
+in the epic's `design.md`. For a system PDR, use `decisions.md`:
 
 ```markdown
 ## PDR-{NNN}: {Title}
@@ -160,10 +162,12 @@ Ask the user these questions (adapt based on what the initial description alread
 
 ### Step 5: ADR/PDR Numbering
 
-**Epic-level**: Read existing ADR/PDR entries in the file, find highest number, increment.
+**Epic-level**: Read existing ADR/PDR entries in `design.md`, find the highest
+number, and increment it.
 
 **System-level**:
-- ADR: Read `docs/architecture/09-adr-summary.md` for highest number. Also scan epic `adr.md` files for inline ADRs. Use next global number.
+- ADR: Read `docs/architecture/09-adr-summary.md` for highest number. Also scan
+  epic `design.md` files for inline ADRs. Use the next global number.
 - PDR: Read `docs/product/decisions.md` for highest number.
 
 ### Step 6: Cross-Post (if available)
@@ -217,7 +221,10 @@ else:
     print(f"No tracking markers found. Scanning full epic history since {since_date}.")
 ```
 
-**Important:** Already-recorded decisions (those already in `adr.md` / `pdr.md` / `decisions.md`) must be filtered out. Read existing decision files and exclude any candidates that match existing entries by title or content.
+**Important:** Already-recorded decisions (those already in epic `design.md`,
+system ADRs, or `decisions.md`) must be filtered out. Read existing decision
+files and exclude any candidates that match existing entries by title or
+content.
 
 ### Step 2: Scan for Decision Candidates
 
@@ -262,7 +269,7 @@ new_packages = Grep("new dependency", glob="requirements*.txt")
 **Source 4: Existing docs gap**
 ```python
 # Compare what's documented vs. what's in code
-existing_adrs = Read("docs/epics/{active-epic}/adr.md")
+existing_decisions = Read("docs/epics/{active-epic}/design.md")
 # Are there technologies/patterns in code not covered by ADRs?
 ```
 

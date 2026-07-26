@@ -418,8 +418,9 @@ Phase 4: Deterministic validation and risk-directed independent review
   → USER APPROVAL GATE #4
 ```
 
-**Output:** A v2 refinement profile and manifest, native contracts, per-story
-boundary plans, acceptance traceability, findings, and approval record.
+**Output:** A v3 refinement profile and manifest, evidence-backed `design.md`,
+native contracts, per-story boundary plans, generated acceptance traceability,
+findings, and approval record.
 
 ### 8.2 Implementation (`/implement` or `/implement_tdd`)
 
@@ -553,25 +554,25 @@ updated backend/frontend documentation uses the component `01-intro.md` through
 
 ```
 docs/epics/{epic-id}/
-├── details.md                # Overview, capabilities, acceptance criteria
-├── system-context.md         # Technical analysis, risks
-├── acceptance-criteria.md    # Given/When/Then testable criteria
-├── test-strategy.md          # Test approach, levels, mocking
-├── architecture.md           # Affected components, C4 diagrams
-├── adr.md                    # Architectural decisions for this epic
-├── pdr.md                    # Product decisions for this epic
-├── file-plan.yaml            # Story breakdown with intent
-└── implementation-summary.md # Post-implementation outcomes
+├── details.md                  # Goal, scope, non-goals, lifecycle status
+├── acceptance-criteria.md      # Canonical observable product behavior
+├── design.md                   # Evidence, decisions, architecture, failures, proof
+├── refinement-profile.yaml     # Risk and required review assignments
+├── refinement-manifest.yaml    # Requirement and decision ownership
+├── acceptance-traceability.yaml # Generated ownership/proof index
+├── file-plan-story-*.yaml      # Per-story implementation boundaries
+├── refinement-findings.yaml    # Independent review findings
+└── refinement-review.md        # Approved implementation handoff
 ```
 
 ### Agent Documentation Responsibilities
 
 | Agent | Writes | Reads |
 |-------|--------|-------|
-| **Product Owner** | product/*, epics/*/details, acceptance-criteria, pdr | architecture/10-quality |
-| **Architect** | architecture/*, epics/*/system-context, test-strategy, architecture, adr, file-plan | product/strategy, product/definition |
+| **Product Owner** | product/*, epics/*/details, acceptance-criteria, product decisions in design | architecture/10-quality |
+| **Architect** | architecture/*, epics/*/design, native contracts, boundary plans | product/strategy, product/definition |
 | **SDET** | (none) | product/definition, architecture/06-runtime, 10-quality, 08-cross-cutting/testing, epics/* |
-| **Developer** | (code only, not docs) | architecture/08-cross-cutting/*, epics/*/adr (if unclear) |
+| **Developer** | code and implementation evidence | architecture/08-cross-cutting/*, epics/*/design, boundary plans |
 
 ---
 

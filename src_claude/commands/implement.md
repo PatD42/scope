@@ -87,7 +87,7 @@ if [ -z "$EPIC_DIR" ]; then
 fi
 
 EPIC_SLUG="$(basename "$EPIC_DIR")"
-V2_VALIDATOR=".claude/scripts/validate-refinement.py"
+V3_VALIDATOR=".claude/scripts/validate-refinement.py"
 
 if [ -n "${SCOPE_PYTHON:-}" ]; then
   PYTHON_CMD="$SCOPE_PYTHON"
@@ -96,20 +96,20 @@ elif command -v python3 >/dev/null 2>&1; then
 elif command -v python >/dev/null 2>&1; then
   PYTHON_CMD="python"
 else
-  echo "Scope v2 requires Python 3. Install Python and set SCOPE_PYTHON."
+  echo "Scope v3 requires Python 3. Install Python and set SCOPE_PYTHON."
   exit 1
 fi
 
 if ! "$PYTHON_CMD" -c "import yaml" >/dev/null 2>&1; then
-  echo "Scope v2 requires PyYAML. Run: $PYTHON_CMD -m pip install 'PyYAML>=6,<7'"
+  echo "Scope v3 requires PyYAML. Run: $PYTHON_CMD -m pip install 'PyYAML>=6,<7'"
   exit 1
 fi
 ```
 
-Run the v2 handoff validator:
+Run the v3 handoff validator:
 
 ```bash
-"$PYTHON_CMD" "$V2_VALIDATOR" "$EPIC_DIR" \
+"$PYTHON_CMD" "$V3_VALIDATOR" "$EPIC_DIR" \
   --phase handoff \
   --repo-root "$PROJECT_ROOT"
 ```
@@ -121,6 +121,7 @@ Read:
 - `refinement-findings.yaml`;
 - `refinement-review.md`;
 - `acceptance-traceability.yaml`;
+- `design.md`;
 - all `file-plan-story-*.yaml`;
 - the authored sources and native contracts cited by the manifest.
 
@@ -219,7 +220,7 @@ Validate:
 - every dependency exists;
 - no story depends on itself;
 - the dependency graph is acyclic;
-- each v2 manifest `owner_story` exists;
+- each v3 manifest `owner_story` exists;
 - every traceability row references an existing story.
 
 Produce a topological story order. Story filename order is only a tie-breaker
@@ -268,9 +269,8 @@ Read:
 - relevant acceptance criteria;
 - manifest rows whose `owner_story` is the active story;
 - matching traceability rows;
-- relevant architecture and ADR sections;
+- relevant `design.md` decisions, boundaries, hostile cases, and proof strategy;
 - relevant native contracts;
-- the test-strategy sections for this story;
 - applicable project lessons and governance.
 
 Do not reload every epic artifact when stable IDs provide a smaller context.
@@ -313,7 +313,8 @@ If the strategy materially changes architecture, stop and return to refinement.
 
 ### 4.4 Prove the story
 
-Run all proof obligations from the boundary plan and traceability rows:
+Run all proof obligations from the boundary plan. Use traceability to record
+actual evidence, not as a duplicate proof specification:
 
 - focused unit tests;
 - integration tests at real component boundaries;
@@ -411,7 +412,7 @@ not use.
 
 Collect tests from:
 
-- traceability `actual_tests` and `expected_files`;
+- traceability `actual_tests`;
 - implementation evidence;
 - boundary-plan proof commands;
 - changed modules and their existing regression tests.
@@ -450,9 +451,9 @@ required/high-risk rows have appropriate proof.
 Before handing off to audit, every required/high-risk traceability row must
 identify:
 
-- requirement and risk;
+- acceptance ID and owner story;
 - actual implementation files;
-- required assertions and actual tests;
+- proof-obligation IDs and actual tests;
 - runtime requirement, command, and evidence;
 - final implementation-evidence status.
 

@@ -51,7 +51,8 @@ SCOPE uses Claude Code's built-in features:
 
 When running inside `./wip/{epic-id}`, use the `plugins/scope/` directory from that worktree checkout. Do not fall back to the main checkout.
 
-The v2 validators require Python 3 and PyYAML. Scope has no persistent service
+The v3 refinement validator and v2 audit validator require Python 3 and PyYAML.
+Claude reviewer automation also uses `pexpect`. Scope has no persistent service
 or database.
 
 ## Installation
@@ -119,7 +120,7 @@ your-project/
 ├── docs/
 │   ├── product/            # Product docs (strategy, definition, decisions)
 │   ├── architecture/       # Technical docs (Arc42 sections 01-13)
-│   ├── epics/{epic-id}/    # Per-epic docs (acceptance criteria, implementation boundary plans, ADRs)
+│   ├── epics/{epic-id}/    # Per-epic contract, design, plans, and evidence
 │   └── releases/           # Release documentation
 ├── ./wip/
 │   └── {epic-id}/          # Git worktree per epic (implementation happens here)
@@ -144,6 +145,7 @@ remediates findings, then audit performs one targeted verification.
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
+- Python 3 with `PyYAML>=6,<7` and `pexpect>=4.9,<5`
 - Git
 
 ## License

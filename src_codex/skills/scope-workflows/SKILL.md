@@ -73,8 +73,11 @@ the main session:
 
 Only spawn Codex sub-agents when the user explicitly asks for parallel agents or delegation. When spawned, pass the relevant Scope role file and a bounded task.
 
-Independent refinement and audit reviewer roles are the exception: their
-commands require fresh `codex exec` processes using `gpt-5.6-terra` with high
+Independent refinement and audit reviewer roles are the exception. Refinement
+uses the risk topology in `refinement-policy.yaml`: low risk uses the provider
+opposite the author, medium risk uses overlapping Claude and Codex semantic-core
+reviews, and high/critical risk adds one specialist. Required assignments run
+concurrently in fresh processes. Codex reviewers use `gpt-5.6-terra` with high
 reasoning. Never perform those reviewer roles in the orchestrating context.
 
 ## Codex Adaptations

@@ -81,7 +81,7 @@ If epic provided, analyze epic for product-impacting changes:
 
 ```python
 # Sources to check
-epic_architecture = Read(f"docs/epics/{epic_dir}/architecture.md")
+epic_design = Read(f"docs/epics/{epic_dir}/design.md")
 epic_acceptance = Read(f"docs/epics/{epic_dir}/acceptance-criteria.md")
 agent_summaries = Read(f".scope/{epic_dir}/agent_summaries.jsonl")
 

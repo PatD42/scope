@@ -13,10 +13,9 @@ VALIDATOR_PATH = REPO_ROOT / "src_shared/scripts/validate-refinement.py"
 POLICY_PATH = REPO_ROOT / "src_shared/config/refinement-policy.yaml"
 COMMAND_PATH = REPO_ROOT / "src_shared/commands/epic_refine.md"
 REVIEWER_PATH = REPO_ROOT / "src_shared/commands/epic_refine/reviewer-refinement.md"
-ARCHITECT_PATH = REPO_ROOT / "src_shared/agents/architect.md"
 
 
-def _load_validator_module() -> ModuleType:
+def _load_module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "scope_validate_refinement", VALIDATOR_PATH
     )
@@ -26,7 +25,7 @@ def _load_validator_module() -> ModuleType:
     return module
 
 
-VALIDATOR = _load_validator_module()
+REFINE = _load_module()
 
 
 def _write(path: Path, content: str) -> None:
@@ -38,939 +37,895 @@ def _dump(path: Path, value: object) -> None:
     _write(path, yaml.safe_dump(value, sort_keys=False))
 
 
-def _document(title: str) -> str:
-    return f"# {title}\n\nMaterialized test content.\n"
+def _load(path: Path) -> dict[str, object]:
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert isinstance(value, dict)
+    return value
 
 
-def _build_valid_epic(tmp_path: Path) -> tuple[Path, Path]:
+def _assignments(risk: str, author: str) -> list[dict[str, str]]:
+    if risk == "low":
+        return [
+            {
+                "provider": "claude" if author == "codex" else "codex",
+                "mission": "semantic_core",
+            }
+        ]
+    result = [
+        {"provider": "claude", "mission": "semantic_core"},
+        {"provider": "codex", "mission": "semantic_core"},
+    ]
+    if risk in {"high", "critical"}:
+        result.append(
+            {"provider": author, "mission": "capability_specialist"}
+        )
+    return result
+
+
+def _design(risk: str, capabilities: list[str]) -> str:
+    challenges = [
+        "authority-and-ownership",
+        "producer-consumer-flow",
+        "failure-and-partial-state",
+        "proof-path",
+    ]
+    capability_challenges = {
+        "content_configuration": [
+            "single-content-authority",
+            "renderer-validator-parity",
+        ],
+        "api_interface": [
+            "request-response-completeness",
+            "compatibility-and-errors",
+        ],
+    }
+    for capability in capabilities:
+        challenges.extend(capability_challenges.get(capability, []))
+    challenge_text = "\n\n".join(
+        f"### CHALLENGE-{challenge}\nResolved through the delivery contract."
+        for challenge in challenges
+    )
+    high_risk = ""
+    if risk in {"high", "critical"}:
+        high_risk = """
+
+### FLOW-AC-001
+Authority: acceptance-criteria.md
+Producer: deliver
+Boundary: delivery service
+State owner: delivery service
+Consumer: caller
+Failure policy: reject invalid input
+Proof: proof-001
+
+### HOSTILE-AC-001
+Invalid case: malformed content
+Rejection mechanism: validation error
+Evidence: [EVIDENCE: src/service.py#def deliver]
+"""
+    return f"""# Design
+
+## Current State and Evidence
+
+The existing service owns delivery. [EVIDENCE: src/service.py#def deliver]
+
+## Product and Architecture Decisions
+
+### PDR-001: Preserve observable delivery
+
+Status: Accepted
+
+### ADR-001: Keep service ownership
+
+Status: Accepted
+
+## Architecture and Ownership
+
+The delivery service remains authoritative.
+
+## Failure and Partial States
+
+Invalid values are rejected before state changes.
+
+## Capability Challenges
+
+{challenge_text}
+
+## Hostile Cases
+
+Malformed input is rejected.{high_risk}
+
+## Verification Strategy
+
+Run `pytest -q tests/test_service.py`.
+"""
+
+
+def _build_repo(
+    tmp_path: Path,
+    *,
+    risk: str = "low",
+    author: str = "codex",
+    capabilities: list[str] | None = None,
+) -> tuple[Path, Path]:
+    if capabilities is None:
+        capabilities = ["content_configuration"] if risk in {"high", "critical"} else []
     repo = tmp_path / "repo"
-    epic = repo / "docs/epics/E-001-adaptive-refinement"
-    config_path = repo / "config/e-001.yaml"
-    reviewer_output = epic / "reviews/refine-v2-001/implementation-readiness.md"
-
+    epic = repo / "docs/epics/E-001-delivery"
     _write(
         epic / "details.md",
-        "---\nepic_id: E-001\ntitle: Adaptive refinement\n"
-        "status: ready-for-implementation\n---\n\n# E-001\n",
+        """---
+epic_id: E-001
+title: Delivery
+status: ready-for-implementation
+---
+
+# Delivery
+
+The implementation preserves the approved outcome.
+""",
     )
     _write(
         epic / "acceptance-criteria.md",
-        "# Acceptance Criteria\n\n## AC-001\nBehavior.\n",
+        "# Acceptance Criteria\n\n## AC-001: Deliver approved content\n",
     )
-    _write(epic / "pdr.md", "# Product Decisions\n\n## PDR-001\nDecision.\n")
-    for name in (
-        "system-context.md",
-        "architecture.md",
-        "adr.md",
-        "test-strategy.md",
-    ):
-        _write(epic / name, _document(name))
-    _write(config_path, "enabled: true\n")
+    _write(epic / "design.md", _design(risk, capabilities))
     _write(
-        reviewer_output,
-        "# Review\n\nREVIEW_ROLE: implementation_readiness\nDECISION: approved\n",
+        repo / "src/service.py",
+        "def deliver(value: str) -> str:\n    return value\n",
     )
     _write(
-        epic / "refinement-review.md",
-        "# Refinement Review\n\nDecision: Approved for implementation\n",
+        repo / "tests/test_service.py",
+        "def test_delivery() -> None:\n    assert True\n",
     )
+    _write(repo / "config/content.yaml", "delivery: enabled\n")
 
+    assignments = _assignments(risk, author)
     _dump(
         epic / "refinement-profile.yaml",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "epic_id": "E-001",
+            "author_provider": author,
             "architecture_scope": "backend",
-            "risk_level": "low",
-            "capabilities": ["content_configuration"],
-            "classification_rationale": "One reversible authored configuration change.",
+            "risk_level": risk,
+            "capabilities": capabilities,
+            "workflow_started_at": "2026-07-26T10:00:00Z",
+            "workflow_completed_at": "2026-07-26T10:10:00Z",
             "review": {
-                "roles": ["implementation_readiness"],
+                "assignments": assignments,
                 "maximum_full_reviews": 1,
-                "maximum_targeted_verifications": 1,
-                "specialist_focus": "none",
+                "maximum_targeted_verifications": (
+                    2 if risk in {"high", "critical"} else 1
+                ),
             },
         },
     )
-    _dump(
-        epic / "refinement-manifest.yaml",
-        {
-            "schema_version": 2,
-            "epic_id": "E-001",
-            "requirements": [
-                {
-                    "id": "AC-001",
-                    "source": {
-                        "artifact": "acceptance-criteria.md",
-                        "anchor": "AC-001",
-                    },
-                    "summary": "Configuration enables the selected behavior.",
-                    "type": "behavior",
-                    "risk": "low",
-                    "implementation_required": True,
-                    "affected_surfaces": ["config/e-001.yaml"],
-                    "proof_obligations": [
-                        "Load the configuration and observe enabled behavior."
-                    ],
-                    "owner_story": "story-01",
-                }
-            ],
-            "decisions": [
-                {
-                    "id": "PDR-001",
-                    "source": {"artifact": "pdr.md", "anchor": "PDR-001"},
-                    "summary": "Use authored configuration.",
-                    "status": "accepted",
-                }
-            ],
-            "artifacts": [
-                {
-                    "id": "ART-001",
-                    "path": "config/e-001.yaml",
-                    "kind": "authored_config",
-                    "capabilities": ["content_configuration"],
-                    "authority": "canonical",
-                }
-            ],
-            "open_items": [],
-        },
-    )
+
+    REFINE.RefinementScaffolder(epic, POLICY_PATH, repo).run()
+    manifest_path = epic / "refinement-manifest.yaml"
+    manifest = _load(manifest_path)
+    requirement = manifest["requirements"][0]
+    requirement["affected_surfaces"] = ["src/service.py#deliver"]
+    requirement["proof_obligations"] = ["proof-001"]
+    requirement["owner_story"] = "story-01"
+    if capabilities:
+        kind = "api_schema" if "api_interface" in capabilities else "authored_config"
+        manifest["artifacts"] = [
+            {
+                "id": "artifact-001",
+                "path": "config/content.yaml",
+                "kind": kind,
+                "authority": "canonical",
+                "capabilities": capabilities,
+            }
+        ]
+    _dump(manifest_path, manifest)
     _dump(
         epic / "file-plan-story-01.yaml",
         {
             "epic_id": "E-001",
             "story_id": "story-01",
-            "story_title": "Implement configured behavior",
+            "story_title": "Deliver approved content",
             "depends_on": [],
-            "required_contracts": [],
-            "required_touchpoints": [],
-            "candidate_files": [],
-            "forbidden_changes": [],
+            "required_contracts": [
+                {
+                    "id": "contract-001",
+                    "contract": "src/service.py#deliver",
+                    "obligation": "Return approved content",
+                    "verification": "pytest -q tests/test_service.py",
+                }
+            ],
+            "required_touchpoints": [
+                {
+                    "id": "touchpoint-001",
+                    "surface": "src/service.py#deliver",
+                    "obligation": "Preserve the caller boundary",
+                    "evidence_required": "unit test",
+                }
+            ],
+            "candidate_files": [
+                {
+                    "path": "src/service.py",
+                    "reason": "Current owner",
+                    "advisory": True,
+                }
+            ],
+            "forbidden_changes": [
+                {
+                    "path_or_surface": "public delivery behavior",
+                    "rule": "Requires renewed refinement",
+                }
+            ],
             "proof_obligations": [
                 {
-                    "id": "configured-behavior-proof",
+                    "id": "proof-001",
                     "acceptance_rows": ["AC-001"],
                     "required_evidence": "unit",
-                    "command_hint": "python3 -m pytest tests/unit/test_config.py",
-                    "success_condition": "The configured behavior is enabled.",
+                    "command_hint": "pytest -q tests/test_service.py",
+                    "success_condition": "The delivery test passes",
                 }
             ],
         },
     )
-    _dump(
-        epic / "acceptance-traceability.yaml",
-        {
-            "schema_version": 2,
-            "epic_id": "E-001",
-            "acceptance_items": [
-                {
-                    "id": "AC-001",
-                    "story": "story-01",
-                    "requirement": "Configuration enables the selected behavior.",
-                    "source": {
-                        "artifact": "acceptance-criteria.md",
-                        "anchor": "AC-001",
-                    },
-                    "implementation": {"expected_files": [], "actual_files": []},
-                    "tests": {
-                        "expected_files": [],
-                        "required_assertions": ["Configured behavior is enabled."],
-                        "actual_tests": [],
-                    },
-                    "runtime_evidence": {
-                        "required": False,
-                        "commands": [],
-                        "evidence": [],
-                    },
-                    "status": "planned",
-                    "audit_notes": "",
-                }
-            ],
-        },
-    )
+    REFINE.RefinementScaffolder(epic, POLICY_PATH, repo).run()
+
+    outputs: list[dict[str, str]] = []
+    for assignment in assignments:
+        provider = assignment["provider"]
+        mission = assignment["mission"]
+        output = epic / f"reviews/refine-v3-001/review-{provider}-{mission}.md"
+        _write(
+            output,
+            f"# Review\n\nREVIEW_PROVIDER: {provider}\n"
+            f"REVIEW_MISSION: {mission}\n\nDECISION: approved\n",
+        )
+        outputs.append(
+            {
+                "provider": provider,
+                "mission": mission,
+                "path": str(output.relative_to(repo)),
+            }
+        )
     _dump(
         epic / "refinement-findings.yaml",
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "epic_id": "E-001",
             "review": {
                 "full_review_count": 1,
                 "targeted_verification_count": 0,
-                "completed_roles": ["implementation_readiness"],
-                "outputs": [
-                    "docs/epics/E-001-adaptive-refinement/reviews/"
-                    "refine-v2-001/implementation-readiness.md"
-                ],
+                "completed_assignments": assignments,
+                "outputs": outputs,
             },
             "findings": [],
         },
     )
-    policy = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
-    capability_checks = [
-        {
-            "capability": capability,
-            "check_id": check_id,
-            "evidence": "The authored configuration and loader contract agree.",
-            "status": "passed",
-        }
-        for capability in ("common", "content_configuration")
-        for check_id in policy["pre_review_challenges"][capability]
-    ]
-    fingerprint_validator = VALIDATOR.RefinementValidator(
-        epic_dir=epic,
-        phase="architecture",
-        policy_path=POLICY_PATH,
-        repo_root=repo,
-    )
-    assert fingerprint_validator.validate() == []
-    _dump(
-        epic / "reviews/refine-v2-001/pre-review-audit.yaml",
-        {
-            "schema_version": 1,
-            "epic_id": "E-001",
-            "input_fingerprint": fingerprint_validator.pre_review_input_fingerprint(),
-            "canonical_requirement_source": "acceptance-criteria.md",
-            "covered_requirement_ids": ["AC-001"],
-            "untracked_normative_statements": [],
-            "unindexed_decision_ids": [],
-            "contract_flows": [],
-            "counterexamples": [],
-            "capability_checks": capability_checks,
-            "validation_commands": [
-                {
-                    "command": "python3 -c 'import yaml'",
-                    "result": "passed",
-                    "evidence": "Configuration parsed successfully.",
-                }
-            ],
-            "unresolved_items": [],
-        },
+    _write(
+        epic / "refinement-review.md",
+        "# Refinement Review\n\nDecision: Approved for implementation\n",
     )
     return repo, epic
 
 
-def _validate(repo: Path, epic: Path, phase: str = "handoff") -> list[str]:
-    validator = VALIDATOR.RefinementValidator(
-        epic_dir=epic,
-        phase=phase,
-        policy_path=POLICY_PATH,
-        repo_root=repo,
-    )
-    return validator.validate()
+def _validate(repo: Path, epic: Path, phase: str) -> tuple[list[str], object]:
+    validator = REFINE.RefinementValidator(epic, phase, POLICY_PATH, repo)
+    return validator.validate(), validator
 
 
-def _refresh_pre_review_fingerprint(repo: Path, epic: Path) -> None:
-    validator = VALIDATOR.RefinementValidator(
-        epic_dir=epic,
-        phase="architecture",
-        policy_path=POLICY_PATH,
-        repo_root=repo,
-    )
-    assert validator.validate() == []
-    audit_path = epic / "reviews/refine-v2-001/pre-review-audit.yaml"
-    audit = yaml.safe_load(audit_path.read_text(encoding="utf-8"))
-    audit["input_fingerprint"] = validator.pre_review_input_fingerprint()
-    _dump(audit_path, audit)
+def test_valid_handoff_passes_every_phase(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
 
-
-def test_valid_low_risk_handoff_passes(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-
-    assert _validate(repo, epic) == []
-
-
-def test_architecture_phase_does_not_require_story_or_review_artifacts(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    for path in (
-        epic / "file-plan-story-01.yaml",
-        epic / "acceptance-traceability.yaml",
-        epic / "refinement-findings.yaml",
-        epic / "refinement-review.md",
-    ):
-        path.unlink()
-    details = epic / "details.md"
-    details.write_text(details.read_text().replace("ready-for-implementation", "draft"))
-    manifest = yaml.safe_load((epic / "refinement-manifest.yaml").read_text())
-    manifest["requirements"][0]["owner_story"] = None
-    _dump(epic / "refinement-manifest.yaml", manifest)
-
-    assert _validate(repo, epic, phase="architecture") == []
-
-
-def test_duplicate_yaml_key_is_rejected(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    profile = epic / "refinement-profile.yaml"
-    profile.write_text(profile.read_text() + "epic_id: E-duplicate\n")
-
-    errors = _validate(repo, epic, phase="profile")
-
-    assert any("duplicate key 'epic_id'" in error for error in errors)
-
-
-def test_native_contract_capability_requires_accepted_artifact_kind(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    profile = yaml.safe_load((epic / "refinement-profile.yaml").read_text())
-    profile["capabilities"] = ["api_interface"]
-    _dump(epic / "refinement-profile.yaml", profile)
-    manifest = yaml.safe_load((epic / "refinement-manifest.yaml").read_text())
-    manifest["artifacts"][0]["capabilities"] = ["api_interface"]
-    _dump(epic / "refinement-manifest.yaml", manifest)
-
-    errors = _validate(repo, epic, phase="architecture")
-
-    assert any("api_interface requires one artifact kind" in error for error in errors)
-
-
-def test_missing_artifact_and_capability_coverage_are_rejected(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    (repo / "config/e-001.yaml").unlink()
-
-    errors = _validate(repo, epic, phase="architecture")
-
-    assert any("artifact path does not exist" in error for error in errors)
+    for phase in REFINE.PHASE_ORDER:
+        errors, _ = _validate(repo, epic, phase)
+        assert errors == [], (phase, errors)
 
 
 @pytest.mark.parametrize(
-    ("depends_on", "expected"),
+    ("risk", "author", "expected"),
     [
-        (["story-99"], "depends on unknown story"),
-        (["story-01"], "depends on itself"),
+        ("low", "claude", ["codex:semantic_core"]),
+        ("medium", "codex", ["claude:semantic_core", "codex:semantic_core"]),
+        (
+            "high",
+            "claude",
+            [
+                "claude:semantic_core",
+                "codex:semantic_core",
+                "claude:capability_specialist",
+            ],
+        ),
+        (
+            "critical",
+            "codex",
+            [
+                "claude:semantic_core",
+                "codex:semantic_core",
+                "codex:capability_specialist",
+            ],
+        ),
     ],
 )
-def test_invalid_story_dependency_is_rejected(
+def test_risk_topology_is_exact(
     tmp_path: Path,
-    depends_on: list[str],
-    expected: str,
+    risk: str,
+    author: str,
+    expected: list[str],
 ) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    plan_path = epic / "file-plan-story-01.yaml"
-    plan = yaml.safe_load(plan_path.read_text())
-    plan["depends_on"] = depends_on
-    _dump(plan_path, plan)
+    repo, epic = _build_repo(tmp_path, risk=risk, author=author)
 
-    errors = _validate(repo, epic, phase="pre_review")
+    errors, validator = _validate(repo, epic, "profile")
 
-    assert any(expected in error for error in errors)
+    assert errors == []
+    assert [
+        REFINE._assignment_key(row)
+        for row in REFINE._expected_assignments(validator.profile, validator.policy)
+    ] == expected
 
 
-def test_dependency_cycle_is_rejected(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
+def test_profile_rejects_invalid_values_and_topology(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    path = epic / "refinement-profile.yaml"
+    profile = _load(path)
+    profile.update(
+        {
+            "schema_version": 2,
+            "epic_id": "",
+            "author_provider": "other",
+            "architecture_scope": "planet",
+            "risk_level": "extreme",
+            "capabilities": ["unknown"],
+            "review": {
+                "assignments": [
+                    {"provider": "other", "mission": "unknown"},
+                    {"provider": "other", "mission": "unknown"},
+                ],
+                "maximum_full_reviews": 9,
+                "maximum_targeted_verifications": 9,
+            },
+        }
+    )
+    _dump(path, profile)
+
+    errors, _ = _validate(repo, epic, "profile")
+    joined = "\n".join(errors)
+
+    for expected in (
+        "schema_version",
+        "epic_id must be a non-empty string",
+        "author_provider",
+        "architecture_scope",
+        "risk_level",
+        "unknown capability",
+        "invalid provider",
+        "invalid mission",
+        "duplicate review.assignments",
+        "must match risk/provider topology",
+    ):
+        assert expected in joined
+
+
+def test_high_risk_requires_capability(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path, risk="high")
+    profile_path = epic / "refinement-profile.yaml"
+    profile = _load(profile_path)
+    profile["capabilities"] = []
+    _dump(profile_path, profile)
+
+    errors, _ = _validate(repo, epic, "profile")
+
+    assert any("requires at least one capability" in error for error in errors)
+
+
+def test_product_rejects_missing_duplicate_ids_and_decision_heading(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    _write(
+        epic / "acceptance-criteria.md",
+        "# Acceptance\n\n## AC-001: First\n\n## AC-001: Duplicate\n",
+    )
+    _write(epic / "design.md", "# Design\n")
+
+    errors, _ = _validate(repo, epic, "product")
+    joined = "\n".join(errors)
+
+    assert "duplicate stable acceptance requirement ids" in joined
+    assert "missing heading: Product and Architecture Decisions" in joined
+
+    _write(epic / "acceptance-criteria.md", "# Acceptance\n\nNo stable ID.\n")
+    errors, _ = _validate(repo, epic, "product")
+    assert any("must contain AC-, ERR-, or E2E- headings" in e for e in errors)
+
+
+def test_requirement_cross_references_do_not_redeclare_canonical_ids(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    acceptance = epic / "acceptance-criteria.md"
+    _write(
+        acceptance,
+        "# Acceptance Criteria\n\n## AC-001: Deliver\n\n"
+        "The E2E proof references AC-001 without redeclaring it.\n",
+    )
+
+    errors, _ = _validate(repo, epic, "product")
+
+    assert errors == []
+
+
+def test_scaffolder_preserves_semantic_judgment_and_actual_evidence(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    manifest_path = epic / "refinement-manifest.yaml"
+    trace_path = epic / "acceptance-traceability.yaml"
+    manifest = _load(manifest_path)
+    manifest["requirements"][0]["summary"] = "User-confirmed summary"
+    manifest["requirements"].append(
+        {
+            "id": "AC-STALE",
+            "source": {"artifact": "acceptance-criteria.md", "anchor": "AC-001"},
+            "summary": "Removed scope",
+        }
+    )
+    manifest["decisions"].append(
+        {
+            "id": "ADR-STALE",
+            "source": {"artifact": "design.md", "anchor": "ADR-001"},
+            "summary": "Removed decision",
+            "status": "accepted",
+        }
+    )
+    _dump(manifest_path, manifest)
+    trace = _load(trace_path)
+    trace["acceptance_items"][0]["implementation"]["actual_files"] = [
+        "src/service.py"
+    ]
+    trace["acceptance_items"][0]["tests"]["actual_tests"] = [
+        "tests/test_service.py"
+    ]
+    trace["acceptance_items"][0]["status"] = "verified"
+    _dump(trace_path, trace)
+
+    written = REFINE.RefinementScaffolder(epic, POLICY_PATH, repo).run()
+
+    assert written == [manifest_path, trace_path]
+    regenerated_manifest = _load(manifest_path)
+    assert regenerated_manifest["requirements"][0]["summary"] == "User-confirmed summary"
+    assert [row["id"] for row in regenerated_manifest["requirements"]] == ["AC-001"]
+    assert {row["id"] for row in regenerated_manifest["decisions"]} == {
+        "PDR-001",
+        "ADR-001",
+    }
+    generated = _load(trace_path)["acceptance_items"][0]
+    assert generated["implementation"]["actual_files"] == ["src/service.py"]
+    assert generated["tests"]["actual_tests"] == ["tests/test_service.py"]
+    assert generated["status"] == "verified"
+
+
+@pytest.mark.parametrize(
+    ("artifact", "message"),
+    [
+        ("refinement-profile.yaml", "legacy profiles are not supported"),
+        ("refinement-manifest.yaml", "legacy refinement manifest"),
+        ("acceptance-traceability.yaml", "legacy acceptance traceability"),
+    ],
+)
+def test_scaffolder_rejects_legacy_artifacts(
+    tmp_path: Path,
+    artifact: str,
+    message: str,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    path = epic / artifact
+    document = _load(path)
+    document["schema_version"] = 2
+    _dump(path, document)
+
+    with pytest.raises(ValueError, match=message):
+        REFINE.RefinementScaffolder(epic, POLICY_PATH, repo).run()
+
+
+def test_architecture_reports_manifest_and_design_defects(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    manifest_path = epic / "refinement-manifest.yaml"
+    manifest = _load(manifest_path)
+    requirement = manifest["requirements"][0]
+    requirement.update(
+        {
+            "source": {"artifact": "../outside.md", "anchor": ""},
+            "summary": "",
+            "type": "invented",
+            "risk": "extreme",
+            "implementation_required": "yes",
+            "affected_surfaces": [""],
+            "proof_obligations": "not-a-list",
+        }
+    )
+    manifest["requirements"].append(dict(requirement))
+    manifest["decisions"][0].update(
+        {
+            "source": "not-a-mapping",
+            "summary": "",
+            "status": "rejected",
+        }
+    )
+    manifest["artifacts"] = [
+        {
+            "id": "artifact-001",
+            "path": "missing.yaml",
+            "kind": "authored_config",
+            "authority": "invented",
+            "capabilities": ["unknown"],
+        },
+        {
+            "id": "artifact-001",
+            "path": "config/content.yaml",
+            "kind": "authored_config",
+            "authority": "canonical",
+            "capabilities": [],
+        },
+    ]
+    manifest["open_items"] = [{"id": "", "status": "invented"}]
+    _dump(manifest_path, manifest)
+    _write(
+        epic / "design.md",
+        """# Design
+
+## Product and Architecture Decisions
+
+[EVIDENCE: /absolute/path#anchor]
+[EVIDENCE: src/service.py]
+[EVIDENCE: src/service.py#missing-anchor]
+""",
+    )
+
+    errors, _ = _validate(repo, epic, "architecture")
+    joined = "\n".join(errors)
+    for expected in (
+        "source.artifact must be repository-relative",
+        "summary must be a non-empty string",
+        "type must be one of",
+        "risk must be one of",
+        "implementation_required must be boolean",
+        "affected_surfaces values must be non-empty strings",
+        "proof_obligations must be a list",
+        "duplicate requirement ids",
+        "source must be a mapping",
+        "status must be accepted",
+        "artifact path does not exist",
+        "unknown capability",
+        "duplicate artifact ids",
+        "open_items[1] id must be a non-empty string",
+        "missing required heading",
+        "evidence path must be repository-relative",
+        "evidence marker must use path#anchor",
+        "evidence anchor not found",
+        "missing architecture challenge",
+    ):
+        assert expected in joined
+
+
+def test_selected_capability_requires_tagged_native_artifact(tmp_path: Path) -> None:
+    repo, epic = _build_repo(
+        tmp_path, risk="high", capabilities=["api_interface"]
+    )
+    manifest_path = epic / "refinement-manifest.yaml"
+    manifest = _load(manifest_path)
+    manifest["artifacts"] = []
+    _dump(manifest_path, manifest)
+
+    errors, _ = _validate(repo, epic, "architecture")
+    assert any("no artifact tagged for selected capability api_interface" in e for e in errors)
+
+    manifest["artifacts"] = [
+        {
+            "id": "artifact-001",
+            "path": "config/content.yaml",
+            "kind": "authored_config",
+            "authority": "canonical",
+            "capabilities": ["api_interface"],
+        }
+    ]
+    _dump(manifest_path, manifest)
+    errors, _ = _validate(repo, epic, "architecture")
+    assert any("requires an accepted native artifact kind" in e for e in errors)
+
+
+def test_high_risk_requires_complete_flow_and_hostile_sections(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path, risk="high")
+    design_path = epic / "design.md"
+    text = design_path.read_text(encoding="utf-8")
+    text = text.replace("Failure policy: reject invalid input\n", "")
+    text = text.replace("Rejection mechanism: validation error\n", "")
+    _write(design_path, text)
+
+    errors, _ = _validate(repo, epic, "architecture")
+
+    assert any("FLOW-AC-001 missing field Failure policy:" in e for e in errors)
+    assert any(
+        "HOSTILE-AC-001 missing field Rejection mechanism:" in e for e in errors
+    )
+
+
+def test_reconciliation_reports_plan_ownership_and_dependency_defects(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
     first_path = epic / "file-plan-story-01.yaml"
-    first = yaml.safe_load(first_path.read_text())
-    first["depends_on"] = ["story-02"]
+    first = _load(first_path)
+    first["depends_on"] = ["story-02", "story-01", "missing-story"]
+    first["candidate_files"][0]["advisory"] = False
+    first["required_contracts"].append(
+        {"id": "contract-001", "contract": "", "obligation": "", "verification": ""}
+    )
+    first["proof_obligations"][0]["acceptance_rows"] = ["UNKNOWN-001"]
     _dump(first_path, first)
     second = dict(first)
     second["story_id"] = "story-02"
-    second["story_title"] = "Second story"
     second["depends_on"] = ["story-01"]
+    second["required_contracts"] = []
+    second["required_touchpoints"] = []
+    second["candidate_files"] = []
+    second["forbidden_changes"] = []
+    second["proof_obligations"] = []
     _dump(epic / "file-plan-story-02.yaml", second)
-
-    errors = _validate(repo, epic, phase="pre_review")
-
-    assert any("story dependency cycle" in error for error in errors)
-
-
-def test_missing_owner_and_traceability_row_are_rejected(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
     manifest_path = epic / "refinement-manifest.yaml"
-    manifest = yaml.safe_load(manifest_path.read_text())
-    manifest["requirements"][0]["owner_story"] = None
+    manifest = _load(manifest_path)
+    manifest["requirements"][0]["owner_story"] = "missing-owner"
+    manifest["open_items"] = [{"id": "OPEN-001", "status": "open"}]
     _dump(manifest_path, manifest)
-    traceability_path = epic / "acceptance-traceability.yaml"
-    traceability = yaml.safe_load(traceability_path.read_text())
-    traceability["acceptance_items"] = [
+
+    errors, _ = _validate(repo, epic, "reconcile")
+    joined = "\n".join(errors)
+    for expected in (
+        "remains unresolved",
+        "advisory must be true",
+        "duplicate required_contracts ids",
+        "references unknown acceptance rows",
+        "depends on itself",
+        "depends on unknown story",
+        "story dependency cycle includes",
+        "references unknown owner_story",
+        "has no story proof obligation",
+    ):
+        assert expected in joined
+
+
+def test_traceability_must_match_generated_authorities(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    path = epic / "acceptance-traceability.yaml"
+    trace = _load(path)
+    row = trace["acceptance_items"][0]
+    row.update(
         {
-            **traceability["acceptance_items"][0],
-            "id": "AC-OTHER",
+            "story": "story-other",
+            "source": {},
+            "proof_obligation_ids": ["proof-other"],
+            "implementation": "bad",
+            "tests": {"actual_tests": [1]},
+            "runtime_evidence": {
+                "required": "yes",
+                "commands": "bad",
+                "evidence": [],
+            },
+            "status": "unknown",
+            "audit_notes": [],
         }
-    ]
-    _dump(traceability_path, traceability)
-
-    errors = _validate(repo, epic, phase="pre_review")
-
-    assert any("missing owner_story" in error for error in errors)
-    assert any(
-        "missing implementation requirements: AC-001" in error for error in errors
     )
+    trace["acceptance_items"].append(dict(row, id="AC-EXTRA"))
+    _dump(path, trace)
+
+    errors, _ = _validate(repo, epic, "reconcile")
+    joined = "\n".join(errors)
+    for expected in (
+        "story does not match manifest owner_story",
+        "source does not match manifest",
+        "proof_obligation_ids do not match story plans",
+        "implementation must be a mapping",
+        "actual_tests values must be non-empty strings",
+        "commands must be a list",
+        "runtime_evidence.required must be boolean",
+        "status must be one of",
+        "audit_notes must be a string",
+        "has non-implementation rows",
+    ):
+        assert expected in joined
 
 
-def test_open_manifest_question_blocks_pre_review(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    manifest_path = epic / "refinement-manifest.yaml"
-    manifest = yaml.safe_load(manifest_path.read_text())
-    manifest["open_items"] = [
-        {
-            "id": "OI-001",
-            "issue": "Product policy is undecided.",
-            "status": "user_question",
-        }
-    ]
-    _dump(manifest_path, manifest)
-
-    errors = _validate(repo, epic, phase="pre_review")
-
-    assert any("remains unresolved at handoff" in error for error in errors)
-
-
-def test_open_blocking_finding_blocks_handoff(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
+def test_review_requires_exact_outputs_and_valid_findings(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path, risk="medium")
     findings_path = epic / "refinement-findings.yaml"
-    findings = yaml.safe_load(findings_path.read_text())
-    findings["findings"] = [
-        {
-            "id": "RF-001",
-            "fingerprint": "architecture-state-owner",
-            "severity": "blocking",
-            "category": "architecture",
-            "status": "open",
-            "evidence": "architecture.md does not name the state owner.",
-            "required_correction": "Name the state owner in the architecture contract.",
-            "affected_manifest_ids": ["AC-001"],
-            "owner": "architect",
-            "verification_roles": ["implementation_readiness"],
-            "closure_test": "Name the owner and verify the native contract.",
-            "requires_user": False,
-        }
-    ]
-    _dump(findings_path, findings)
-
-    errors = _validate(repo, epic)
-
-    assert any("remains open at handoff" in error for error in errors)
-
-
-def test_review_policy_and_output_are_enforced(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    findings_path = epic / "refinement-findings.yaml"
-    findings = yaml.safe_load(findings_path.read_text())
-    findings["review"]["completed_roles"] = []
+    findings = _load(findings_path)
     findings["review"]["full_review_count"] = 2
-    findings["review"]["outputs"] = ["docs/epics/missing-review.md"]
-    _dump(findings_path, findings)
-
-    errors = _validate(repo, epic)
-
-    assert any("missing completed review roles" in error for error in errors)
-    assert any("exceeds policy maximum" in error for error in errors)
-    assert any("review output does not exist" in error for error in errors)
-
-
-def test_review_output_must_prove_the_completed_role(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    output = epic / "reviews/refine-v2-001/implementation-readiness.md"
-    _write(
-        output, "# Review\n\nREVIEW_ROLE: architecture_coherence\nDECISION: approved\n"
-    )
-
-    errors = _validate(repo, epic)
-
-    assert any("is not in completed_roles" in error for error in errors)
-    assert any(
-        "has no review output for roles: implementation_readiness" in error
-        for error in errors
-    )
-
-
-def test_duplicate_review_outputs_and_malformed_completed_roles_are_rejected(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    findings_path = epic / "refinement-findings.yaml"
-    findings = yaml.safe_load(findings_path.read_text())
-    findings["review"]["completed_roles"] = [
-        "implementation_readiness",
-        {"bad": "role"},
+    findings["review"]["targeted_verification_count"] = 4
+    findings["review"]["completed_assignments"] = [
+        {"provider": "claude", "mission": "semantic_core"}
     ]
-    findings["review"]["outputs"] *= 2
-    _dump(findings_path, findings)
-
-    errors = _validate(repo, epic)
-
-    assert any(
-        "completed_roles values must be non-empty strings" in error for error in errors
-    )
-    assert any("duplicate review outputs" in error for error in errors)
-
-
-def test_review_output_requires_declared_role_marker(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    output = epic / "reviews/refine-v2-001/implementation-readiness.md"
-    _write(output, "# Review\n\nDECISION: approved\n")
-
-    errors = _validate(repo, epic)
-
-    assert any("review output has no valid REVIEW_ROLE" in error for error in errors)
-
-
-def test_profile_review_budget_cannot_be_below_policy_minimum(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    profile_path = epic / "refinement-profile.yaml"
-    profile = yaml.safe_load(profile_path.read_text())
-    profile["review"]["maximum_full_reviews"] = 0
-    _dump(profile_path, profile)
-
-    errors = _validate(repo, epic, phase="profile")
-
-    assert any("is below policy minimum" in error for error in errors)
-
-
-def test_handoff_epic_identity_and_traceability_version_are_enforced(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    plan_path = epic / "file-plan-story-01.yaml"
-    plan = yaml.safe_load(plan_path.read_text())
-    plan["epic_id"] = "E-WRONG"
-    _dump(plan_path, plan)
-    traceability_path = epic / "acceptance-traceability.yaml"
-    traceability = yaml.safe_load(traceability_path.read_text())
-    traceability["schema_version"] = 1
-    traceability["epic_id"] = "E-WRONG"
-    traceability["acceptance_items"][0]["id"] = "AC-UNKNOWN"
-    _dump(traceability_path, traceability)
-
-    errors = _validate(repo, epic, phase="pre_review")
-
-    assert any("file-plan-story-01.yaml epic_id 'E-WRONG'" in error for error in errors)
-    assert any("schema_version must be 2" in error for error in errors)
-    assert any(
-        "acceptance-traceability.yaml epic_id 'E-WRONG'" in error for error in errors
-    )
-    assert any("unknown manifest requirement 'AC-UNKNOWN'" in error for error in errors)
-
-
-def test_any_open_finding_blocks_handoff(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    findings_path = epic / "refinement-findings.yaml"
-    findings = yaml.safe_load(findings_path.read_text())
+    output = findings["review"]["outputs"][0]
+    findings["review"]["outputs"] = [output, dict(output)]
+    output_path = repo / output["path"]
+    _write(output_path, "# Review without identity markers\n")
     findings["findings"] = [
         {
             "id": "RF-001",
-            "fingerprint": "minor-wording-gap",
+            "fingerprint": "same",
+            "severity": "extreme",
+            "category": "invented",
+            "status": "corrected",
+            "evidence": "",
+            "required_correction": "",
+            "affected_manifest_ids": ["UNKNOWN"],
+            "owner": "",
+            "verification_assignments": [
+                {"provider": "codex", "mission": "semantic_core"}
+            ],
+            "closure_test": "",
+            "requires_user": "no",
+        },
+        {
+            "id": "RF-001",
+            "fingerprint": "same",
             "severity": "minor",
-            "category": "mechanical",
-            "status": "open",
-            "evidence": "One handoff label is ambiguous.",
-            "required_correction": "Replace the ambiguous handoff label.",
+            "category": "testability",
+            "status": "verified",
+            "evidence": "Observed",
             "affected_manifest_ids": ["AC-001"],
             "owner": "architect",
-            "verification_roles": ["implementation_readiness"],
-            "closure_test": "Correct or explicitly reject the finding.",
+            "verification_assignments": [
+                {"provider": "claude", "mission": "semantic_core"}
+            ],
+            "closure_test": "Inspect correction",
+            "requires_user": False,
+        },
+        {
+            "id": "RF-002",
+            "fingerprint": "accepted-risk",
+            "severity": "minor",
+            "category": "architecture",
+            "status": "accepted_risk",
+            "evidence": "Residual risk",
+            "affected_manifest_ids": ["AC-001"],
+            "owner": "user",
+            "verification_assignments": [
+                {"provider": "claude", "mission": "semantic_core"}
+            ],
+            "closure_test": "User accepts the risk",
+            "requires_user": False,
+        },
+    ]
+    _dump(findings_path, findings)
+
+    errors, _ = _validate(repo, epic, "review")
+    joined = "\n".join(errors)
+    for expected in (
+        "review.full_review_count must be 1",
+        "targeted verification count exceeds",
+        "completed_assignments do not satisfy profile",
+        "duplicate review output paths",
+        "review output lacks REVIEW_PROVIDER/REVIEW_MISSION",
+        "review.outputs do not cover all assignments",
+        "severity must be one of",
+        "category must be one of",
+        "evidence must be a non-empty string",
+        "required_correction must be a non-empty string",
+        "correction_evidence must be a non-empty string",
+        "verification_evidence must be a non-empty string",
+        "references unknown manifest ids",
+        "references incomplete assignments",
+        "owner must be a non-empty string",
+        "closure_test must be a non-empty string",
+        "requires_user must be boolean",
+        "accepted_risk requires explicit user approval",
+        "duplicate finding ids",
+        "duplicate finding fingerprints",
+    ):
+        assert expected in joined
+
+
+def test_handoff_rejects_active_findings_status_and_decision(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    findings_path = epic / "refinement-findings.yaml"
+    findings = _load(findings_path)
+    findings["findings"] = [
+        {
+            "id": "RF-001",
+            "fingerprint": "delivery-proof",
+            "severity": "major",
+            "category": "testability",
+            "status": "open",
+            "evidence": "No integration proof",
+            "required_correction": "Add proof",
+            "affected_manifest_ids": ["AC-001"],
+            "owner": "architect",
+            "verification_assignments": [
+                {"provider": "claude", "mission": "semantic_core"}
+            ],
+            "closure_test": "Run proof",
             "requires_user": False,
         }
     ]
     _dump(findings_path, findings)
-
-    errors = _validate(repo, epic)
-
-    assert any("remains open at handoff" in error for error in errors)
-
-
-def test_review_phase_allows_open_findings_but_handoff_requires_verification(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    findings_path = epic / "refinement-findings.yaml"
-    findings = yaml.safe_load(findings_path.read_text())
-    finding = {
-        "id": "RF-001",
-        "fingerprint": "architecture-state-owner",
-        "severity": "blocking",
-        "category": "architecture",
-        "status": "open",
-        "evidence": "architecture.md does not name the state owner.",
-        "required_correction": "Name the state owner in the native contract.",
-        "affected_manifest_ids": ["AC-001"],
-        "owner": "architect",
-        "verification_roles": ["implementation_readiness"],
-        "closure_test": "The architecture and native contract name one owner.",
-        "requires_user": False,
-    }
-    findings["findings"] = [finding]
-    _dump(findings_path, findings)
-
-    assert _validate(repo, epic, phase="review") == []
-
-    finding["status"] = "corrected"
-    _dump(findings_path, findings)
-    errors = _validate(repo, epic, phase="review")
-
-    assert any(
-        "correction_evidence must be a non-empty string" in error for error in errors
+    _write(
+        epic / "details.md",
+        "---\nepic_id: E-001\nstatus: draft\n---\n\n# Delivery\n",
     )
+    _write(epic / "refinement-review.md", "# Refinement Review\n\nIncomplete\n")
 
-    finding["correction_evidence"] = "architecture.md now names the repository owner."
-    _dump(findings_path, findings)
-    errors = _validate(repo, epic)
+    errors, _ = _validate(repo, epic, "handoff")
+    joined = "\n".join(errors)
 
-    assert any("remains corrected at handoff" in error for error in errors)
-
-    finding["status"] = "verified"
-    finding["verification_evidence"] = "Targeted reviewer confirmed the owner contract."
-    _dump(findings_path, findings)
-
-    assert _validate(repo, epic) == []
+    assert "remains open at handoff" in joined
+    assert "status must be ready-for-implementation" in joined
+    assert "must contain 'Decision: Approved for implementation'" in joined
 
 
-def test_high_risk_profile_and_review_allow_two_targeted_verifications(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    profile_path = epic / "refinement-profile.yaml"
-    profile = yaml.safe_load(profile_path.read_text())
-    profile["risk_level"] = "high"
-    profile["review"]["roles"] = [
-        "architecture_coherence",
-        "implementation_readiness",
-        "capability_specialist",
-    ]
-    profile["review"]["maximum_targeted_verifications"] = 2
-    _dump(profile_path, profile)
-    _refresh_pre_review_fingerprint(repo, epic)
-
-    for role in ("architecture_coherence", "capability_specialist"):
-        _write(
-            epic / f"reviews/refine-v2-001/{role}.md",
-            f"# Review\n\nREVIEW_ROLE: {role}\nDECISION: approved\n",
-        )
-    findings_path = epic / "refinement-findings.yaml"
-    findings = yaml.safe_load(findings_path.read_text())
-    findings["review"]["completed_roles"] = profile["review"]["roles"]
-    findings["review"]["outputs"].extend(
-        [
-            "docs/epics/E-001-adaptive-refinement/reviews/"
-            "refine-v2-001/architecture_coherence.md",
-            "docs/epics/E-001-adaptive-refinement/reviews/"
-            "refine-v2-001/capability_specialist.md",
-        ]
-    )
-    findings["review"]["targeted_verification_count"] = 2
-    _dump(findings_path, findings)
-
-    assert _validate(repo, epic, phase="review") == []
-
-    findings["review"]["targeted_verification_count"] = 3
-    _dump(findings_path, findings)
-    errors = _validate(repo, epic, phase="review")
-
-    assert any(
-        "targeted_verification_count=3 exceeds policy maximum 2" in error
-        for error in errors
-    )
-
-
-def test_high_risk_profile_requires_two_round_allowance(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    profile_path = epic / "refinement-profile.yaml"
-    profile = yaml.safe_load(profile_path.read_text())
-    profile["risk_level"] = "high"
-    profile["review"]["roles"] = [
-        "architecture_coherence",
-        "implementation_readiness",
-        "capability_specialist",
-    ]
-    profile["review"]["maximum_targeted_verifications"] = 1
-    _dump(profile_path, profile)
-
-    errors = _validate(repo, epic, phase="profile")
-
-    assert any(
-        "maximum_targeted_verifications=1 is below policy minimum 2" in error
-        for error in errors
-    )
-
-
-def test_stable_error_and_e2e_ids_require_manifest_rows(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    acceptance = epic / "acceptance-criteria.md"
-    acceptance.write_text(
-        acceptance.read_text()
-        + "\n| ERR-001 | Invalid input fails closed |\n"
-        + "\n### E2E-001 Complete configured behavior\n\nExercise the workflow.\n"
-    )
-
-    errors = _validate(repo, epic, phase="architecture")
-
-    assert any(
-        "missing stable acceptance requirements: E2E-001, ERR-001" in error
-        for error in errors
-    )
-
-
-def test_pre_review_requires_current_author_challenge_audit(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    audit_path = epic / "reviews/refine-v2-001/pre-review-audit.yaml"
-    audit_path.unlink()
-
-    assert _validate(repo, epic, phase="architecture") == []
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("missing pre-review audit" in error for error in errors)
-
-    repo, epic = _build_valid_epic(tmp_path / "stale")
-    architecture = epic / "architecture.md"
-    architecture.write_text(
-        architecture.read_text(encoding="utf-8") + "\nChanged contract.\n",
-        encoding="utf-8",
-    )
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("input_fingerprint is stale" in error for error in errors)
-
-
-def test_high_risk_requirements_need_flows_and_counterexamples(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    manifest_path = epic / "refinement-manifest.yaml"
-    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
-    manifest["requirements"][0]["risk"] = "high"
-    _dump(manifest_path, manifest)
-    _refresh_pre_review_fingerprint(repo, epic)
-
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any(
-        "high-risk requirements missing contract flows: AC-001" in error
-        for error in errors
-    )
-    assert any(
-        "high-risk requirements missing counterexamples: AC-001" in error
-        for error in errors
-    )
-
-    audit_path = epic / "reviews/refine-v2-001/pre-review-audit.yaml"
-    audit = yaml.safe_load(audit_path.read_text(encoding="utf-8"))
-    audit["contract_flows"] = [
+def test_advisories_are_non_blocking_and_metrics_are_recorded(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    details_path = epic / "details.md"
+    details = details_path.read_text(encoding="utf-8")
+    _write(details_path, details + "\nThe system must preserve this prose.\n")
+    metadata = epic / "reviews/refine-v3-001/metadata-claude-semantic_core.yaml"
+    _dump(
+        metadata,
         {
-            "id": "FLOW-001",
-            "requirement_ids": ["AC-001"],
-            "authority": "config/e-001.yaml",
-            "producer": "configuration author",
-            "transport": "configuration loader",
-            "state_or_persistence": "in-memory immutable configuration",
-            "consumer": "configured service",
-            "proof": "configuration loader test",
-            "status": "passed",
-        }
-    ]
-    audit["counterexamples"] = [
-        {
-            "id": "ATTACK-001",
-            "requirement_ids": ["AC-001"],
-            "invalid_case": "The loader ignores the enabled flag.",
-            "rejection_mechanism": "The loader assertion fails.",
-            "evidence": "configured-behavior-proof",
-            "status": "passed",
-        }
-    ]
-    _dump(audit_path, audit)
-
-    assert _validate(repo, epic, phase="pre_review") == []
-
-
-def test_story_proof_and_traceability_ownership_must_align(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    plan_path = epic / "file-plan-story-01.yaml"
-    plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
-    plan["proof_obligations"] = []
-    _dump(plan_path, plan)
-    _refresh_pre_review_fingerprint(repo, epic)
-
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("AC-001 has no story proof obligation" in error for error in errors)
-
-    repo, epic = _build_valid_epic(tmp_path / "owner")
-    second_plan = yaml.safe_load(
-        (epic / "file-plan-story-01.yaml").read_text(encoding="utf-8")
-    )
-    second_plan["story_id"] = "story-02"
-    second_plan["story_title"] = "Verify configured behavior"
-    second_plan["proof_obligations"] = []
-    _dump(epic / "file-plan-story-02.yaml", second_plan)
-    trace_path = epic / "acceptance-traceability.yaml"
-    trace = yaml.safe_load(trace_path.read_text(encoding="utf-8"))
-    trace["acceptance_items"][0]["story"] = "story-02"
-    _dump(trace_path, trace)
-    _refresh_pre_review_fingerprint(repo, epic)
-
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("does not match manifest owner_story" in error for error in errors)
-
-
-def test_traceability_requires_assertions_commands_and_manifest_source(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    trace_path = epic / "acceptance-traceability.yaml"
-    trace = yaml.safe_load(trace_path.read_text(encoding="utf-8"))
-    item = trace["acceptance_items"][0]
-    item["tests"]["required_assertions"] = []
-    item["runtime_evidence"] = {"required": True, "commands": [], "evidence": []}
-    item["source"]["anchor"] = "Acceptance Criteria"
-    _dump(trace_path, trace)
-    _refresh_pre_review_fingerprint(repo, epic)
-
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any(
-        "tests.required_assertions must not be empty" in error for error in errors
-    )
-    assert any(
-        "runtime_evidence.commands must not be empty" in error for error in errors
-    )
-    assert any(
-        "source does not match manifest requirement source" in error for error in errors
-    )
-
-
-def test_manifest_indexes_all_stable_decisions(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    pdr = epic / "pdr.md"
-    pdr.write_text(
-        pdr.read_text(encoding="utf-8") + "\n## PDR-002\n\nStatus: Accepted\n",
-        encoding="utf-8",
-    )
-
-    errors = _validate(repo, epic, phase="architecture")
-    assert any("missing stable decisions: PDR-002" in error for error in errors)
-
-
-def test_command_defines_bounded_convergence_and_targeted_reviewer_scope() -> None:
-    command = COMMAND_PATH.read_text(encoding="utf-8")
-    reviewer = REVIEWER_PATH.read_text(encoding="utf-8")
-    architect = ARCHITECT_PATH.read_text(encoding="utf-8")
-
-    assert "### Bounded correction convergence" in command
-    assert "--phase review" in command
-    assert "continue without asking the user" in command
-    assert "targeted verification remains open" not in command
-    assert "one full review" in command
-    assert "two for high/critical" in command
-    assert "### Pre-review contract challenge" in command
-    assert "--print-input-fingerprint" in command
-    assert "pre-review audit has the current input fingerprint" in reviewer
-    assert "Scope Epic Refine V2 precedence" in architect
-    assert "fewest independently verifiable stories" in architect
-    assert "Do not restart a\n  broad review" in reviewer
-    assert "status: corrected" in reviewer
-
-
-def test_malformed_pre_review_audit_reports_contract_errors(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    audit_path = epic / "reviews/refine-v2-001/pre-review-audit.yaml"
-    audit = yaml.safe_load(audit_path.read_text(encoding="utf-8"))
-    audit.update(
-        {
-            "schema_version": 99,
-            "epic_id": "OTHER",
-            "input_fingerprint": "stale",
-            "canonical_requirement_source": "details.md",
-            "covered_requirement_ids": ["AC-UNKNOWN", 2],
-            "untracked_normative_statements": ["details.md:1"],
-            "unindexed_decision_ids": ["PDR-999"],
-            "unresolved_items": ["open"],
-            "contract_flows": [
+            "reviews": [
                 {
-                    "id": "FLOW-001",
-                    "requirement_ids": ["AC-UNKNOWN"],
-                    "authority": "",
-                    "producer": "",
-                    "transport": "",
-                    "state_or_persistence": "",
-                    "consumer": "",
-                    "proof": "",
-                    "status": "open",
-                },
-                "not-a-row",
-            ],
-            "counterexamples": "bad",
-            "capability_checks": [
-                {
-                    "capability": "common",
-                    "check_id": "authority-and-ownership",
-                    "evidence": "",
-                    "status": "open",
-                },
-                {
-                    "capability": "common",
-                    "check_id": "authority-and-ownership",
-                    "evidence": "duplicate",
-                    "status": "passed",
-                },
-                "not-a-row",
-            ],
-            "validation_commands": [
-                {"command": "", "result": "failed", "evidence": ""},
-                "not-a-row",
-            ],
-        }
+                    "duration_seconds": 12,
+                    "retry_count": 0,
+                }
+            ]
+        },
     )
-    _dump(audit_path, audit)
 
-    errors = _validate(repo, epic, phase="pre_review")
-    expected_fragments = (
-        "schema_version must be 1",
-        "does not match profile",
-        "input_fingerprint is stale",
-        "canonical_requirement_source must be 'acceptance-criteria.md'",
-        "covered_requirement_ids values must be non-empty strings",
-        "missing covered implementation requirements: AC-001",
-        "covers unknown requirements: AC-UNKNOWN",
-        "untracked_normative_statements must be empty",
-        "unindexed_decision_ids must be empty",
-        "unresolved_items must be empty",
-        "contract_flows[2] must be a mapping",
-        "counterexamples must be a list",
-        "references unknown requirements: AC-UNKNOWN",
-        "status must be passed",
-        "duplicate capability check",
-        "missing capability checks",
-        "result must be passed",
-        "validation_commands[2] must be a mapping",
-    )
-    for fragment in expected_fragments:
-        assert any(fragment in error for error in errors), fragment
+    errors, validator = _validate(repo, epic, "handoff")
+    metrics = validator.metrics()
+
+    assert errors == []
+    assert any("possible untracked normative statement" in a for a in validator.advisories)
+    assert metrics["review_duration_seconds"] == 12
+    assert metrics["review_retry_count"] == 0
+    assert metrics["review_output_count"] == 1
+    assert metrics["review_metadata_count"] == 1
+    assert metrics["workflow_elapsed_seconds"] == 600
 
 
-@pytest.mark.parametrize(
-    ("details_status", "review_decision", "expected"),
-    [
-        (
-            "draft",
-            "Decision: Approved for implementation",
-            "status must be ready-for-implementation",
-        ),
-        (
-            "ready-for-implementation",
-            "Decision: Pending",
-            "must contain 'Decision: Approved",
-        ),
-    ],
-)
-def test_ready_markers_are_required(
-    tmp_path: Path,
-    details_status: str,
-    review_decision: str,
-    expected: str,
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    details = epic / "details.md"
-    details.write_text(
-        details.read_text().replace("ready-for-implementation", details_status)
-    )
-    _write(epic / "refinement-review.md", f"# Review\n\n{review_decision}\n")
+def test_validator_early_guards_and_yaml_errors(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    invalid_phase = REFINE.RefinementValidator(
+        epic, "invented", POLICY_PATH, repo
+    ).validate()
+    assert invalid_phase == ["unsupported validation phase: invented"]
 
-    errors = _validate(repo, epic)
+    missing_epic = REFINE.RefinementValidator(
+        repo / "missing", "profile", POLICY_PATH, repo
+    ).validate()
+    assert any("epic directory does not exist" in e for e in missing_epic)
 
-    assert any(expected in error for error in errors)
+    missing_repo = REFINE.RefinementValidator(
+        epic, "profile", POLICY_PATH, repo / "missing"
+    ).validate()
+    assert any("repository root does not exist" in e for e in missing_repo)
+
+    bad_policy = tmp_path / "bad-policy.yaml"
+    _write(bad_policy, "schema_version: 1\nschema_version: 2\n")
+    errors = REFINE.RefinementValidator(epic, "profile", bad_policy, repo).validate()
+    assert any("duplicate key" in e for e in errors)
+
+    _write(epic / "refinement-profile.yaml", "epic_id: [unterminated\n")
+    errors, _ = _validate(repo, epic, "profile")
+    assert any("invalid refinement profile" in e for e in errors)
 
 
-def test_cli_main_reports_success_and_failure(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
+def test_cli_scaffold_validation_and_metrics(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo, epic = _build_repo(tmp_path)
+    metrics_path = tmp_path / "metrics.yaml"
 
     assert (
-        VALIDATOR.main(
+        REFINE.main(
             [
                 str(epic),
                 "--phase",
@@ -979,34 +934,22 @@ def test_cli_main_reports_success_and_failure(
                 str(POLICY_PATH),
                 "--repo-root",
                 str(repo),
+                "--scaffold",
+                "--metrics-output",
+                str(metrics_path),
             ]
         )
         == 0
     )
+    assert _load(metrics_path)["phase"] == "handoff"
     assert "Refinement validation passed" in capsys.readouterr().out
 
+    profile_path = epic / "refinement-profile.yaml"
+    profile = _load(profile_path)
+    profile["schema_version"] = 2
+    _dump(profile_path, profile)
     assert (
-        VALIDATOR.main(
-            [
-                str(epic),
-                "--phase",
-                "architecture",
-                "--policy",
-                str(POLICY_PATH),
-                "--repo-root",
-                str(repo),
-                "--print-input-fingerprint",
-            ]
-        )
-        == 0
-    )
-    fingerprint = capsys.readouterr().out.strip()
-    assert len(fingerprint) == 64
-    int(fingerprint, 16)
-
-    (epic / "refinement-profile.yaml").unlink()
-    assert (
-        VALIDATOR.main(
+        REFINE.main(
             [
                 str(epic),
                 "--phase",
@@ -1015,435 +958,276 @@ def test_cli_main_reports_success_and_failure(
                 str(POLICY_PATH),
                 "--repo-root",
                 str(repo),
+                "--scaffold",
             ]
         )
         == 1
     )
-    assert "Refinement validation failed" in capsys.readouterr().err
+    assert "Refinement scaffold failed" in capsys.readouterr().err
 
 
-def test_validator_early_guards_and_repo_root_inference(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    inferred = VALIDATOR.RefinementValidator(epic, "profile", POLICY_PATH)
-    assert inferred.repo_root == repo.resolve()
-
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    fallback = VALIDATOR.RefinementValidator(outside, "profile", POLICY_PATH)
-    assert fallback.repo_root == Path.cwd().resolve()
-
-    invalid_phase = VALIDATOR.RefinementValidator(epic, "unknown", POLICY_PATH, repo)
-    assert invalid_phase.validate() == ["unsupported validation phase: unknown"]
-
-    missing_epic = VALIDATOR.RefinementValidator(
-        repo / "missing", "profile", POLICY_PATH, repo
-    )
-    assert "epic directory does not exist" in missing_epic.validate()[0]
-
-    missing_policy = VALIDATOR.RefinementValidator(
-        epic, "profile", repo / "missing.yaml", repo
-    )
-    assert any(
-        "missing refinement policy" in error for error in missing_policy.validate()
+def test_helper_guards_and_scaffold_malformed_rows(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    assert REFINE._infer_repo_root(epic) == repo
+    assert REFINE._infer_repo_root(tmp_path / "elsewhere") == Path.cwd().resolve()
+    with pytest.raises(ValueError, match="missing fixture"):
+        REFINE._load_yaml(tmp_path / "missing.yaml", "fixture")
+    non_mapping = tmp_path / "list.yaml"
+    _write(non_mapping, "- item\n")
+    with pytest.raises(ValueError, match="must contain a YAML mapping"):
+        REFINE._load_yaml(non_mapping, "fixture")
+    assert (
+        REFINE.RefinementScaffolder._line_summary("AC-999", "AC-999")
+        == "Complete judgment for AC-999"
     )
 
-    invalid_policy = repo / "invalid-policy.yaml"
-    _write(invalid_policy, "- not-a-mapping\n")
-    invalid = VALIDATOR.RefinementValidator(epic, "profile", invalid_policy, repo)
-    assert any("must contain a YAML mapping" in error for error in invalid.validate())
-
-
-def test_malformed_policy_shapes_are_reported(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    policy = yaml.safe_load(POLICY_PATH.read_text())
-    policy["phase_required_artifacts"] = []
-    policy["allowed_architecture_scopes"] = "backend"
-    policy["capabilities"] = []
-    policy["risk_review_policy"] = []
-    policy_path = repo / "malformed-policy.yaml"
-    _dump(policy_path, policy)
-
-    validator = VALIDATOR.RefinementValidator(epic, "profile", policy_path, repo)
-    errors = validator.validate()
-
-    assert any(
-        "phase_required_artifacts must be a mapping" in error for error in errors
-    )
-    assert any("allowed values for architecture_scope" in error for error in errors)
-    assert any("policy capabilities must be a mapping" in error for error in errors)
-    assert any("risk_review_policy must be a mapping" in error for error in errors)
-
-    policy = yaml.safe_load(POLICY_PATH.read_text())
-    policy["phase_required_artifacts"].pop("profile")
-    policy["risk_review_policy"]["low"] = []
-    _dump(policy_path, policy)
-    errors = VALIDATOR.RefinementValidator(
-        epic, "profile", policy_path, repo
-    ).validate()
-    assert any("no artifact list for phase profile" in error for error in errors)
-    assert any("no review mapping for risk low" in error for error in errors)
-
-
-def test_malformed_profile_reports_all_contract_errors(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    profile_path = epic / "refinement-profile.yaml"
-    profile = yaml.safe_load(profile_path.read_text())
-    profile.update(
+    scaffolder = REFINE.RefinementScaffolder(epic, POLICY_PATH, repo)
+    trace = scaffolder._traceability(
+        _load(epic / "refinement-profile.yaml"),
         {
-            "schema_version": 99,
-            "epic_id": "",
-            "classification_rationale": "",
-            "architecture_scope": "invalid",
-            "risk_level": "invalid",
-            "capabilities": ["unknown", "unknown", {"not": "scalar"}],
-            "review": {
-                "roles": [],
-                "maximum_full_reviews": -1,
-                "maximum_targeted_verifications": 2,
-            },
-        }
-    )
-    _dump(profile_path, profile)
-
-    errors = _validate(repo, epic, phase="profile")
-
-    assert any("schema_version must be 2" in error for error in errors)
-    assert any("epic_id must be a non-empty string" in error for error in errors)
-    assert any(
-        "classification_rationale must be a non-empty string" in error
-        for error in errors
-    )
-    assert any("architecture_scope must be one of" in error for error in errors)
-    assert any("risk_level must be one of" in error for error in errors)
-    assert any("unknown capability" in error for error in errors)
-    assert any("duplicate capabilities" in error for error in errors)
-    assert any("contains a non-scalar value" in error for error in errors)
-    assert any("review.roles must be a non-empty list" in error for error in errors)
-    assert any("must be a non-negative integer" in error for error in errors)
-
-    profile["review"] = "not-a-mapping"
-    profile["capabilities"] = "not-a-list"
-    _dump(profile_path, profile)
-    errors = _validate(repo, epic, phase="profile")
-    assert any("capabilities must be a list" in error for error in errors)
-    assert any("review must be a mapping" in error for error in errors)
-
-
-def test_malformed_manifest_rows_are_reported(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    manifest_path = epic / "refinement-manifest.yaml"
-    manifest = yaml.safe_load(manifest_path.read_text())
-    requirement = manifest["requirements"][0]
-    requirement.update(
-        {
-            "id": "",
-            "source": "bad-source",
-            "summary": "",
-            "type": "unknown",
-            "risk": "unknown",
-            "implementation_required": "yes",
-            "affected_surfaces": "bad",
-            "proof_obligations": "bad",
-        }
-    )
-    manifest["schema_version"] = 99
-    manifest["epic_id"] = "OTHER"
-    manifest["requirements"].append("not-a-row")
-    manifest["decisions"] = [
-        {
-            "id": "",
-            "source": {"artifact": "missing.md", "anchor": ""},
-            "summary": "",
-            "status": "",
+            "requirements": [
+                "bad",
+                {"id": "AC-X", "implementation_required": False},
+                {"id": 42, "implementation_required": True},
+            ]
         },
-        "not-a-row",
-    ]
-    manifest["artifacts"] = [
-        {
-            "id": "ART-X",
-            "path": "missing/artifact.yaml",
-            "kind": "",
-            "capabilities": "bad",
-            "authority": "unknown",
-        },
-        {
-            "id": "ART-X",
-            "path": str((repo / "config/e-001.yaml").resolve()),
-            "kind": "authored_config",
-            "capabilities": ["unknown"],
-            "authority": "canonical",
-        },
-    ]
-    manifest["open_items"] = [
-        {"id": "", "issue": "", "status": "unknown"},
-        "not-a-row",
-    ]
-    _dump(manifest_path, manifest)
-
-    errors = _validate(repo, epic, phase="architecture")
-
-    expected_fragments = (
-        "schema_version must be 2",
-        "does not match profile",
-        "requirements[2] must be a mapping",
-        "source must be a mapping",
-        "implementation_required must be boolean",
-        "affected_surfaces must be a list",
-        "proof_obligations must be a list",
-        "source artifact does not exist",
-        "artifact path does not exist",
-        "capabilities must be a list",
-        "references unknown capability",
-        "duplicate artifact ids",
-        "has no artifact tagged for selected capability",
+        tmp_path / "new-traceability.yaml",
     )
-    for fragment in expected_fragments:
-        assert any(fragment in error for error in errors), fragment
-
-
-def test_missing_and_malformed_boundary_plans_are_reported(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    plan_path = epic / "file-plan-story-01.yaml"
-    plan_path.unlink()
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("missing implementation boundary plans" in error for error in errors)
-
-    _write(plan_path, "- not-a-mapping\n")
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("must contain a YAML mapping" in error for error in errors)
+    assert trace["acceptance_items"] == []
 
     _dump(
-        plan_path,
+        epic / "file-plan-story-99.yaml",
         {
-            "epic_id": "",
-            "story_id": "story-01",
-            "story_title": "",
-            "depends_on": "not-a-list",
-            "required_contracts": "bad",
-            "required_touchpoints": "bad",
-            "candidate_files": "bad",
-            "forbidden_changes": "bad",
-            "proof_obligations": "bad",
+            "story_id": 99,
+            "proof_obligations": ["bad"],
         },
     )
-    duplicate = yaml.safe_load(plan_path.read_text())
-    duplicate["story_title"] = "Duplicate"
-    _dump(epic / "file-plan-story-02.yaml", duplicate)
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("depends_on must be a list" in error for error in errors)
-    assert any("required_contracts must be a list" in error for error in errors)
-    assert any("duplicate story_id" in error for error in errors)
-
-
-def test_structured_boundary_entries_are_validated(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    plan_path = epic / "file-plan-story-01.yaml"
-    plan = yaml.safe_load(plan_path.read_text())
-    plan.update(
+    _dump(
+        epic / "file-plan-story-98.yaml",
         {
-            "required_contracts": [
-                {
-                    "id": "contract-1",
-                    "contract": "",
-                    "obligation": "Honor the authored configuration.",
-                    "verification": "python3 -m pytest",
-                },
-                "not-a-mapping",
-            ],
-            "required_touchpoints": [
-                {
-                    "id": "touchpoint-1",
-                    "surface": "configuration loader",
-                    "obligation": "Load the flag.",
-                    "evidence_required": "integration test",
-                }
-            ],
-            "candidate_files": [
-                {
-                    "path": "src/config.py",
-                    "reason": "Existing loader",
-                    "advisory": False,
-                }
-            ],
-            "forbidden_changes": [
-                {"path_or_surface": "public schema", "rule": "Do not rename fields."}
-            ],
-            "proof_obligations": [
-                {
-                    "id": "proof-1",
-                    "acceptance_rows": ["AC-UNKNOWN", 2],
-                    "required_evidence": "integration",
-                    "command_hint": "python3 -m pytest",
-                    "success_condition": "The configured behavior is enabled.",
-                }
-            ],
-        }
+            "story_id": "story-98",
+            "proof_obligations": ["bad"],
+        },
     )
-    _dump(plan_path, plan)
-
-    errors = _validate(repo, epic, phase="pre_review")
-
-    assert any("contract must be a non-empty string" in error for error in errors)
-    assert any("required_contracts[2] must be a mapping" in error for error in errors)
-    assert any("candidate_files[1] advisory must be true" in error for error in errors)
-    assert any("acceptance_rows values must be strings" in error for error in errors)
-    assert any("unknown acceptance rows: AC-UNKNOWN" in error for error in errors)
+    assert scaffolder._proof_index()["AC-001"][0][0] == "story-01"
 
 
-@pytest.mark.parametrize(
-    ("scope", "artifact_path", "expected"),
-    [
-        (
-            "backend",
-            "docs/architecture/frontend/13-specs/api.yaml",
-            "backend architecture",
-        ),
-        (
-            "frontend",
-            "docs/architecture/backend/13-specs/api.yaml",
-            "frontend architecture",
-        ),
-        (
-            "system",
-            "docs/architecture/backend/13-specs/api.yaml",
-            "system architecture",
-        ),
-    ],
-)
-def test_architecture_artifact_path_must_match_profile_scope(
+def test_policy_shape_profile_shape_and_required_artifact_errors(
     tmp_path: Path,
-    scope: str,
-    artifact_path: str,
-    expected: str,
 ) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
+    repo, epic = _build_repo(tmp_path)
+    policy = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
+
+    malformed_policy = dict(policy)
+    malformed_policy["phase_required_artifacts"] = []
+    malformed_path = tmp_path / "malformed-policy.yaml"
+    _dump(malformed_path, malformed_policy)
+    errors = REFINE.RefinementValidator(
+        epic, "profile", malformed_path, repo
+    ).validate()
+    assert "policy phase_required_artifacts must be a mapping" in errors
+
+    missing_phase_policy = dict(policy)
+    missing_phase_policy["phase_required_artifacts"] = {}
+    missing_phase_path = tmp_path / "missing-phase-policy.yaml"
+    _dump(missing_phase_path, missing_phase_policy)
+    errors = REFINE.RefinementValidator(
+        epic, "profile", missing_phase_path, repo
+    ).validate()
+    assert any("policy has no artifact list" in error for error in errors)
+
+    bad_artifact_policy = dict(policy)
+    bad_artifact_policy["phase_required_artifacts"] = {"profile": [42, "missing.md"]}
+    bad_artifact_path = tmp_path / "bad-artifact-policy.yaml"
+    _dump(bad_artifact_path, bad_artifact_policy)
+    errors = REFINE.RefinementValidator(
+        epic, "profile", bad_artifact_path, repo
+    ).validate()
+    assert sum("missing profile artifact" in error for error in errors) == 2
+
     profile_path = epic / "refinement-profile.yaml"
-    profile = yaml.safe_load(profile_path.read_text())
-    profile["architecture_scope"] = scope
+    profile = _load(profile_path)
+    profile["review"] = []
     _dump(profile_path, profile)
-    _write(repo / artifact_path, "contract: test\n")
-    manifest_path = epic / "refinement-manifest.yaml"
-    manifest = yaml.safe_load(manifest_path.read_text())
-    manifest["artifacts"][0]["path"] = artifact_path
-    _dump(manifest_path, manifest)
-
-    errors = _validate(repo, epic, phase="architecture")
-
-    assert any(expected in error for error in errors)
-
-
-def test_malformed_traceability_rows_are_reported(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    traceability_path = epic / "acceptance-traceability.yaml"
-    traceability = yaml.safe_load(traceability_path.read_text())
-    row = traceability["acceptance_items"][0]
-    row.update(
-        {
-            "story": "story-missing",
-            "requirement": "",
-            "source": "bad",
-            "implementation": "bad",
-            "tests": "bad",
-            "runtime_evidence": "bad",
-            "status": "",
-        }
-    )
-    traceability["acceptance_items"].append(dict(row))
-    _dump(traceability_path, traceability)
-
-    errors = _validate(repo, epic, phase="pre_review")
-
-    assert any("references unknown story" in error for error in errors)
-    assert any("implementation must be a mapping" in error for error in errors)
-    assert any("duplicate acceptance traceability ids" in error for error in errors)
-
-    traceability["acceptance_items"] = "not-a-list"
-    _dump(traceability_path, traceability)
-    errors = _validate(repo, epic, phase="pre_review")
-    assert any("acceptance_items must be a list" in error for error in errors)
-
-
-def test_malformed_findings_and_review_rows_are_reported(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    findings_path = epic / "refinement-findings.yaml"
-    findings = yaml.safe_load(findings_path.read_text())
-    invalid_finding = {
-        "id": "RF-001",
-        "fingerprint": "same",
-        "severity": "invalid",
-        "category": "invalid",
-        "status": "invalid",
-        "evidence": "",
-        "affected_manifest_ids": ["AC-UNKNOWN"],
-        "owner": "",
-        "closure_test": "",
-        "requires_user": "yes",
-    }
-    findings["findings"] = [invalid_finding, dict(invalid_finding), "not-a-row"]
-    findings["review"]["targeted_verification_count"] = -1
-    findings["review"]["outputs"] = "not-a-list"
-    _dump(findings_path, findings)
-
-    errors = _validate(repo, epic)
-
-    assert any("review.outputs must be a list" in error for error in errors)
-    assert any(
-        "targeted_verification_count must be a non-negative integer" in error
-        for error in errors
-    )
-    assert any("findings[3] must be a mapping" in error for error in errors)
-    assert any("references unknown manifest ids" in error for error in errors)
-    assert any("requires_user must be boolean" in error for error in errors)
-    assert any("duplicate finding ids" in error for error in errors)
-    assert any("duplicate finding fingerprints" in error for error in errors)
-
-    findings["review"] = "not-a-mapping"
-    findings["findings"] = []
-    _dump(findings_path, findings)
-    errors = _validate(repo, epic)
+    errors, _ = _validate(repo, epic, "profile")
     assert any("review must be a mapping" in error for error in errors)
-    assert any("review.completed_roles must be a list" in error for error in errors)
+
+    profile["review"] = {
+        "assignments": ["bad"],
+        "maximum_full_reviews": 9,
+        "maximum_targeted_verifications": 9,
+    }
+    _dump(profile_path, profile)
+    errors, _ = _validate(repo, epic, "profile")
+    assert any("review.assignments[1] must be a mapping" in error for error in errors)
+    assert any("review.maximum_full_reviews must be 1" in error for error in errors)
+
+    profile["review"]["assignments"] = []
+    _dump(profile_path, profile)
+    errors, _ = _validate(repo, epic, "profile")
+    assert any("review.assignments must be a non-empty list" in error for error in errors)
 
 
-@pytest.mark.parametrize(
-    ("details", "remove_review", "expected"),
-    [
-        ("# No frontmatter\n", False, "must start with YAML frontmatter"),
-        ("---\nstatus: [\n---\n", False, "invalid frontmatter"),
-        ("---\n- list\n---\n", False, "frontmatter in"),
-        (
-            "---\nepic_id: E-001\ntitle: Test\nstatus: ready-for-implementation\n---\n",
-            True,
-            "cannot read",
-        ),
-    ],
-)
-def test_malformed_ready_artifacts_are_reported(
+def test_missing_and_malformed_phase_artifacts_report_cleanly(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    (epic / "design.md").unlink()
+    errors, _ = _validate(repo, epic, "product")
+    assert any("missing product artifact" in error for error in errors)
+    assert any("cannot read product artifact" in error for error in errors)
+
+    _write(epic / "design.md", _design("low", []))
+    _write(epic / "refinement-manifest.yaml", "requirements: [unterminated\n")
+    errors, _ = _validate(repo, epic, "architecture")
+    assert any("invalid refinement manifest" in error for error in errors)
+
+    _write(epic / "refinement-manifest.yaml", "{}\n")
+    errors, _ = _validate(repo, epic, "architecture")
+    assert any("schema_version" in error for error in errors) is False
+
+    repo2, epic2 = _build_repo(tmp_path / "second")
+    (epic2 / "file-plan-story-01.yaml").unlink()
+    errors, _ = _validate(repo2, epic2, "reconcile")
+    assert any("missing implementation boundary plans" in error for error in errors)
+
+
+def test_ready_status_and_review_output_read_errors(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    validator = REFINE.RefinementValidator(epic, "handoff", POLICY_PATH, repo)
+
+    _write(epic / "details.md", "# No frontmatter\n")
+    validator._validate_ready_status()
+    assert any("must start with YAML frontmatter" in error for error in validator.errors)
+
+    validator.errors.clear()
+    _write(epic / "details.md", "---\nstatus: [unterminated\n---\n")
+    validator._validate_ready_status()
+    assert any("invalid frontmatter" in error for error in validator.errors)
+
+    validator.errors.clear()
+    _write(epic / "details.md", "---\n- list\n---\n")
+    validator._validate_ready_status()
+    assert any("frontmatter in" in error and "must be a mapping" in error for error in validator.errors)
+
+    validator.errors.clear()
+    _write(
+        epic / "details.md",
+        "---\nepic_id: E-001\nstatus: ready-for-implementation\n---\n",
+    )
+    (epic / "refinement-review.md").unlink()
+    validator._validate_ready_status()
+    assert any("cannot read" in error for error in validator.errors)
+
+    validator.errors.clear()
+    assert validator._review_markers(epic, epic / "findings.yaml") == {}
+    assert any("cannot read review output" in error for error in validator.errors)
+
+
+def test_metrics_tolerate_invalid_metadata_and_count_findings(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path)
+    findings_path = epic / "refinement-findings.yaml"
+    findings = _load(findings_path)
+    findings["review"]["targeted_verification_count"] = 1
+    findings["findings"] = [
+        {"severity": "major", "category": "architecture"},
+        "not-a-row",
+    ]
+    _dump(findings_path, findings)
+    _write(
+        epic / "reviews/refine-v3-001/metadata-invalid.yaml",
+        "reviews: [unterminated\n",
+    )
+    _dump(
+        epic / "reviews/refine-v3-001/metadata-rows.yaml",
+        {"reviews": ["bad", {"duration_seconds": 3, "retry_count": 1}]},
+    )
+    _dump(
+        epic / "reviews/refine-v3-001/metadata-shape.yaml",
+        {"reviews": "bad"},
+    )
+    profile = _load(epic / "refinement-profile.yaml")
+    profile["workflow_completed_at"] = "not-a-date"
+    _dump(epic / "refinement-profile.yaml", profile)
+    details = (epic / "details.md").read_text(encoding="utf-8")
+    _write(epic / "details.md", details + "\n".join(["This must be tracked."] * 30))
+
+    _, validator = _validate(repo, epic, "profile")
+    metrics = validator.metrics()
+
+    assert len(validator.advisories) == 25
+    assert metrics["review_duration_seconds"] == 3
+    assert metrics["review_retry_count"] == 1
+    assert metrics["targeted_verification_count"] == 1
+    assert metrics["findings_by_severity"] == {"major": 1}
+    assert metrics["findings_by_category"] == {"architecture": 1}
+    assert metrics["workflow_elapsed_seconds"] is None
+
+
+def test_validation_helpers_cover_source_identity_and_collection_errors(
     tmp_path: Path,
-    details: str,
-    remove_review: bool,
-    expected: str,
 ) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    _write(epic / "details.md", details)
-    if remove_review:
-        (epic / "refinement-review.md").unlink()
+    repo, epic = _build_repo(tmp_path)
+    validator = REFINE.RefinementValidator(epic, "architecture", POLICY_PATH, repo)
+    validator.policy = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
+    validator.profile = {"epic_id": "E-001"}
+    marker = epic / "refinement-manifest.yaml"
 
-    errors = _validate(repo, epic)
-
-    assert any(expected in error for error in errors)
-
-
-def test_absolute_and_repo_relative_sources_are_supported(tmp_path: Path) -> None:
-    repo, epic = _build_valid_epic(tmp_path)
-    manifest_path = epic / "refinement-manifest.yaml"
-    manifest = yaml.safe_load(manifest_path.read_text())
-    manifest["requirements"][0]["source"]["artifact"] = str(
-        (epic / "acceptance-criteria.md").resolve()
+    validator._validate_source({}, marker, "row")
+    validator._validate_source(
+        {"artifact": "missing.md", "anchor": "A"}, marker, "row"
     )
-    manifest["decisions"][0]["source"]["artifact"] = (
-        "docs/epics/E-001-adaptive-refinement/pdr.md"
+    validator._validate_source(
+        {"artifact": "acceptance-criteria.md", "anchor": ""}, marker, "row"
     )
-    _dump(manifest_path, manifest)
+    validator._validate_source(
+        {"artifact": "acceptance-criteria.md", "anchor": "MISSING"}, marker, "row"
+    )
+    validator._match_epic_id({"epic_id": "OTHER"}, marker)
+    assert validator._resolve_repo_path(str(epic)) == epic
+    validator._require_mapping_list({}, "rows", marker, allow_empty=False)
+    validator._require_mapping_list(
+        {"rows": []}, "rows", marker, allow_empty=False
+    )
+    validator._require_mapping_list(
+        {"rows": ["bad"]}, "rows", marker, allow_empty=True
+    )
+    validator._require_string_list([], "values", marker, allow_empty=False)
+    validator._require_allowed("x", None, "value", marker)
+    validator._check_unique([["not-hashable"]], "values", marker)
 
-    assert _validate(repo, epic, phase="architecture") == []
+    joined = "\n".join(validator.errors)
+    for expected in (
+        "source.artifact must be non-empty",
+        "source artifact does not exist",
+        "source.anchor must be non-empty",
+        "source anchor not found",
+        "does not match profile",
+        "rows must be a list",
+        "rows must not be empty",
+        "rows[1] must be a mapping",
+        "values must not be empty",
+        "policy allowed values",
+        "contains a non-scalar value",
+    ):
+        assert expected in joined
+
+
+def test_command_and_reviewer_encode_v3_quality_controls() -> None:
+    command = COMMAND_PATH.read_text(encoding="utf-8")
+    reviewer = REVIEWER_PATH.read_text(encoding="utf-8")
+
+    for expected in (
+        "design.md",
+        "Phase 2: Evidence-Backed Adversarial Design",
+        "Phase 3: Implementation Handoff and Reconciliation",
+        "Launch all required assignment commands before waiting",
+        "--ignore-user-config",
+        "--safe-mode",
+        "--retries 0",
+        "gpt-5.6-terra",
+    ):
+        assert expected in command
+    assert "pre-review-audit.yaml" in command
+    assert "Do not create the removed split epic files" in command
+    assert "REVIEW_PROVIDER" in reviewer
+    assert "REVIEW_MISSION" in reviewer
+    assert "semantic_core" in reviewer

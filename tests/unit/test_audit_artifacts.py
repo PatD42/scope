@@ -63,19 +63,25 @@ def _build_repo(
     _dump(
         epic / "refinement-profile.yaml",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "epic_id": "E-001",
+            "author_provider": "codex",
             "architecture_scope": "backend",
             "risk_level": risk,
             "capabilities": capabilities or ["content_configuration"],
-            "classification_rationale": "Test fixture.",
-            "review": {},
+            "review": {
+                "assignments": [
+                    {"provider": "claude", "mission": "semantic_core"}
+                ],
+                "maximum_full_reviews": 1,
+                "maximum_targeted_verifications": 1,
+            },
         },
     )
     _dump(
         epic / "refinement-manifest.yaml",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "epic_id": "E-001",
             "requirements": [
                 {
@@ -101,24 +107,21 @@ def _build_repo(
     _dump(
         epic / "acceptance-traceability.yaml",
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "epic_id": "E-001",
             "acceptance_items": [
                 {
                     "id": "AC-001",
                     "story": "story-01",
-                    "requirement": "The real delivery path succeeds.",
                     "source": {
-                        "doc": "docs/epics/E-001-auditable-delivery/acceptance-criteria.md",
-                        "section": "AC-001",
+                        "artifact": "acceptance-criteria.md",
+                        "anchor": "AC-001",
                     },
+                    "proof_obligation_ids": ["proof-001"],
                     "implementation": {
-                        "expected_files": ["src/delivery.py"],
                         "actual_files": ["src/delivery.py"],
                     },
                     "tests": {
-                        "expected_files": ["tests/test_delivery.py"],
-                        "required_assertions": ["The delivery path returns success."],
                         "actual_tests": ["tests/test_delivery.py"],
                     },
                     "runtime_evidence": {
@@ -556,11 +559,14 @@ def test_pre_review_rejects_pending_or_missing_required_evidence(tmp_path: Path)
     trace_path = epic / "acceptance-traceability.yaml"
     trace = _load(trace_path)
     trace["acceptance_items"][0]["implementation"]["actual_files"] = []
-    trace["acceptance_items"][0]["tests"]["required_assertions"] = []
     trace["acceptance_items"][0]["tests"]["actual_tests"] = []
     trace["acceptance_items"][0]["runtime_evidence"]["commands"] = []
     trace["acceptance_items"][0]["runtime_evidence"]["evidence"] = []
     _dump(trace_path, trace)
+    manifest_path = epic / "refinement-manifest.yaml"
+    manifest = _load(manifest_path)
+    manifest["requirements"][0]["proof_obligations"] = []
+    _dump(manifest_path, manifest)
     attempt = _prepare(repo, epic)
 
     errors = _validate(repo, epic, attempt, "pre_review")

@@ -53,6 +53,7 @@ jobs:
             ".claude/commands/audit_epic/reviewer-audit.md",
             ".claude/agents/developer.md",
             ".claude/skills/project-documentation/SKILL.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/design.md",
             ".claude/governance/developer-checklist.md",
             ".claude/config/refinement-policy.yaml",
             ".claude/config/audit-policy.yaml",
@@ -65,6 +66,7 @@ jobs:
             "plugins/scope/commands/audit_epic/reviewer-audit.md",
             "plugins/scope/agents/developer.md",
             "plugins/scope/skills/project-documentation/SKILL.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/design.md",
             "plugins/scope/governance/developer-checklist.md",
             "plugins/scope/config/refinement-policy.yaml",
             "plugins/scope/config/audit-policy.yaml",
@@ -111,7 +113,17 @@ jobs:
             "plugins/scope/commands/epic_refine/reviewer-architecture-codex.md",
             "plugins/scope/commands/epic_refine/reviewer-architecture-claude.md",
             "plugins/scope/commands/epic_refine/reviewer-architecture-agy.md",
-            "plugins/scope/commands/epic_refine/reviewer-architecture-glm.md"
+            "plugins/scope/commands/epic_refine/reviewer-architecture-glm.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/system-context.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/architecture.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/adr.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/pdr.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/test-strategy.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/system-context.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/architecture.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/adr.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/pdr.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/test-strategy.md"
           )
           foreach ($relativePath in $stalePaths) {
             $path = Join-Path $projectTarget $relativePath

@@ -65,9 +65,8 @@ You write BOTH production code AND tests. This creates a risk: you could weaken 
 1. **Load context** from task description:
    - Implementation boundary plan (story-specific)
    - Acceptance criteria: `docs/epics/{epic-dir}/acceptance-criteria.md`
-   - Acceptance traceability: `docs/epics/{epic-dir}/acceptance-traceability.yaml`
-   - Architecture: `docs/epics/{epic-dir}/architecture.md`
-   - ADRs: `docs/epics/{epic-dir}/adr.md`
+   - Generated acceptance view: `docs/epics/{epic-dir}/acceptance-traceability.yaml`
+   - Design, decisions, and proof strategy: `docs/epics/{epic-dir}/design.md`
    - System ADRs: `docs/architecture/09-adr-summary.md`
    - Lessons: `docs/lessons-learned/INDEX.md`
 

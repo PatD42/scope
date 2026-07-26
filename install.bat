@@ -112,6 +112,12 @@ for %%R in (reviewer-architecture-codex reviewer-architecture-claude reviewer-ar
     call :delete_if_exists "%CODEX_DIR%\commands\epic_refine\%%R.md"
     if errorlevel 1 goto :install_failed
 )
+for %%F in (system-context architecture adr pdr test-strategy) do (
+    call :delete_if_exists "%CLAUDE_DIR%\skills\project-documentation\templates-technical-arc42-c4\epic\%%F.md"
+    if errorlevel 1 goto :install_failed
+    call :delete_if_exists "%CODEX_DIR%\skills\project-documentation\templates-technical-arc42-c4\epic\%%F.md"
+    if errorlevel 1 goto :install_failed
+)
 
 echo.
 echo Installing Claude Files

@@ -64,8 +64,9 @@ SCOPE uses Claude Code or codex built-in features:
 - **TaskCreate/TaskUpdate** manage story dependencies and sequencing
 - **Git worktrees** isolate implementation from the main branch
 
-The v2 refinement and audit validators require Python 3 and PyYAML. Scope has no
-persistent service or database.
+The v3 refinement validator and v2 audit validator require Python 3 and PyYAML.
+Claude reviewer automation also uses `pexpect`. Scope has no persistent service
+or database.
 
 ## Installation
 
@@ -185,7 +186,7 @@ your-project/
 ├── docs/
 │   ├── product/            # Product docs (strategy, definition, decisions)
 │   ├── architecture/       # Technical docs (Arc42 sections 01-13)
-│   ├── epics/{epic-id}/    # Per-epic docs (acceptance criteria, file plans, ADRs)
+│   ├── epics/{epic-id}/    # Per-epic contract, design, story plans, and evidence
 │   └── releases/           # Release documentation
 ├── wip/
 │   └── {epic-id}/          # Git worktree per epic (implementation happens here)
@@ -211,7 +212,7 @@ full audits require a material boundary change or explicit authorization.
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
-- Python 3 with `PyYAML>=6,<7`
+- Python 3 with `PyYAML>=6,<7` and `pexpect>=4.9,<5`
 - Git
 
 ## License

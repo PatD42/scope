@@ -144,14 +144,12 @@ docs/
 │       └── adr/                  # Frontend-specific ADRs
 ├── epics/{epic-id-with-filesafe-title}/
 │   ├── details.md
-│   ├── system-context.md
 │   ├── acceptance-criteria.md
+│   ├── design.md
+│   ├── refinement-profile.yaml
+│   ├── refinement-manifest.yaml
 │   ├── acceptance-traceability.yaml
-│   ├── test-strategy.md
-│   ├── architecture.md
-│   ├── adr.md
-│   ├── pdr.md
-│   ├── file-plan.yaml
+│   ├── file-plan-story-NN.yaml
 │   └── implementation-summary.md
 ├── operations/
 │   ├── overview.md                # System inventory, access points, contacts
@@ -366,7 +364,7 @@ ADRs are scoped by component to keep decisions close to the code they affect.
 
 **Before creating a new ADR:**
 1. Scan `09-adr-summary.md` for the highest existing ADR number
-2. Also check epic-level `adr.md` files for inline ADRs (e.g., ADR-024 through ADR-036 exist in epic docs)
+2. Also check epic-level v3 `design.md` files for inline ADR sections
 3. Assign the next number in sequence
 
 **File naming:** `ADR-{NNN}-{kebab-title}.md` in the scope's `adr/` directory.
@@ -470,12 +468,10 @@ contracts, and error contracts.
 Every epic folder must contain these required artifacts:
 - `details.md`
 - `acceptance-criteria.md`
+- `design.md`
+- `refinement-profile.yaml`
+- `refinement-manifest.yaml`
 - `acceptance-traceability.yaml`
-- `system-context.md`
-- `architecture.md`
-- `adr.md`
-- `pdr.md`
-- `test-strategy.md`
 
 During refinement, the epic folder must also contain one or more
 `file-plan-story-*.yaml` implementation boundary plans before the epic can be
@@ -488,56 +484,31 @@ marked ready-for-implementation.
 
 ### details.md
 **Template:** `templates-technical-arc42-c4/epic/details.md`
-**Content:** Intent, requirements, acceptance criteria, test scenarios, components, risks
+**Content:** Intent, scope, non-goals, user value, success measures, constraints, dependencies, and risks
 **Frontmatter:** epic_id, title, status
 **Owners:** Product Owner, Architect
 **Readers:** SDET, Developer (rarely - use stories)
 
-### system-context.md
-**Template:** `templates-technical-arc42-c4/epic/system-context.md`
-**Content:** Technical analysis, risks, constraints, initial architectural thoughts
-**Owner:** Architect
-**Readers:** Product Owner, SDET
-**Trigger:** Before acceptance criteria definition
-
 ### acceptance-criteria.md
 **Template:** `templates-technical-arc42-c4/epic/acceptance-criteria.md`
-**Content:** Testable acceptance criteria in Given/When/Then format, edge cases
+**Content:** Canonical observable behavior declared under stable `AC-*`, `ERR-*`, and `E2E-*` headings
 **Owner:** Product Owner
 **Readers:** Architect, SDET
-**Trigger:** After system context analysis, before test strategy
+**Trigger:** After intent approval, before architecture design
+
+### design.md
+**Template:** `templates-technical-arc42-c4/epic/design.md`
+**Content:** Repository evidence, PDR/ADR decisions, architecture and ownership, failure/partial states, capability challenges, hostile cases, and verification strategy
+**Owners:** Product Owner for product decisions; Architect for architecture and proof
+**Readers:** Developer, SDET, independent refinement reviewers, Epic Housekeeping
+**Trigger:** Product and architecture refinement
 
 ### acceptance-traceability.yaml
 **Template:** `templates-technical-arc42-c4/epic/acceptance-traceability.yaml`
-**Content:** Machine-readable matrix mapping acceptance criteria and story behaviors to expected implementation surfaces, expected test files, required assertions, runtime evidence, status, and audit notes
-**Owner:** Architect during refinement, Developer during implementation, Auditor during audit
+**Content:** Generated v3 view mapping acceptance IDs to owner stories and proof IDs while reserving actual files, tests, runtime evidence, status, and audit notes for implementation/audit
+**Owner:** Validator for derived fields; Developer and Auditor for actual evidence
 **Readers:** Developer, Auditor, Epic Housekeeping
-**Trigger:** Created during epic refinement with implementation boundary plans; updated during implementation and audit
-
-### test-strategy.md
-**Template:** `templates-technical-arc42-c4/epic/test-strategy.md`
-**Content:** Test approach, test levels, mocking strategy, test data requirements
-**Owner:** Architect
-**Readers:** SDET, Developer
-**Trigger:** After acceptance criteria, before architecture design
-
-### architecture.md
-**Template:** `templates-technical-arc42-c4/epic/architecture.md`
-**Content:** Affected building blocks, runtime scenarios, C4 diagrams, integration points
-**Owner:** Architect
-**Readers:** SDET, Developer
-
-### adr.md
-**Template:** `templates-technical-arc42-c4/epic/adr.md`
-**Format:** ADR-NNN with date, status, scope, epic, context, decision, alternatives, consequences
-**Owner:** Architect
-**Readers:** Developer (when unclear), Epic Housekeeping
-
-### pdr.md
-**Template:** `templates-technical-arc42-c4/epic/pdr.md`
-**Content:** Product decisions for this epic
-**Owner:** Product Owner
-**Readers:** Architect, Epic Housekeeping
+**Trigger:** Generated during refinement reconciliation; updated during implementation and audit
 
 ### file-plan-story-NN.yaml
 **Template:** None (format defined inline in architect agent, Phase 7)
@@ -718,13 +689,13 @@ On conversation start, read docs/lessons-learned/INDEX.md for project-specific l
 
 | Agent | Writes | Reads (Primary) |
 |-------|--------|-----------------|
-| **Product Owner** | product/*, epics/*/{details,acceptance-criteria,pdr}.md | architecture/10-quality.md |
-| **Architect** | architecture/*, architecture/backend/*, architecture/frontend/*, architecture/{adr,backend/adr,frontend/adr}/*.md, epics/*/{details,system-context,test-strategy,architecture,adr,file-plan}.yaml | product/{strategy,definition}.md |
-| **SDET** | - | product/definition.md, architecture/{06,10}*.md, architecture/08-cross-cutting/testing.md, architecture/{backend,frontend}/*.md, epics/*/{details,acceptance-criteria,test-strategy,architecture}.md |
-| **Developer (backend)** | - | architecture/backend/*.md, architecture/backend/adr/*.md, architecture/08-cross-cutting/*.md, epics/*/{test-strategy,adr}.md |
-| **Developer (frontend)** | - | architecture/frontend/*.md, architecture/frontend/adr/*.md, architecture/08-cross-cutting/*.md, epics/*/{test-strategy,adr}.md |
-| **Epic Housekeeping** | product/decisions.md (summaries), architecture/09-adr-summary.md (roll-up from all scopes), epics/*/implementation-summary.md | `.scope/*/agents_summaries.jsonl`, epics/*/{adr,pdr}.md, architecture/{adr,backend/adr,frontend/adr}/*.md |
-| **Security Reviewer** | epics/*/adr.md (security), architecture/08-cross-cutting/security.md | architecture/{03,04,08,10}*.md, architecture/{backend,frontend}/*.md, epics/*/{details,adr}.md |
+| **Product Owner** | product/*, epic details/acceptance criteria, PDR sections in epic `design.md` | architecture/10-quality.md |
+| **Architect** | architecture trees and ADR files, epic `design.md`, manifest judgment, story plans | product/{strategy,definition}.md |
+| **SDET** | - | product/definition.md, architecture testing/quality docs, epic acceptance criteria and `design.md` |
+| **Developer (backend)** | - | backend architecture/ADRs, cross-cutting docs, epic `design.md` |
+| **Developer (frontend)** | - | frontend architecture/ADRs, cross-cutting docs, epic `design.md` |
+| **Epic Housekeeping** | product decisions, ADR summary, implementation summary | agent summaries, epic `design.md`, implementation/audit evidence |
+| **Security Reviewer** | security architecture and security ADRs | architecture security/quality docs and epic `design.md` |
 | **DevOps** | architecture/{07,08}/operations.md | architecture/{03,07,08}*.md, architecture/backend/{03-context,07-deployment}.md |
 | **Operations (RE)** | operations/* | architecture/{07,08-cross-cutting}*.md, architecture/backend/*.md |
 
