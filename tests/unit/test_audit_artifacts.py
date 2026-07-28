@@ -59,7 +59,7 @@ def _build_repo(
     _write(epic / "acceptance-criteria.md", "# Acceptance Criteria\n\n## AC-001\nDeliver it.\n")
     _write(source, "def delivered() -> bool:\n    return True\n")
     _write(test, "def test_delivered() -> None:\n    assert True\n")
-    _write(evidence, "verified\n")
+    _write(evidence, "1 passed, 0 failed, 0 errors, 0 skipped\n")
     _dump(
         epic / "refinement-profile.yaml",
         {
@@ -154,14 +154,90 @@ def _build_repo(
                 {
                     "id": "proof-001",
                     "acceptance_rows": ["AC-001"],
-                    "command_hint": "pytest -q tests/test_delivery.py",
+                    "required_evidence": "unit",
+                    "command": "pytest -q tests/test_delivery.py",
+                    "success_condition": "The delivery test passes.",
+                    "freshness": "reusable",
                 }
             ],
         },
     )
+    fingerprint = AUDIT.repository_fingerprint(repo, epic)
+    output_hash = AUDIT._file_sha256(evidence)
+    test_record = {
+        "id": "story-01-proof-001",
+        "kind": "test",
+        "command": "pytest -q tests/test_delivery.py",
+        "cwd": ".",
+        "status": "pass",
+        "exit_code": 0,
+        "output": "tmp_debug/runtime-evidence.txt",
+        "output_sha256": output_hash,
+        "started_at": "2026-07-28T10:00:00Z",
+        "completed_at": "2026-07-28T10:00:01Z",
+        "repository_fingerprint": fingerprint,
+        "acceptance_rows": ["AC-001"],
+        "proof_obligation_ids": ["proof-001"],
+        "test_ids": ["tests/test_delivery.py"],
+        "test_summary": {
+            "passed": 1,
+            "failed": 0,
+            "errors": 0,
+            "skipped": 0,
+        },
+    }
+    commands = [test_record]
+    if runtime_required:
+        runtime_record = {
+            **test_record,
+            "id": "story-01-runtime-001",
+            "kind": "runtime",
+            "command": "python -m delivery_smoke",
+            "test_ids": [],
+        }
+        commands.append(runtime_record)
+        trace = _load(epic / "acceptance-traceability.yaml")
+        trace["acceptance_items"][0]["runtime_evidence"]["commands"] = [
+            "python -m delivery_smoke"
+        ]
+        _dump(epic / "acceptance-traceability.yaml", trace)
     _dump(
         epic / "implementation-evidence.yaml",
-        {"schema_version": 1, "epic_id": "E-001", "audit_ready": True},
+        {
+            "schema_version": 3,
+            "epic_id": "E-001",
+            "repository": {
+                "head": "no-git-head",
+                "fingerprint": fingerprint,
+            },
+            "stories": [
+                {
+                    "story_id": "story-01",
+                    "status": "verified",
+                    "acceptance_rows": ["AC-001"],
+                    "strategy": {
+                        "inspected_paths": ["src/delivery.py"],
+                        "selected_approach": "Preserve the direct delivery path.",
+                        "candidate_files_used": ["src/delivery.py"],
+                        "candidate_files_skipped": [],
+                        "discovered_files": [],
+                    },
+                    "files_changed": ["src/delivery.py"],
+                    "tests_added_or_updated": ["tests/test_delivery.py"],
+                    "contract_checks": [],
+                    "commands_run": commands,
+                    "value_proof": "The delivery path returns success.",
+                    "remaining_unproven_work": [],
+                }
+            ],
+            "epic_level": {
+                "commands_run": [],
+                "coverage": {},
+                "operational_deliverables": [],
+                "blocked_rows": [],
+            },
+            "audit_ready": True,
+        },
     )
     return repo, epic
 
@@ -171,7 +247,7 @@ def _prepare(
     epic: Path,
     *,
     mode: str = "full",
-    cycle_id: str = "audit-v2",
+    cycle_id: str = "audit-v3",
     findings: list[str] | None = None,
     siblings: list[str] | None = None,
     allow_extra: bool = False,
@@ -204,6 +280,8 @@ def _finding(
         "first_seen_attempt": "audit-001",
         "severity": "major",
         "category": "implementation",
+        "source": "reviewer",
+        "detected_by": ["codex"],
         "disposition": disposition,
         "status": status,
         "title": "Delivery behavior is not proved",
@@ -213,8 +291,24 @@ def _finding(
         "impact": "The promised outcome may not be delivered.",
         "owner": "implementation" if disposition == "remediation_required" else "user",
         "closure_test": "Run the real delivery path and observe success.",
-        "reviewer_roles": ["implementation_integrity"],
     }
+
+
+def _refresh_repository_fingerprint(repo: Path, epic: Path) -> None:
+    path = epic / "implementation-evidence.yaml"
+    evidence = _load(path)
+    fingerprint = AUDIT.repository_fingerprint(repo, epic)
+    head = AUDIT._run_git(repo, "rev-parse", "HEAD")
+    evidence["repository"] = {
+        "head": head[0] if head else "no-git-head",
+        "fingerprint": fingerprint,
+    }
+    for story in evidence["stories"]:
+        for record in story["commands_run"]:
+            record["repository_fingerprint"] = fingerprint
+    for record in evidence["epic_level"]["commands_run"]:
+        record["repository_fingerprint"] = fingerprint
+    _dump(path, evidence)
 
 
 def _set_evidence_results(epic: Path, attempt_dir: Path, status: str = "pass") -> None:
@@ -231,6 +325,8 @@ def _set_evidence_results(epic: Path, attempt_dir: Path, status: str = "pass") -
     attempt = _load(attempt_path)
     for gate in attempt["gates"]:
         gate["status"] = status if status in {"pass", "fail", "blocked"} else "fail"
+        if gate["status"] != "pass":
+            gate["reused"] = False
         gate["evidence"] = ["tmp_debug/runtime-evidence.txt"]
         gate["reason"] = "" if gate["status"] != "blocked" else "External proof unavailable."
     _dump(attempt_path, attempt)
@@ -251,14 +347,27 @@ def _complete_attempt(
     if skip_reviews:
         attempt["review"]["skipped_reason"] = "Mechanical evidence is not reviewable."
     else:
-        for role in attempt["review"]["required_roles"]:
-            output_path = attempt_dir / f"review-{role}.md"
+        for assignment in attempt["review"]["required_assignments"]:
+            provider = assignment["provider"]
+            mission = assignment["mission"]
+            output_path = attempt_dir / f"review-{provider}-{mission}.md"
+            metadata_path = attempt_dir / f"metadata-{provider}-{mission}.yaml"
             _write(
                 output_path,
-                f"# Review\n\nAUDIT_ROLE: {role}\nDECISION: "
-                f"{'pass' if status == 'pass' else 'findings'}\n",
+                f"# Review\n\nAUDIT_PROVIDER: {provider}\n"
+                f"AUDIT_MISSION: {mission}\nDECISION: "
+                f"{'pass' if status == 'pass' else 'findings'}\n"
+                "COVERED_ACCEPTANCE_IDS: [AC-001]\n",
             )
-            outputs.append({"role": role, "path": str(output_path.relative_to(repo))})
+            _dump(metadata_path, {"provider": provider, "status": "completed"})
+            outputs.append(
+                {
+                    "provider": provider,
+                    "mission": mission,
+                    "path": str(output_path.relative_to(repo)),
+                    "metadata_path": str(metadata_path.relative_to(repo)),
+                }
+            )
     attempt["review"]["outputs"] = outputs
     attempt["status"] = status
     attempt["decision_reason"] = f"Evidence supports {status}."
@@ -267,13 +376,14 @@ def _complete_attempt(
     matrix = _load(attempt_dir / "audit-verification-matrix.yaml")
     _dump(epic / "audit-verification-matrix.yaml", matrix)
     _write(epic / "epic_audit.md", f"# Epic Audit\n\nDecision: {status.upper()}\n")
+    AUDIT.record_metrics(SimpleNamespace(epic_dir=epic, attempt_dir=attempt_dir))
 
 
 def _validate(repo: Path, epic: Path, attempt: Path, phase: str) -> list[str]:
     return AUDIT.AuditValidator(epic, attempt, phase, POLICY_PATH, repo).validate()
 
 
-def test_prepare_full_derives_scope_matrix_gate_and_low_risk_role(
+def test_prepare_full_derives_scope_matrix_gate_and_three_provider_assignments(
     tmp_path: Path,
 ) -> None:
     repo, epic = _build_repo(tmp_path)
@@ -286,40 +396,53 @@ def test_prepare_full_derives_scope_matrix_gate_and_low_risk_role(
     assert attempt_dir.name == "audit-001"
     assert attempt["mode"] == "full"
     assert attempt["scope"]["acceptance_rows"] == ["AC-001"]
-    assert attempt["review"]["required_roles"] == ["implementation_integrity"]
+    assert attempt["review"]["required_assignments"] == [
+        {"provider": "claude", "mission": "semantic_core"},
+        {"provider": "codex", "mission": "semantic_core"},
+        {"provider": "agy", "mission": "semantic_core"},
+    ]
     assert attempt["gates"][0]["command"] == "pytest -q tests/test_delivery.py"
+    assert attempt["gates"][0]["reused"] is True
     assert matrix["rows"][0]["id"] == "AC-001"
     assert matrix["rows"][0]["implementation"]["actual_files"] == ["src/delivery.py"]
-    assert matrix["rows"][0]["status"] == "pending"
-    assert findings == {"schema_version": 2, "epic_id": "E-001", "findings": []}
+    assert matrix["rows"][0]["status"] == "ready"
+    assert findings == {"schema_version": 3, "epic_id": "E-001", "findings": []}
+    assert (attempt_dir / "review-packet.yaml").is_file()
 
 
 @pytest.mark.parametrize(
-    ("risk", "expected_roles"),
+    ("risk", "expected_focus"),
     [
-        ("low", ["implementation_integrity"]),
-        ("medium", ["implementation_integrity", "contract_and_evidence"]),
-        (
-            "high",
-            ["implementation_integrity", "contract_and_evidence", "capability_specialist"],
-        ),
-        (
-            "critical",
-            ["implementation_integrity", "contract_and_evidence", "capability_specialist"],
-        ),
+        ("low", []),
+        ("medium", []),
+        ("high", ["llm_ml"]),
+        ("critical", ["llm_ml"]),
     ],
 )
-def test_prepare_selects_roles_from_risk(
+def test_prepare_selects_all_providers_and_capability_focus_from_risk(
     tmp_path: Path,
     risk: str,
-    expected_roles: list[str],
+    expected_focus: list[str],
 ) -> None:
     repo, epic = _build_repo(tmp_path, risk=risk, capabilities=["llm_ml"])
 
     attempt = _load(_prepare(repo, epic) / "audit-attempt.yaml")
 
-    assert attempt["review"]["required_roles"] == expected_roles
-    assert attempt["specialist_focus"] == (["llm_ml"] if "capability_specialist" in expected_roles else [])
+    assert {
+        assignment["provider"]
+        for assignment in attempt["review"]["required_assignments"]
+    } == {"claude", "codex", "agy"}
+    assert attempt["capability_focus"] == expected_focus
+
+
+def test_critical_gate_requires_fresh_independent_execution(tmp_path: Path) -> None:
+    repo, epic = _build_repo(tmp_path, risk="critical")
+
+    attempt = _load(_prepare(repo, epic) / "audit-attempt.yaml")
+
+    assert attempt["gates"][0]["freshness"] == "fresh"
+    assert attempt["gates"][0]["reused"] is False
+    assert attempt["gates"][0]["status"] == "pending"
 
 
 def test_targeted_prepare_requires_remediated_finding_and_scopes_siblings(
@@ -351,6 +474,31 @@ def test_targeted_prepare_requires_remediated_finding_and_scopes_siblings(
         "finding_ids": ["AUDIT-001"],
         "sibling_surfaces": ["src/sibling.py"],
     }
+    assert attempt["review"]["required_assignments"] == [
+        {"provider": "codex", "mission": "semantic_core"}
+    ]
+
+
+def test_targeted_deterministic_finding_uses_closure_gates_without_reviewer(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    _prepare(repo, epic)
+    finding = _finding(status="remediated_pending_verification")
+    finding["source"] = "deterministic"
+    finding["detected_by"] = []
+    _dump(
+        epic / "audit-findings.yaml",
+        {"schema_version": 3, "epic_id": "E-001", "findings": [finding]},
+    )
+
+    attempt = _load(
+        _prepare(repo, epic, mode="targeted", findings=["AUDIT-001"])
+        / "audit-attempt.yaml"
+    )
+
+    assert attempt["review"]["required_assignments"] == []
+    assert "deterministic closure" in attempt["review"]["skipped_reason"]
 
 
 def test_targeted_prepare_rejects_missing_unknown_and_unscoped_findings(
@@ -393,7 +541,7 @@ def test_prepare_rejects_bad_mode_identity_and_duplicate_traceability(tmp_path: 
         repo_root=repo,
         policy=POLICY_PATH,
         mode="invented",
-        cycle_id="audit-v2",
+        cycle_id="audit-v3",
         finding=[],
         sibling_surface=[],
         allow_extra=False,
@@ -416,6 +564,7 @@ def test_prepare_rejects_bad_mode_identity_and_duplicate_traceability(tmp_path: 
 
 def test_prepare_records_git_changes_against_main(tmp_path: Path) -> None:
     repo, epic = _build_repo(tmp_path)
+    _write(repo / "src/removed.py", "VALUE = 1\n")
     subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "Scope Test"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.email", "scope@example.test"], cwd=repo, check=True)
@@ -423,11 +572,22 @@ def test_prepare_records_git_changes_against_main(tmp_path: Path) -> None:
     subprocess.run(["git", "commit", "-m", "fixture"], cwd=repo, check=True, capture_output=True)
     _write(repo / "src/delivery.py", "def delivered() -> bool:\n    return False\n")
     _write(repo / "src/untracked.py", "VALUE = 1\n")
+    (repo / "src/removed.py").unlink()
+    evidence = _load(epic / "implementation-evidence.yaml")
+    evidence["stories"][0]["files_changed"].extend(
+        ["src/untracked.py", "src/removed.py"]
+    )
+    evidence["stories"][0]["strategy"]["discovered_files"].extend(
+        ["src/untracked.py", "src/removed.py"]
+    )
+    _dump(epic / "implementation-evidence.yaml", evidence)
+    _refresh_repository_fingerprint(repo, epic)
 
     attempt = _load(_prepare(repo, epic) / "audit-attempt.yaml")
 
     assert "src/delivery.py" in attempt["changed_files"]
     assert "src/untracked.py" in attempt["changed_files"]
+    assert "src/removed.py" in attempt["changed_files"]
 
 
 def test_prepare_rejects_missing_v2_handoff_and_policy_helper_errors(
@@ -453,11 +613,17 @@ def test_prepare_rejects_missing_v2_handoff_and_policy_helper_errors(
     with pytest.raises(ValueError, match="cannot determine epic_id"):
         AUDIT._epic_id({}, {}, {})
     with pytest.raises(ValueError, match="must be a mapping"):
-        AUDIT._required_roles({"risk_review_policy": []}, "low")
-    with pytest.raises(ValueError, match="has no roles"):
-        AUDIT._required_roles({"risk_review_policy": {}}, "low")
+        AUDIT._full_assignments({"risk_review_policy": []}, "low")
+    with pytest.raises(ValueError, match="has no providers"):
+        AUDIT._full_assignments({"risk_review_policy": {}}, "low")
     with pytest.raises(ValueError, match="non-empty strings"):
-        AUDIT._required_roles({"risk_review_policy": {"low": {"roles": [""]}}}, "low")
+        AUDIT._full_assignments(
+            {
+                "risk_review_policy": {"low": {"providers": [""]}},
+                "review_providers": ["claude"],
+            },
+            "low",
+        )
 
 
 def test_matrix_and_gate_derivation_defensive_paths(tmp_path: Path) -> None:
@@ -518,17 +684,17 @@ def test_matrix_and_gate_derivation_defensive_paths(tmp_path: Path) -> None:
                 {
                     "id": "other-row",
                     "acceptance_rows": ["AC-404"],
-                    "command_hint": "pytest ignored.py",
+                    "command": "pytest ignored.py",
                 },
                 {
                     "id": "duplicate",
                     "acceptance_rows": ["AC-001"],
-                    "command_hint": "pytest -q tests/test_delivery.py",
+                    "command": "pytest -q tests/test_delivery.py",
                 },
             ]
         },
     )
-    gates = AUDIT._boundary_gates(epic, {"AC-001"})
+    gates = AUDIT._boundary_gates(epic, {"AC-001"}, _load(epic / "refinement-manifest.yaml"), [])
     assert len(gates) == 1
 
 
@@ -541,7 +707,7 @@ def test_prepare_ignores_malformed_historical_attempt_and_rejects_bad_findings_s
     assert attempt.name == "audit-002"
 
     other_repo, other_epic = _build_repo(tmp_path / "other")
-    _dump(other_epic / "audit-findings.yaml", {"schema_version": 2, "epic_id": "E-001", "findings": {}})
+    _dump(other_epic / "audit-findings.yaml", {"schema_version": 3, "epic_id": "E-001", "findings": {}})
     with pytest.raises(ValueError, match="must contain a findings list"):
         _prepare(other_repo, other_epic)
 
@@ -554,20 +720,145 @@ def test_pre_review_validation_passes_with_complete_direct_evidence(tmp_path: Pa
     assert _validate(repo, epic, attempt, "pre_review") == []
 
 
+def test_evidence_verifier_accepts_full_and_story_scopes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    args = SimpleNamespace(
+        epic_dir=epic,
+        repo_root=repo,
+        policy=POLICY_PATH,
+        story="",
+    )
+
+    assert AUDIT.verify_evidence(args) == 0
+    assert "audit-ready handoff" in capsys.readouterr().out
+    args.story = "story-01"
+    assert AUDIT.verify_evidence(args) == 0
+    assert "story=story-01" in capsys.readouterr().out
+    assert AUDIT.print_fingerprint(
+        SimpleNamespace(epic_dir=epic, repo_root=repo)
+    ) == 0
+    assert "sha256:" in capsys.readouterr().out
+
+
+def test_evidence_verifier_rejects_stale_output_and_malformed_records(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    path = epic / "implementation-evidence.yaml"
+    evidence = _load(path)
+    story = evidence["stories"][0]
+    record = story["commands_run"][0]
+    evidence["schema_version"] = 2
+    evidence["epic_id"] = "WRONG"
+    evidence["repository"] = {"head": "wrong", "fingerprint": "sha256:wrong"}
+    story["status"] = "invented"
+    story["strategy"]["selected_approach"] = ""
+    story["strategy"]["candidate_files_used"] = []
+    story["files_changed"].append("src/missing.py")
+    story["remaining_unproven_work"] = []
+    record.update(
+        {
+            "kind": "test",
+            "command": "",
+            "status": "pass",
+            "exit_code": 7,
+            "output_sha256": "sha256:wrong",
+            "acceptance_rows": [1],
+            "proof_obligation_ids": "bad",
+            "test_ids": ["tests/missing.py::test_missing"],
+            "test_summary": {
+                "passed": -1,
+                "failed": 1,
+                "errors": "bad",
+                "skipped": -1,
+            },
+        }
+    )
+    story["commands_run"].extend(
+        [
+            "bad",
+            {
+                **record,
+                "id": "inspection",
+                "kind": "inspection",
+                "command": "",
+                "inspection": "",
+                "exit_code": 0,
+                "test_ids": [],
+            },
+        ]
+    )
+    evidence["epic_level"]["commands_run"] = ["bad"]
+    evidence["epic_level"]["blocked_rows"] = ["AC-001"]
+    evidence["audit_ready"] = False
+    _dump(path, evidence)
+
+    errors = AUDIT.ImplementationEvidenceVerifier(
+        epic, POLICY_PATH, repo
+    ).validate()
+    joined = "\n".join(errors)
+
+    for expected in (
+        "schema_version must be 3",
+        "epic_id does not match",
+        "HEAD does not match",
+        "repository fingerprint does not match",
+        "status must be one of",
+        "selected_approach",
+        "unclassified changed files",
+        "path does not exist",
+        "commands_run entries must be mappings",
+        "passing command must have exit_code 0",
+        "output_sha256 does not match",
+        "test_summary.passed",
+        "passing test command reports failures",
+        "inspection must be a non-empty string",
+        "inspection exit_code must be null",
+        "audit_ready must be true",
+        "blocked_rows",
+    ):
+        assert expected in joined
+
+
+def test_evidence_verifier_rejects_stale_source_and_missing_story(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    _write(repo / "src/delivery.py", "def delivered() -> bool:\n    return False\n")
+
+    args = SimpleNamespace(
+        epic_dir=epic,
+        repo_root=repo,
+        policy=POLICY_PATH,
+        story="missing-story",
+    )
+    assert AUDIT.verify_evidence(args) == 1
+    error = capsys.readouterr().err
+    assert "repository fingerprint does not match" in error
+    assert "has no story 'missing-story'" in error
+
+
 def test_pre_review_rejects_pending_or_missing_required_evidence(tmp_path: Path) -> None:
     repo, epic = _build_repo(tmp_path, runtime_required=True)
-    trace_path = epic / "acceptance-traceability.yaml"
-    trace = _load(trace_path)
-    trace["acceptance_items"][0]["implementation"]["actual_files"] = []
-    trace["acceptance_items"][0]["tests"]["actual_tests"] = []
-    trace["acceptance_items"][0]["runtime_evidence"]["commands"] = []
-    trace["acceptance_items"][0]["runtime_evidence"]["evidence"] = []
-    _dump(trace_path, trace)
-    manifest_path = epic / "refinement-manifest.yaml"
-    manifest = _load(manifest_path)
-    manifest["requirements"][0]["proof_obligations"] = []
-    _dump(manifest_path, manifest)
     attempt = _prepare(repo, epic)
+    matrix_path = attempt / "audit-verification-matrix.yaml"
+    matrix = _load(matrix_path)
+    matrix["rows"][0]["implementation"]["actual_files"] = []
+    matrix["rows"][0]["tests"]["required_assertions"] = []
+    matrix["rows"][0]["tests"]["actual_tests"] = []
+    matrix["rows"][0]["runtime_evidence"]["commands"] = []
+    matrix["rows"][0]["runtime_evidence"]["evidence"] = []
+    _dump(matrix_path, matrix)
+    attempt_path = attempt / "audit-attempt.yaml"
+    attempt_data = _load(attempt_path)
+    attempt_data["gates"][0]["status"] = "pending"
+    attempt_data["gates"][0]["reused"] = False
+    attempt_data["gates"][0]["evidence"] = []
+    _dump(attempt_path, attempt_data)
 
     errors = _validate(repo, epic, attempt, "pre_review")
 
@@ -576,7 +867,6 @@ def test_pre_review_rejects_pending_or_missing_required_evidence(tmp_path: Path)
     assert any("no actual tests" in error for error in errors)
     assert any("no runtime command" in error for error in errors)
     assert any("no runtime evidence" in error for error in errors)
-    assert any("matrix row AC-001 remains pending" in error for error in errors)
     assert any("gates[1] remains pending" in error for error in errors)
 
 
@@ -596,7 +886,7 @@ def test_validator_rederives_immutable_matrix_fields(tmp_path: Path) -> None:
     assert any("implementation differs from derived traceability" in error for error in errors)
 
 
-def test_complete_pass_requires_and_accepts_role_outputs_and_published_artifacts(
+def test_complete_pass_requires_and_accepts_provider_outputs_and_published_artifacts(
     tmp_path: Path,
 ) -> None:
     repo, epic = _build_repo(tmp_path, risk="medium")
@@ -606,7 +896,7 @@ def test_complete_pass_requires_and_accepts_role_outputs_and_published_artifacts
     assert _validate(repo, epic, attempt, "complete") == []
 
 
-def test_complete_rejects_missing_mismatched_or_malformed_role_outputs(
+def test_complete_rejects_missing_mismatched_or_malformed_provider_outputs(
     tmp_path: Path,
 ) -> None:
     repo, epic = _build_repo(tmp_path)
@@ -615,20 +905,28 @@ def test_complete_rejects_missing_mismatched_or_malformed_role_outputs(
     attempt_path = attempt / "audit-attempt.yaml"
     data = _load(attempt_path)
     output = repo / data["review"]["outputs"][0]["path"]
-    _write(output, "# Review\n\nAUDIT_ROLE: contract_and_evidence\nDECISION: invented\n")
-    data["review"]["required_roles"].append("invented_role")
+    _write(
+        output,
+        "# Review\n\nAUDIT_PROVIDER: invented\nAUDIT_MISSION: invented\n"
+        "DECISION: invented\nCOVERED_ACCEPTANCE_IDS: []\n",
+    )
+    data["review"]["required_assignments"].append(
+        {"provider": "invented", "mission": "semantic_core"}
+    )
     _dump(attempt_path, data)
 
     errors = _validate(repo, epic, attempt, "complete")
 
-    assert any("contains unknown roles: invented_role" in error for error in errors)
-    assert any("declares AUDIT_ROLE 'contract_and_evidence'" in error for error in errors)
+    assert any("unknown provider 'invented'" in error for error in errors)
+    assert any("declares AUDIT_PROVIDER 'invented'" in error for error in errors)
+    assert any("declares AUDIT_MISSION 'invented'" in error for error in errors)
     assert any("unsupported DECISION 'invented'" in error for error in errors)
-    assert any("has no output for roles: invented_role" in error for error in errors)
+    assert any("has no output for assignments: invented/semantic_core" in error for error in errors)
 
     _write(output, "# Review without markers\n")
     errors = _validate(repo, epic, attempt, "complete")
-    assert any("output has no valid AUDIT_ROLE" in error for error in errors)
+    assert any("output has no valid AUDIT_PROVIDER" in error for error in errors)
+    assert any("output has no valid AUDIT_MISSION" in error for error in errors)
     assert any("output has no valid DECISION" in error for error in errors)
 
 
@@ -657,6 +955,46 @@ def test_finding_schema_and_reciprocal_matrix_links_are_enforced(tmp_path: Path)
     assert any("references unknown findings: AUDIT-404" in error for error in errors)
     assert any("links finding AUDIT-002 without reciprocal scope" in error for error in errors)
     assert any("finding AUDIT-001 is missing from matrix row AC-001" in error for error in errors)
+
+
+def test_record_metrics_counts_only_new_findings_and_preserves_provider_provenance(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    attempt = _prepare(repo, epic)
+    first = _finding()
+    first["detected_by"] = ["codex", "agy"]
+    second = _finding(finding_id="AUDIT-002")
+    second["category"] = "mechanical"
+    second["source"] = "deterministic"
+    second["detected_by"] = []
+    third = _finding(finding_id="AUDIT-003")
+    third["first_seen_attempt"] = "audit-000"
+    _dump(
+        epic / "audit-findings.yaml",
+        {
+            "schema_version": 3,
+            "epic_id": "E-001",
+            "findings": [first, second, third],
+        },
+    )
+
+    assert AUDIT.record_metrics(
+        SimpleNamespace(epic_dir=epic, attempt_dir=attempt)
+    ) == 0
+    metrics = _load(attempt / "audit-attempt.yaml")["metrics"]
+
+    assert metrics["new_findings"]["total"] == 2
+    assert metrics["new_findings"]["by_category"] == {
+        "implementation": 1,
+        "mechanical": 1,
+    }
+    assert metrics["new_findings"]["by_source"] == {
+        "deterministic": 1,
+        "reviewer": 1,
+    }
+    assert metrics["new_findings"]["by_provider"] == {"agy": 1, "codex": 1}
+    assert metrics["targeted_verification_required"] is True
 
 
 def test_valid_fail_links_nonpassing_row_to_remediation_finding(tmp_path: Path) -> None:
@@ -823,7 +1161,7 @@ def test_cli_main_reports_prepare_validation_success_and_failure(
     assert "Audit artifact operation failed" in capsys.readouterr().err
 
 
-def test_command_and_reviewer_are_read_only_role_based_and_isolated() -> None:
+def test_command_and_reviewer_are_read_only_provider_based_and_isolated() -> None:
     command = AUDIT_COMMAND_PATH.read_text(encoding="utf-8")
     reviewer = REVIEWER_PATH.read_text(encoding="utf-8")
     combined = f"{command}\n{reviewer}".lower()
@@ -831,16 +1169,14 @@ def test_command_and_reviewer_are_read_only_role_based_and_isolated() -> None:
     assert "audit is read-only" in combined
     assert "one full audit" in command
     assert "one targeted" in command
-    assert "implementation_integrity" in reviewer
-    assert "contract_and_evidence" in reviewer
-    assert "capability_specialist" in reviewer
-    assert "{{AUDIT_ROLE}}" in reviewer
+    assert "semantic_core" in command
+    assert "{{AUDIT_PROVIDER}}" in reviewer
+    assert "claude, codex, and agy" in command.lower()
     assert "gpt-5.6-terra" in command
     assert 'model_reasoning_effort="\\"$CODEX_REASONING_EFFORT\\""' in command
     assert "--sandbox read-only" in command
     assert "--dangerously-skip-permissions" in command
     for coupled_term in (
-        "gemini 3",
         "glm-5.2",
         "auto-fix finding",
         "maximum audit attempts: 3",

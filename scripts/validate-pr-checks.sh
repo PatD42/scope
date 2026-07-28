@@ -196,8 +196,10 @@ check_install() {
 
   test -f "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/design.md"
+  test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/implementation-evidence.yaml"
   test -f "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
   test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/design.md"
+  test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/implementation-evidence.yaml"
   grep -n "Path selection rule" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "Path selection rule" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
@@ -368,6 +370,8 @@ check_command_expectations() {
   grep -n "Do not invoke another reviewer" src_shared/commands/audit_epic/reviewer-audit.md
   grep -n "invoke another reviewer" src_shared/commands/epic_refine/reviewer-refinement.md
   grep -n "Reviewer identity" src_shared/commands/audit_epic/reviewer-audit.md
+  grep -n "AUDIT_PROVIDER" src_shared/commands/audit_epic/reviewer-audit.md
+  grep -n "COVERED_ACCEPTANCE_IDS" src_shared/commands/audit_epic/reviewer-audit.md
   grep -n "REVIEW_PROVIDER" src_shared/commands/epic_refine/reviewer-refinement.md
   grep -n "REVIEW_MISSION" src_shared/commands/epic_refine/reviewer-refinement.md
   grep -n "semantic_core" src_shared/commands/epic_refine/reviewer-refinement.md
@@ -383,6 +387,16 @@ check_command_expectations() {
   grep -n -- "--retries 0" src_shared/commands/epic_refine.md
   grep -n "design.md" src_shared/commands/epic_refine.md
   grep -n "tmp_debug/scope-audit" src_shared/commands/audit_epic.md
+  grep -n "Launch all required assignment commands before waiting" src_shared/commands/audit_epic.md
+  grep -n -- "--ignore-user-config" src_shared/commands/audit_epic.md
+  grep -n -- "--safe-mode" src_shared/commands/audit_epic.md
+  grep -n -- "--retries 0" src_shared/commands/audit_epic.md
+  grep -n "gemini-3.1-pro-high" src_shared/commands/audit_epic.md
+  grep -n "verify-evidence" src_claude/commands/implement.md
+  grep -n "verify-evidence" src_codex/commands/implement.md
+  grep -n "schema_version: 3" src_claude/commands/implement.md
+  grep -n "schema_version: 3" src_codex/commands/implement.md
+  test -f src_shared/skills/project-documentation/templates-technical-arc42-c4/epic/implementation-evidence.yaml
   grep -n "tmp_debug.*scope-reviewer-logs" src_shared/scripts/scope-reviewer-claude-pexpect.py
 
   if grep -R -n -E 'LEGACY_VALIDATOR|legacy input mode|maximum_followups|minimum_followups|followup_count|followup-[0-9N]' \

@@ -261,9 +261,12 @@ The implementation preserves the approved outcome.
                 {
                     "id": "proof-001",
                     "acceptance_rows": ["AC-001"],
-                    "required_evidence": "unit",
-                    "command_hint": "pytest -q tests/test_service.py",
+                    "required_evidence": (
+                        "integration" if risk in {"high", "critical"} else "unit"
+                    ),
+                    "command": "pytest -q tests/test_service.py",
                     "success_condition": "The delivery test passes",
+                    "freshness": "reusable",
                 }
             ],
         },
@@ -649,6 +652,48 @@ def test_high_risk_requires_complete_flow_and_hostile_sections(
     assert any(
         "HOSTILE-AC-001 missing field Rejection mechanism:" in e for e in errors
     )
+
+
+def test_proof_obligations_require_executable_or_inspection_contracts(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path)
+    path = epic / "file-plan-story-01.yaml"
+    plan = _load(path)
+    proof = plan["proof_obligations"][0]
+    proof["required_evidence"] = "invented"
+    proof["freshness"] = "stale"
+    proof.pop("command")
+    _dump(path, plan)
+
+    errors, _ = _validate(repo, epic, "reconcile")
+    joined = "\n".join(errors)
+    assert "required_evidence must be one of" in joined
+    assert "freshness must be one of" in joined
+    assert "command must be a non-empty string" in joined
+
+    proof["required_evidence"] = "inspection"
+    proof["freshness"] = "reusable"
+    proof["inspection"] = {"target": "", "predicate": ""}
+    _dump(path, plan)
+    errors, _ = _validate(repo, epic, "reconcile")
+    joined = "\n".join(errors)
+    assert "target must be a non-empty string" in joined
+    assert "predicate must be a non-empty string" in joined
+
+
+def test_high_risk_requirement_requires_material_flow_closure_proof(
+    tmp_path: Path,
+) -> None:
+    repo, epic = _build_repo(tmp_path, risk="high")
+    path = epic / "file-plan-story-01.yaml"
+    plan = _load(path)
+    plan["proof_obligations"][0]["required_evidence"] = "unit"
+    _dump(path, plan)
+
+    errors, _ = _validate(repo, epic, "reconcile")
+
+    assert any("has no material-flow closure proof" in error for error in errors)
 
 
 def test_reconciliation_reports_plan_ownership_and_dependency_defects(

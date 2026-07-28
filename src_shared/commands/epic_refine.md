@@ -374,10 +374,22 @@ forbidden_changes:
 proof_obligations:
   - id: "proof-id"
     acceptance_rows: ["AC-001"]
-    required_evidence: "unit | integration | e2e | live_smoke | runtime_command | inspection"
-    command_hint: "Concrete checker"
+    required_evidence: "unit | integration | e2e | static | live_smoke | runtime_command | operational | inspection"
+    command: "Exact runnable command; omit only for inspection"
+    # inspection:
+    #   target: "repo-relative path and stable symbol/section"
+    #   predicate: "Concrete condition that must be true"
     success_condition: "Observable result"
+    freshness: "reusable | fresh"
 ```
+
+Use `command` for every executable proof. `command_hint` and prose-only command
+suggestions are invalid. Use `inspection` only when the outcome cannot be
+executed; both its target and pass predicate must be concrete.
+
+Every high/critical implementation row needs at least one material-flow closure
+proof owned by its terminal story: integration, end-to-end, live smoke, runtime,
+or operational evidence. Unit tests alone cannot close a high-risk flow.
 
 Populate each implementation-required manifest row's `owner_story`, then
 regenerate the mechanical traceability view:

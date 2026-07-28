@@ -150,6 +150,7 @@ docs/
 │   ├── refinement-manifest.yaml
 │   ├── acceptance-traceability.yaml
 │   ├── file-plan-story-NN.yaml
+│   ├── implementation-evidence.yaml
 │   └── implementation-summary.md
 ├── operations/
 │   ├── overview.md                # System inventory, access points, contacts
@@ -477,6 +478,9 @@ During refinement, the epic folder must also contain one or more
 `file-plan-story-*.yaml` implementation boundary plans before the epic can be
 marked ready-for-implementation.
 
+During implementation, the epic folder must also contain
+`implementation-evidence.yaml` before the epic can be marked audit-ready.
+
 ### Epic Folder Hygiene
 - Epic folders may contain only markdown and YAML files.
 - Do not place source code, generated code, cache directories, binaries, or OS artifacts in `docs/epics/...`.
@@ -516,6 +520,13 @@ marked ready-for-implementation.
 **Intent:** Defines binding contracts/touchpoints/forbidden changes/proof obligations and advisory candidate files. It is not a mandatory tactical file-edit list.
 **Owner:** Architect
 **Usage:** One file per story in `docs/epics/{epic-dir}/`
+
+### implementation-evidence.yaml
+**Template:** `templates-technical-arc42-c4/epic/implementation-evidence.yaml`
+**Content:** Versioned implementation status, changed-file classification, exact command and inspection records, output hashes, test summaries, repository fingerprint, and audit-readiness state
+**Owner:** Developer; mechanically verified before audit
+**Readers:** Auditor, Epic Housekeeping
+**Trigger:** Created and updated during implementation
 
 ### implementation-summary.md
 **Template:** `templates-technical-arc42-c4/epic/implementation-summary.md`

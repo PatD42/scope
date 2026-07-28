@@ -1,7 +1,8 @@
-schema_version: 1
-attempt_version: 2
-matrix_version: 2
-findings_version: 2
+schema_version: 2
+attempt_version: 3
+matrix_version: 3
+findings_version: 3
+implementation_evidence_version: 3
 
 allowed_modes:
   - full
@@ -21,7 +22,7 @@ gate_statuses:
   - not_applicable
 
 row_statuses:
-  - pending
+  - ready
   - pass
   - fail
   - unverified
@@ -41,36 +42,61 @@ review_decisions:
   - blocked
   - unverified
 
-roles:
-  implementation_integrity:
-    description: Real call paths, negative behavior, integration touchpoints, stubs, and delivered value.
-  contract_and_evidence:
-    description: Requirement, native-contract, code, test, runtime-evidence, and forbidden-change coherence.
-  capability_specialist:
-    description: Selected high-risk capability and directly coupled sibling surfaces only.
+review_providers:
+  - claude
+  - codex
+  - agy
+
+review_missions:
+  - semantic_core
 
 risk_review_policy:
   low:
-    roles:
-      - implementation_integrity
+    providers:
+      - claude
+      - codex
+      - agy
+    capability_focus: false
   medium:
-    roles:
-      - implementation_integrity
-      - contract_and_evidence
+    providers:
+      - claude
+      - codex
+      - agy
+    capability_focus: false
   high:
-    roles:
-      - implementation_integrity
-      - contract_and_evidence
-      - capability_specialist
+    providers:
+      - claude
+      - codex
+      - agy
+    capability_focus: true
   critical:
-    roles:
-      - implementation_integrity
-      - contract_and_evidence
-      - capability_specialist
+    providers:
+      - claude
+      - codex
+      - agy
+    capability_focus: true
 
 review_budget:
   maximum_full_attempts: 1
   maximum_targeted_attempts: 1
+
+implementation_evidence:
+  story_statuses:
+    - verified
+    - implementation_complete_unverified
+    - blocked
+  command_kinds:
+    - test
+    - regression
+    - static
+    - contract
+    - runtime
+    - operational
+    - inspection
+  command_statuses:
+    - pass
+    - fail
+    - blocked
 
 finding:
   severities:
@@ -89,6 +115,9 @@ finding:
     - documentation
     - mechanical
     - specialist
+  sources:
+    - deterministic
+    - reviewer
   dispositions:
     - remediation_required
     - user_decision

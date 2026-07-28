@@ -902,8 +902,8 @@ class RefinementValidator:
                 "proof_obligations": (
                     "id",
                     "required_evidence",
-                    "command_hint",
                     "success_condition",
+                    "freshness",
                 ),
             }
             for field, required_fields in specifications.items():
@@ -923,6 +923,39 @@ class RefinementValidator:
                     if field == "candidate_files" and entry.get("advisory") is not True:
                         self.errors.append(f"{context} advisory must be true")
                     if field == "proof_obligations":
+                        proof_policy = _mapping(
+                            self.policy.get("proof_obligations")
+                        )
+                        evidence_kind = entry.get("required_evidence")
+                        self._require_allowed(
+                            evidence_kind,
+                            proof_policy.get("evidence_kinds"),
+                            "required_evidence",
+                            path,
+                            context,
+                        )
+                        self._require_allowed(
+                            entry.get("freshness"),
+                            proof_policy.get("freshness"),
+                            "freshness",
+                            path,
+                            context,
+                        )
+                        if evidence_kind == "inspection":
+                            inspection = entry.get("inspection")
+                            if not isinstance(inspection, dict):
+                                self.errors.append(
+                                    f"{context} inspection must be a mapping"
+                                )
+                            else:
+                                self._require_string(
+                                    inspection, "target", path, context
+                                )
+                                self._require_string(
+                                    inspection, "predicate", path, context
+                                )
+                        else:
+                            self._require_string(entry, "command", path, context)
                         rows = self._require_string_list(
                             entry.get("acceptance_rows"),
                             "acceptance_rows",
@@ -975,6 +1008,21 @@ class RefinementValidator:
                     f"manifest requirement {row_id} owner_story {owner!r} "
                     "does not own a proof obligation"
                 )
+            if requirement.get("risk") in {"high", "critical"}:
+                closure_kinds = set(
+                    _mapping(self.policy.get("proof_obligations")).get(
+                        "flow_closure_kinds", []
+                    )
+                )
+                proof_kinds = {
+                    proof.get("required_evidence")
+                    for _, proof in proof_index.get(str(row_id), [])
+                }
+                if not proof_kinds.intersection(closure_kinds):
+                    self.errors.append(
+                        f"high-risk manifest requirement {row_id} has no material-flow "
+                        "closure proof"
+                    )
 
     def _detect_dependency_cycles(
         self, dependencies: Mapping[str, list[str]]

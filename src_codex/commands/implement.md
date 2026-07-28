@@ -88,6 +88,8 @@ fi
 
 EPIC_SLUG="$(basename "$EPIC_DIR")"
 V3_VALIDATOR="plugins/scope/scripts/validate-refinement.py"
+AUDIT_TOOL="plugins/scope/scripts/audit-artifacts.py"
+AUDIT_POLICY="plugins/scope/config/audit-policy.yaml"
 
 if [ -n "${SCOPE_PYTHON:-}" ]; then
   PYTHON_CMD="$SCOPE_PYTHON"
@@ -345,14 +347,19 @@ After each story, update `acceptance-traceability.yaml`:
 - status: `implemented`, `tested`, `verified`, `blocked`, or `deferred`;
 - audit notes.
 
-Create or update `implementation-evidence.yaml`:
+Create or update `implementation-evidence.yaml`. Store raw command output under
+`tmp_debug/scope-implementation/{epic-id}/`; durable evidence records only its
+repo-relative path and SHA-256 hash:
 
 ```yaml
-schema_version: 2
+schema_version: 3
 epic_id: "{epic-id}"
+repository:
+  head: "git rev-parse HEAD, or no-git-head"
+  fingerprint: "value from audit-artifacts.py fingerprint"
 stories:
   - story_id: "story-01"
-    status: "complete | implementation_complete_unverified | blocked"
+    status: "verified | implementation_complete_unverified | blocked"
     acceptance_rows: ["AC-001"]
     strategy:
       inspected_paths: []
@@ -364,24 +371,44 @@ stories:
     tests_added_or_updated: []
     contract_checks: []
     commands_run:
-      - command: "exact command"
+      - id: "story-01-proof-001"
+        kind: "test | regression | static | contract | runtime | operational | inspection"
+        command: "exact command; omit only for inspection"
+        inspection: "concrete target and predicate; inspection only"
+        cwd: "."
         status: "pass | fail | blocked"
-        evidence: "repo-relative evidence path or concise captured result"
-    runtime_evidence: []
+        exit_code: 0
+        output: "tmp_debug/scope-implementation/.../proof-output.txt"
+        output_sha256: "sha256:..."
+        started_at: "ISO-8601 UTC"
+        completed_at: "ISO-8601 UTC"
+        repository_fingerprint: "sha256:..."
+        acceptance_rows: ["AC-001"]
+        proof_obligation_ids: ["proof-001"]
+        test_ids: ["tests/test_delivery.py::test_delivery"]
+        test_summary:
+          passed: 1
+          failed: 0
+          errors: 0
+          skipped: 0
     value_proof: "Observable story outcome"
     remaining_unproven_work: []
 epic_level:
-  tests: {}
+  commands_run: []
   coverage: {}
   operational_deliverables: []
   blocked_rows: []
 audit_ready: false
 ```
 
-Every completed story needs mapped acceptance rows, actual changed files,
-verification evidence, and no remaining required proof. Story 0 may omit
-acceptance rows only when it is pure scaffolding and its boundary plan proves
-the scaffolding outcome.
+`test_summary` is required only for `test` and `regression`; `exit_code` is null
+only for `inspection`. Every changed file must appear in
+`candidate_files_used` or `discovered_files`. A story is `verified` only when
+all of its proof obligations pass at the recorded repository fingerprint and
+`remaining_unproven_work` is empty. Otherwise use
+`implementation_complete_unverified` or `blocked` and state the missing proof.
+Pure scaffolding Story 0 may omit acceptance rows only when its boundary plan
+contains executable proof of the scaffolding outcome.
 
 ### 4.6 Story checkpoint
 
@@ -390,6 +417,18 @@ Before advancing:
 - read `plugins/scope/governance/developer-checklist.md` from the worktree;
 - run the focused checks again after the final edit;
 - confirm traceability and evidence are current;
+- refresh `repository.head` and `repository.fingerprint`;
+- run the story-scoped evidence verifier:
+
+```bash
+"$PYTHON_CMD" "$AUDIT_TOOL" verify-evidence "$EPIC_DIR" \
+  --repo-root "$(pwd)" \
+  --policy "$AUDIT_POLICY" \
+  --story "$STORY_ID"
+```
+
+- when this story closes a high/critical material flow, run the integration,
+  end-to-end, live-smoke, runtime, or operational proof owned by that flow;
 - summarize what is complete, verified, blocked, and left.
 
 Do not continue from a state that cannot be described and reproduced.
@@ -445,8 +484,19 @@ If the answer is only “the code and tests exist,” delivery proof is incomple
 
 ### Pre-audit evidence package
 
-Complete `implementation-evidence.yaml` and set `audit_ready: true` only when all
-required/high-risk rows have appropriate proof.
+Complete `implementation-evidence.yaml`. Rerun current-fingerprint focused
+proofs for every acceptance row and record the broad suite as a `regression`
+command. Set `audit_ready: true` as a candidate, then run:
+
+```bash
+"$PYTHON_CMD" "$AUDIT_TOOL" verify-evidence "$EPIC_DIR" \
+  --repo-root "$(pwd)" \
+  --policy "$AUDIT_POLICY"
+```
+
+If verification fails, immediately restore `audit_ready: false`, correct the
+evidence or implementation, and rerun the affected proof. Do not enter audit
+with an unsupported readiness claim.
 
 Before handing off to audit, every required/high-risk traceability row must
 identify:
@@ -475,7 +525,7 @@ review or directly editing `epic_audit.md`.
 2. Record the highest existing `reviews/audit-NNN` attempt.
 3. Execute `scope:audit_epic {epic-id}` exactly as that command specifies.
 4. Confirm a new attempt directory, `audit-attempt.yaml`, the attempt and
-   published matrices, `audit-findings.yaml`, required reviewer-role outputs,
+   published matrices, `audit-findings.yaml`, required provider outputs,
    and `epic_audit.md` were produced.
 5. Confirm the audit completion validator passed.
 
@@ -497,6 +547,8 @@ Read `audit-findings.yaml` and `epic_audit.md`.
 - Inspect sibling surfaces identified by the audit; do not patch only the named
   symptom.
 - Add or update tests/runtime evidence that would have caught the defect.
+- Record each finding closure command in current-fingerprint implementation
+  evidence and map it to the affected acceptance rows.
 - Update implementation evidence and actual traceability evidence mappings, but
   do not edit the audit matrix directly; the audit tool derives a fresh matrix.
 - Set corrected findings to `remediated_pending_verification` only after their

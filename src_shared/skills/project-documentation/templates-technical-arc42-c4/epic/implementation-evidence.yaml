@@ -1,0 +1,30 @@
+schema_version: 3
+epic_id: EPIC-ID
+repository:
+  head: ""
+  fingerprint: ""
+stories:
+  - story_id: story-01
+    status: implementation_complete_unverified
+    acceptance_rows:
+      - AC-001
+    strategy:
+      inspected_paths: []
+      selected_approach: ""
+      candidate_files_used: []
+      candidate_files_skipped: []
+      discovered_files: []
+    files_changed: []
+    tests_added_or_updated: []
+    contract_checks: []
+    commands_run: []
+    value_proof: ""
+    remaining_unproven_work:
+      - Proof has not run.
+epic_level:
+  commands_run: []
+  coverage: {}
+  operational_deliverables: []
+  blocked_rows:
+    - AC-001
+audit_ready: false

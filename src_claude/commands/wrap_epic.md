@@ -220,6 +220,17 @@ detection rules. "Be more careful" is not a lesson; "When an acceptance
 criterion promises persisted output, require non-zero runtime evidence before
 story completion" is.
 
+For every blocking or major audit finding, record exactly one prevention
+classification in the implementation summary:
+
+- `regression_test_added`;
+- `existing_gate_covers`;
+- `lesson_candidate`;
+- `epic_specific_exception`, with reason.
+
+Do not automatically create a global gate from a single finding. Lessons and
+new governance gates remain user-approved.
+
 ```
 Capturing lessons learned for {EPIC_ID}...
 

@@ -116,6 +116,26 @@ design:
     details_words: 1200
     design_words: 4000
 
+proof_obligations:
+  evidence_kinds:
+    - unit
+    - integration
+    - e2e
+    - static
+    - live_smoke
+    - runtime_command
+    - operational
+    - inspection
+  flow_closure_kinds:
+    - integration
+    - e2e
+    - live_smoke
+    - runtime_command
+    - operational
+  freshness:
+    - reusable
+    - fresh
+
 capabilities:
   api_interface:
     description: Public or cross-component API, command, event, or interface behavior.

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -116,7 +117,69 @@ def _changed_files(repo_root: Path) -> list[str]:
     paths.update(_run_git(repo_root, "diff", "--name-only"))
     paths.update(_run_git(repo_root, "diff", "--cached", "--name-only"))
     paths.update(_run_git(repo_root, "ls-files", "--others", "--exclude-standard"))
-    return sorted(path for path in paths if (repo_root / path).exists())
+    return sorted(paths)
+
+
+def _changed_paths(repo_root: Path) -> list[str]:
+    if not _run_git(repo_root, "rev-parse", "--is-inside-work-tree"):
+        return []
+    paths = set(_run_git(repo_root, "diff", "--name-only", "HEAD"))
+    paths.update(_run_git(repo_root, "ls-files", "--others", "--exclude-standard"))
+    return sorted(paths)
+
+
+def _is_evidence_output(path: str, epic_dir: Path, repo_root: Path) -> bool:
+    try:
+        epic_relative = epic_dir.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        epic_relative = ""
+    normalized = Path(path).as_posix().lstrip("./")
+    if normalized.startswith(("tmp_debug/", ".scope/")):
+        return True
+    if not epic_relative or not normalized.startswith(f"{epic_relative}/"):
+        return False
+    relative = normalized.removeprefix(f"{epic_relative}/")
+    return (
+        relative in {
+            "acceptance-traceability.yaml",
+            "implementation-evidence.yaml",
+            "implementation-summary.md",
+            "audit-findings.yaml",
+            "audit-verification-matrix.yaml",
+            "epic_audit.md",
+        }
+        or relative.startswith("reviews/")
+    )
+
+
+def repository_fingerprint(repo_root: Path, epic_dir: Path) -> str:
+    """Hash the current source state while excluding self-changing evidence outputs."""
+    digest = hashlib.sha256()
+    head = _run_git(repo_root, "rev-parse", "HEAD")
+    digest.update((head[0] if head else "no-git-head").encode())
+    paths = _changed_paths(repo_root)
+    if not paths:
+        paths = [
+            path.relative_to(repo_root).as_posix()
+            for path in sorted(repo_root.rglob("*"))
+            if path.is_file() and ".git" not in path.parts
+        ]
+    for value in paths:
+        if _is_evidence_output(value, epic_dir, repo_root):
+            continue
+        path = repo_root / value
+        digest.update(value.encode())
+        digest.update(b"\0")
+        if path.is_file():
+            digest.update(path.read_bytes())
+        else:
+            digest.update(b"<deleted>")
+        digest.update(b"\0")
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _file_sha256(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
 def _next_attempt_dir(epic_dir: Path) -> tuple[str, Path]:
@@ -187,17 +250,42 @@ def _risk_and_capabilities(profile: Mapping[str, Any]) -> tuple[str, list[str]]:
     return risk, sorted({item for item in capabilities if isinstance(item, str) and item})
 
 
-def _required_roles(policy: Mapping[str, Any], risk: str) -> list[str]:
+def _full_assignments(policy: Mapping[str, Any], risk: str) -> list[dict[str, str]]:
     risk_policy = policy.get("risk_review_policy", {})
     if not isinstance(risk_policy, dict):
         raise ValueError("audit policy risk_review_policy must be a mapping")
     selected = risk_policy.get(risk)
-    if not isinstance(selected, dict) or not isinstance(selected.get("roles"), list):
-        raise ValueError(f"audit policy has no roles for risk {risk}")
-    roles = selected["roles"]
-    if not all(isinstance(role, str) and role for role in roles):
-        raise ValueError(f"audit policy roles for {risk} must be non-empty strings")
-    return list(roles)
+    if not isinstance(selected, dict) or not isinstance(selected.get("providers"), list):
+        raise ValueError(f"audit policy has no providers for risk {risk}")
+    providers = selected["providers"]
+    known = set(_string_list(policy.get("review_providers")))
+    if not all(isinstance(provider, str) and provider for provider in providers):
+        raise ValueError(f"audit policy providers for {risk} must be non-empty strings")
+    unknown = sorted(set(providers) - known)
+    if unknown:
+        raise ValueError(f"audit policy has unknown providers for {risk}: {', '.join(unknown)}")
+    return [{"provider": provider, "mission": "semantic_core"} for provider in providers]
+
+
+def _targeted_assignments(
+    policy: Mapping[str, Any],
+    findings: Sequence[Mapping[str, Any]],
+) -> list[dict[str, str]]:
+    known = set(_string_list(policy.get("review_providers")))
+    providers = {
+        provider
+        for finding in findings
+        if finding.get("source") == "reviewer"
+        for provider in _string_list(finding.get("detected_by"))
+    }
+    unknown = sorted(providers - known)
+    if unknown:
+        raise ValueError(f"targeted findings reference unknown providers: {', '.join(unknown)}")
+    return [
+        {"provider": provider, "mission": "semantic_core"}
+        for provider in _string_list(policy.get("review_providers"))
+        if provider in providers
+    ]
 
 
 def _requirements_by_id(manifest: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
@@ -219,6 +307,433 @@ def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str) and item]
+
+
+class ImplementationEvidenceVerifier:
+    """Verify implementation proof provenance without interpreting product behavior."""
+
+    def __init__(
+        self,
+        epic_dir: Path,
+        policy_path: Path,
+        repo_root: Path | None = None,
+        story_id: str = "",
+    ) -> None:
+        self.epic_dir = epic_dir.resolve()
+        self.policy_path = policy_path.resolve()
+        self.repo_root = (repo_root or _infer_repo_root(self.epic_dir)).resolve()
+        self.story_id = story_id
+        self.errors: list[str] = []
+        self.current_fingerprint = repository_fingerprint(self.repo_root, self.epic_dir)
+        self.current_head = (_run_git(self.repo_root, "rev-parse", "HEAD") or ["no-git-head"])[0]
+        self.changed_files = set(_changed_files(self.repo_root))
+        self.current_records: list[dict[str, Any]] = []
+
+    def validate(self) -> list[str]:
+        try:
+            policy = _load_yaml(self.policy_path, "audit policy")
+            profile = _profile(self.epic_dir)
+            traceability = _traceability(self.epic_dir)
+            manifest = _manifest(self.epic_dir)
+            evidence = _load_yaml(
+                self.epic_dir / "implementation-evidence.yaml",
+                "implementation evidence",
+            )
+        except ValueError as exc:
+            return [str(exc)]
+
+        expected_version = policy.get("implementation_evidence_version")
+        if evidence.get("schema_version") != expected_version:
+            self.errors.append(
+                "implementation-evidence.yaml schema_version must be "
+                f"{expected_version!r}, got {evidence.get('schema_version')!r}"
+            )
+        try:
+            epic_id = _epic_id(profile, traceability, manifest)
+        except ValueError as exc:
+            return [str(exc)]
+        if evidence.get("epic_id") != epic_id:
+            self.errors.append("implementation-evidence.yaml epic_id does not match refinement")
+
+        repository = evidence.get("repository")
+        if not isinstance(repository, dict):
+            self.errors.append("implementation-evidence.yaml repository must be a mapping")
+        else:
+            if repository.get("head") != self.current_head:
+                self.errors.append("implementation evidence HEAD does not match the current worktree")
+            if repository.get("fingerprint") != self.current_fingerprint:
+                self.errors.append(
+                    "implementation evidence repository fingerprint does not match the current worktree"
+                )
+
+        evidence_policy = policy.get("implementation_evidence", {})
+        stories = evidence.get("stories")
+        if not isinstance(stories, list) or not stories:
+            self.errors.append("implementation-evidence.yaml stories must be a non-empty list")
+            stories = []
+        selected_stories = [
+            story
+            for story in stories
+            if isinstance(story, dict)
+            and (not self.story_id or story.get("story_id") == self.story_id)
+        ]
+        if self.story_id and not selected_stories:
+            self.errors.append(f"implementation evidence has no story {self.story_id!r}")
+
+        all_records: list[dict[str, Any]] = []
+        story_ids: list[str] = []
+        claimed_files: set[str] = set()
+        plans = {
+            str(plan.get("story_id")): plan
+            for path in sorted(self.epic_dir.glob("file-plan-story-*.yaml"))
+            for plan in [_load_yaml(path, "implementation boundary plan")]
+            if isinstance(plan.get("story_id"), str)
+        }
+        for index, story in enumerate(selected_stories, start=1):
+            context = f"implementation-evidence.yaml stories[{index}]"
+            story_id = story.get("story_id")
+            if not isinstance(story_id, str) or not story_id:
+                self.errors.append(f"{context} story_id must be a non-empty string")
+            else:
+                story_ids.append(story_id)
+            status = story.get("status")
+            allowed_statuses = _string_list(
+                _mapping(evidence_policy).get("story_statuses")
+            )
+            if status not in allowed_statuses:
+                self.errors.append(
+                    f"{context} status must be one of {allowed_statuses!r}, got {status!r}"
+                )
+            acceptance_rows = self._string_list_required(
+                story.get("acceptance_rows"), f"{context} acceptance_rows"
+            )
+            files_changed = self._string_list_required(
+                story.get("files_changed"), f"{context} files_changed"
+            )
+            claimed_files.update(files_changed)
+            strategy = story.get("strategy")
+            classified: set[str] = set()
+            if not isinstance(strategy, dict):
+                self.errors.append(f"{context} strategy must be a mapping")
+            else:
+                for field in (
+                    "inspected_paths",
+                    "candidate_files_used",
+                    "candidate_files_skipped",
+                    "discovered_files",
+                ):
+                    values = self._string_list_required(
+                        strategy.get(field), f"{context} strategy.{field}", allow_empty=True
+                    )
+                    if field in {"candidate_files_used", "discovered_files"}:
+                        classified.update(values)
+                selected_approach = strategy.get("selected_approach")
+                if not isinstance(selected_approach, str) or not selected_approach.strip():
+                    self.errors.append(
+                        f"{context} strategy.selected_approach must be a non-empty string"
+                    )
+            unclassified = sorted(set(files_changed) - classified)
+            if unclassified:
+                self.errors.append(
+                    f"{context} has unclassified changed files: {', '.join(unclassified)}"
+                )
+            for value in files_changed:
+                self._require_changed_file(value, f"{context} files_changed")
+            plan = plans.get(str(story_id), {})
+            for forbidden in plan.get("forbidden_changes", []):
+                if not isinstance(forbidden, dict):
+                    continue
+                forbidden_path = str(forbidden.get("path_or_surface", "")).split("#", 1)[0]
+                if forbidden_path in files_changed:
+                    self.errors.append(
+                        f"{context} changes mechanically forbidden path: {forbidden_path}"
+                    )
+
+            remaining = self._string_list_required(
+                story.get("remaining_unproven_work"),
+                f"{context} remaining_unproven_work",
+                allow_empty=True,
+            )
+            if status == "verified" and remaining:
+                self.errors.append(f"{context} verified story has remaining unproven work")
+            if status != "verified" and not remaining:
+                self.errors.append(f"{context} non-verified story must describe unproven work")
+            value_proof = story.get("value_proof")
+            if status == "verified" and (
+                not isinstance(value_proof, str) or not value_proof.strip()
+            ):
+                self.errors.append(f"{context} verified story requires value_proof")
+
+            records = story.get("commands_run")
+            if not isinstance(records, list):
+                self.errors.append(f"{context} commands_run must be a list")
+            else:
+                all_records.extend(
+                    self._validate_command_record(record, f"{context} commands_run[{record_index}]",
+                                                  evidence_policy)
+                    for record_index, record in enumerate(records, start=1)
+                    if isinstance(record, dict)
+                )
+                if any(not isinstance(record, dict) for record in records):
+                    self.errors.append(f"{context} commands_run entries must be mappings")
+            if (
+                status == "verified"
+                and not acceptance_rows
+                and story_id not in {"story-0", "story-00"}
+            ):
+                self.errors.append(f"{context} verified story requires acceptance_rows")
+
+        if len(story_ids) != len(set(story_ids)):
+            self.errors.append("implementation evidence has duplicate story IDs")
+        if not self.story_id and _run_git(
+            self.repo_root, "rev-parse", "--is-inside-work-tree"
+        ):
+            actual_files = {
+                value
+                for value in _changed_files(self.repo_root)
+                if not _is_evidence_output(value, self.epic_dir, self.repo_root)
+            }
+            unexplained = sorted(actual_files - claimed_files)
+            if unexplained:
+                self.errors.append(
+                    "implementation evidence does not classify changed files: "
+                    + ", ".join(unexplained)
+                )
+
+        epic_level = evidence.get("epic_level")
+        if not isinstance(epic_level, dict):
+            self.errors.append("implementation-evidence.yaml epic_level must be a mapping")
+            epic_level = {}
+        epic_records = epic_level.get("commands_run")
+        if not isinstance(epic_records, list):
+            self.errors.append("implementation-evidence.yaml epic_level.commands_run must be a list")
+            epic_records = []
+        for index, record in enumerate(epic_records, start=1):
+            if not isinstance(record, dict):
+                self.errors.append(
+                    f"implementation-evidence.yaml epic_level.commands_run[{index}] must be a mapping"
+                )
+                continue
+            all_records.append(
+                self._validate_command_record(
+                    record,
+                    f"implementation-evidence.yaml epic_level.commands_run[{index}]",
+                    evidence_policy,
+                )
+            )
+
+        self.current_records = [
+            record
+            for record in all_records
+            if record.get("repository_fingerprint") == self.current_fingerprint
+            and record.get("status") == "pass"
+        ]
+        self._validate_traceability(traceability, manifest, selected_stories)
+
+        if not self.story_id:
+            if evidence.get("audit_ready") is not True:
+                self.errors.append("implementation-evidence.yaml audit_ready must be true")
+            if any(
+                isinstance(story, dict) and story.get("status") != "verified"
+                for story in stories
+            ):
+                self.errors.append("audit_ready requires every story to be verified")
+            blocked_rows = epic_level.get("blocked_rows")
+            if not isinstance(blocked_rows, list) or blocked_rows:
+                self.errors.append("audit_ready requires epic_level.blocked_rows to be an empty list")
+        return self.errors
+
+    def _validate_command_record(
+        self,
+        record: Mapping[str, Any],
+        context: str,
+        evidence_policy: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        value = dict(record)
+        for field in ("id", "kind", "status", "cwd", "output", "output_sha256",
+                      "started_at", "completed_at", "repository_fingerprint"):
+            if not isinstance(value.get(field), str) or not str(value[field]).strip():
+                self.errors.append(f"{context} {field} must be a non-empty string")
+        kind = value.get("kind")
+        allowed_kinds = _string_list(evidence_policy.get("command_kinds"))
+        if kind not in allowed_kinds:
+            self.errors.append(f"{context} kind must be one of {allowed_kinds!r}")
+        status = value.get("status")
+        allowed_statuses = _string_list(evidence_policy.get("command_statuses"))
+        if status not in allowed_statuses:
+            self.errors.append(f"{context} status must be one of {allowed_statuses!r}")
+        if kind == "inspection":
+            if not isinstance(value.get("inspection"), str) or not value["inspection"].strip():
+                self.errors.append(f"{context} inspection must be a non-empty string")
+        elif not isinstance(value.get("command"), str) or not value["command"].strip():
+            self.errors.append(f"{context} command must be a non-empty string")
+
+        exit_code = value.get("exit_code")
+        if kind == "inspection":
+            if exit_code is not None:
+                self.errors.append(f"{context} inspection exit_code must be null")
+        elif not isinstance(exit_code, int):
+            self.errors.append(f"{context} exit_code must be an integer")
+        elif status == "pass" and exit_code != 0:
+            self.errors.append(f"{context} passing command must have exit_code 0")
+        elif status == "fail" and exit_code == 0:
+            self.errors.append(f"{context} failing command must have non-zero exit_code")
+
+        output = value.get("output")
+        if isinstance(output, str) and output:
+            output_path = self._resolve_path(output)
+            if not output_path.is_file():
+                self.errors.append(f"{context} output does not exist: {output}")
+            elif value.get("output_sha256") != _file_sha256(output_path):
+                self.errors.append(f"{context} output_sha256 does not match {output}")
+        self._string_list_required(
+            value.get("acceptance_rows"), f"{context} acceptance_rows", allow_empty=True
+        )
+        self._string_list_required(
+            value.get("proof_obligation_ids"),
+            f"{context} proof_obligation_ids",
+            allow_empty=True,
+        )
+        test_ids = self._string_list_required(
+            value.get("test_ids"), f"{context} test_ids", allow_empty=True
+        )
+        for test_id in test_ids:
+            test_path = test_id.split("::", 1)[0]
+            self._require_repo_file(test_path, f"{context} test_ids")
+        if kind in {"test", "regression"}:
+            summary = value.get("test_summary")
+            if not isinstance(summary, dict):
+                self.errors.append(f"{context} test_summary must be a mapping")
+            else:
+                for field in ("passed", "failed", "errors", "skipped"):
+                    count = summary.get(field)
+                    if not isinstance(count, int) or count < 0:
+                        self.errors.append(
+                            f"{context} test_summary.{field} must be a non-negative integer"
+                        )
+                if status == "pass" and (
+                    summary.get("failed", 0) != 0 or summary.get("errors", 0) != 0
+                ):
+                    self.errors.append(
+                        f"{context} passing test command reports failures or errors"
+                    )
+        return value
+
+    def _validate_traceability(
+        self,
+        traceability: Mapping[str, Any],
+        manifest: Mapping[str, Any],
+        stories: Sequence[Mapping[str, Any]],
+    ) -> None:
+        requirements = _requirements_by_id(manifest)
+        story_rows = {
+            row_id
+            for story in stories
+            for row_id in _string_list(story.get("acceptance_rows"))
+        }
+        records_by_row: dict[str, list[dict[str, Any]]] = {}
+        for record in self.current_records:
+            for row_id in _string_list(record.get("acceptance_rows")):
+                records_by_row.setdefault(row_id, []).append(record)
+        rows = traceability.get("acceptance_items")
+        if not isinstance(rows, list):
+            self.errors.append("acceptance-traceability.yaml acceptance_items must be a list")
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_id = str(row.get("id", ""))
+            if self.story_id and row_id not in story_rows:
+                continue
+            if requirements.get(row_id, {}).get("implementation_required") is False:
+                continue
+            context = f"traceability row {row_id}"
+            if row.get("status") != "verified":
+                self.errors.append(f"{context} status must be verified")
+            if row_id not in story_rows:
+                self.errors.append(f"{context} is not mapped to implementation evidence")
+            implementation = _mapping(row.get("implementation"))
+            actual_files = _string_list(implementation.get("actual_files"))
+            if not actual_files:
+                self.errors.append(f"{context} has no actual implementation files")
+            for value in actual_files:
+                self._require_repo_file(value, f"{context} actual_files")
+            tests = _mapping(row.get("tests"))
+            actual_tests = _string_list(tests.get("actual_tests"))
+            if not actual_tests:
+                self.errors.append(f"{context} has no actual tests")
+            for value in actual_tests:
+                self._require_repo_file(value.split("::", 1)[0], f"{context} actual_tests")
+            current = records_by_row.get(row_id, [])
+            current_test_ids = {
+                test_id
+                for record in current
+                if record.get("kind") in {"test", "regression"}
+                for test_id in _string_list(record.get("test_ids"))
+            }
+            missing_tests = sorted(set(actual_tests) - current_test_ids)
+            if missing_tests:
+                self.errors.append(
+                    f"{context} actual tests lack current passing proof: {', '.join(missing_tests)}"
+                )
+            proof_ids = set(_string_list(row.get("proof_obligation_ids")))
+            current_proofs = {
+                proof_id
+                for record in current
+                for proof_id in _string_list(record.get("proof_obligation_ids"))
+            }
+            missing_proofs = sorted(proof_ids - current_proofs)
+            if missing_proofs:
+                self.errors.append(
+                    f"{context} proof obligations lack current passing evidence: "
+                    + ", ".join(missing_proofs)
+                )
+            runtime = _mapping(row.get("runtime_evidence"))
+            if runtime.get("required") is True:
+                runtime_records = [
+                    record for record in current if record.get("kind") == "runtime"
+                ]
+                commands = set(_string_list(runtime.get("commands")))
+                evidence = set(_string_list(runtime.get("evidence")))
+                actual_commands = {
+                    str(record.get("command", "")) for record in runtime_records
+                }
+                actual_evidence = {
+                    str(record.get("output", "")) for record in runtime_records
+                }
+                if not commands or not commands.issubset(actual_commands):
+                    self.errors.append(f"{context} runtime commands lack current passing proof")
+                if not evidence or not evidence.issubset(actual_evidence):
+                    self.errors.append(f"{context} runtime evidence lacks current passing proof")
+
+    def _string_list_required(
+        self,
+        value: Any,
+        context: str,
+        *,
+        allow_empty: bool = False,
+    ) -> list[str]:
+        if not isinstance(value, list):
+            self.errors.append(f"{context} must be a list")
+            return []
+        result = [item for item in value if isinstance(item, str) and item]
+        if len(result) != len(value):
+            self.errors.append(f"{context} values must be non-empty strings")
+        if not allow_empty and not result:
+            self.errors.append(f"{context} must not be empty")
+        return result
+
+    def _require_repo_file(self, value: str, context: str) -> None:
+        if not self._resolve_path(value).is_file():
+            self.errors.append(f"{context} path does not exist: {value}")
+
+    def _require_changed_file(self, value: str, context: str) -> None:
+        if not self._resolve_path(value).is_file() and value not in self.changed_files:
+            self.errors.append(f"{context} path does not exist or identify a deletion: {value}")
+
+    def _resolve_path(self, value: str) -> Path:
+        path = Path(value)
+        return path if path.is_absolute() else self.repo_root / path
 
 
 def _derive_matrix(
@@ -282,7 +797,7 @@ def _derive_matrix(
                     "commands": _string_list(runtime.get("commands")),
                     "evidence": _string_list(runtime.get("evidence")),
                 },
-                "status": "pending",
+                "status": "ready",
                 "finding_ids": [],
                 "audit_notes": "",
             }
@@ -299,8 +814,14 @@ def _derive_matrix(
     }
 
 
-def _boundary_gates(epic_dir: Path, scoped_rows: set[str]) -> list[dict[str, Any]]:
-    commands: list[tuple[str, str]] = []
+def _boundary_gates(
+    epic_dir: Path,
+    scoped_rows: set[str],
+    manifest: Mapping[str, Any],
+    current_records: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    requirements = _requirements_by_id(manifest)
+    commands: list[tuple[str, str, list[str], bool]] = []
     for path in sorted(epic_dir.glob("file-plan-story-*.yaml")):
         plan = _load_yaml(path, "implementation boundary plan")
         proofs = plan.get("proof_obligations", [])
@@ -312,30 +833,74 @@ def _boundary_gates(epic_dir: Path, scoped_rows: set[str]) -> list[dict[str, Any
             acceptance_rows = set(_string_list(proof.get("acceptance_rows")))
             if acceptance_rows and not acceptance_rows.intersection(scoped_rows):
                 continue
-            command = proof.get("command_hint")
+            command = proof.get("command")
             if isinstance(command, str) and command.strip():
-                commands.append((str(proof.get("id", "boundary-proof")), command.strip()))
+                requires_fresh = proof.get("freshness") == "fresh" or any(
+                    requirements.get(row_id, {}).get("risk") == "critical"
+                    for row_id in acceptance_rows
+                )
+                commands.append(
+                    (
+                        str(proof.get("id", "boundary-proof")),
+                        command.strip(),
+                        sorted(acceptance_rows),
+                        requires_fresh,
+                    )
+                )
+
+    for record in current_records:
+        if record.get("kind") != "regression":
+            continue
+        command = record.get("command")
+        if isinstance(command, str) and command:
+            commands.append(
+                (
+                    str(record.get("id", "epic-regression")),
+                    command,
+                    _string_list(record.get("acceptance_rows")),
+                    False,
+                )
+            )
 
     unique: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for source_id, command in commands:
+    for source_id, command, acceptance_rows, requires_fresh in commands:
         if command in seen:
             continue
         seen.add(command)
+        reusable = next(
+            (
+                record
+                for record in current_records
+                if record.get("command") == command and record.get("status") == "pass"
+            ),
+            None,
+        )
+        reused = reusable is not None and not requires_fresh
         unique.append(
             {
                 "id": f"gate-{len(unique) + 1:03d}",
                 "source": source_id,
                 "command": command,
-                "status": "pending",
-                "evidence": [],
-                "reason": "",
+                "acceptance_rows": acceptance_rows,
+                "freshness": "fresh" if requires_fresh else "reusable",
+                "reused": reused,
+                "status": "pass" if reused else "pending",
+                "evidence": [str(reusable.get("output"))] if reused else [],
+                "reason": "Reused fingerprint-matched implementation evidence."
+                if reused
+                else "",
             }
         )
     return unique
 
 
-def _existing_v2_attempts(epic_dir: Path, cycle_id: str, mode: str) -> int:
+def _existing_attempts(
+    epic_dir: Path,
+    cycle_id: str,
+    mode: str,
+    attempt_version: int,
+) -> int:
     count = 0
     for path in (epic_dir / "reviews").glob("audit-*/audit-attempt.yaml"):
         try:
@@ -343,7 +908,7 @@ def _existing_v2_attempts(epic_dir: Path, cycle_id: str, mode: str) -> int:
         except ValueError:
             continue
         if (
-            attempt.get("schema_version") == 2
+            attempt.get("schema_version") == attempt_version
             and attempt.get("cycle_id") == cycle_id
             and attempt.get("mode") == mode
         ):
@@ -371,7 +936,17 @@ def prepare(args: argparse.Namespace) -> int:
     manifest = _manifest(epic_dir)
     epic_id = _epic_id(profile, traceability, manifest)
     risk, capabilities = _risk_and_capabilities(profile)
-    roles = _required_roles(policy, risk)
+    evidence_verifier = ImplementationEvidenceVerifier(
+        epic_dir,
+        args.policy,
+        repo_root,
+    )
+    evidence_errors = evidence_verifier.validate()
+    if evidence_errors:
+        raise ValueError(
+            "implementation evidence is not audit-ready:\n- "
+            + "\n- ".join(evidence_errors)
+        )
 
     allowed_modes = policy.get("allowed_modes", [])
     if args.mode not in allowed_modes:
@@ -379,7 +954,12 @@ def prepare(args: argparse.Namespace) -> int:
     budget = policy.get("review_budget", {})
     budget_field = "maximum_full_attempts" if args.mode == "full" else "maximum_targeted_attempts"
     maximum = budget.get(budget_field) if isinstance(budget, dict) else None
-    existing = _existing_v2_attempts(epic_dir, args.cycle_id, args.mode)
+    existing = _existing_attempts(
+        epic_dir,
+        args.cycle_id,
+        args.mode,
+        int(policy.get("attempt_version", 0)),
+    )
     if isinstance(maximum, int) and existing >= maximum and not args.allow_extra:
         raise ValueError(
             f"audit cycle {args.cycle_id!r} already has {existing} {args.mode} attempt(s); "
@@ -412,6 +992,7 @@ def prepare(args: argparse.Namespace) -> int:
     if args.mode == "full":
         scoped_rows = all_rows
         finding_ids: list[str] = []
+        assignments = _full_assignments(policy, risk)
     else:
         finding_ids = list(dict.fromkeys(args.finding))
         if not finding_ids:
@@ -436,6 +1017,13 @@ def prepare(args: argparse.Namespace) -> int:
         scoped_rows = [row_id for row_id in all_rows if row_id in scoped]
         if not scoped_rows:
             raise ValueError("targeted findings do not reference any current acceptance rows")
+        assignments = _targeted_assignments(
+            policy,
+            [findings_by_id[finding_id] for finding_id in finding_ids],
+        )
+
+    risk_policy = _mapping(_mapping(policy.get("risk_review_policy")).get(risk))
+    capability_focus = capabilities if risk_policy.get("capability_focus") is True else []
 
     attempt = {
         "schema_version": policy.get("attempt_version"),
@@ -446,19 +1034,30 @@ def prepare(args: argparse.Namespace) -> int:
         "reason": args.reason or ("complete implementation audit" if args.mode == "full" else "finding verification"),
         "risk_level": risk,
         "capabilities": capabilities,
-        "specialist_focus": capabilities if "capability_specialist" in roles else [],
+        "capability_focus": capability_focus,
+        "repository_fingerprint": evidence_verifier.current_fingerprint,
         "scope": {
             "acceptance_rows": scoped_rows,
             "finding_ids": finding_ids,
             "sibling_surfaces": list(dict.fromkeys(args.sibling_surface)),
         },
         "changed_files": _changed_files(repo_root),
-        "gates": _boundary_gates(epic_dir, set(scoped_rows)),
+        "gates": _boundary_gates(
+            epic_dir,
+            set(scoped_rows),
+            manifest,
+            evidence_verifier.current_records,
+        ),
         "review": {
-            "required_roles": roles,
+            "required_assignments": assignments,
             "outputs": [],
-            "skipped_reason": "",
+            "skipped_reason": (
+                "Targeted findings require deterministic closure only."
+                if args.mode == "targeted" and not assignments
+                else ""
+            ),
         },
+        "metrics": {},
         "status": "pending",
         "decision_reason": "",
     }
@@ -466,14 +1065,129 @@ def prepare(args: argparse.Namespace) -> int:
     attempt_dir.mkdir(parents=True, exist_ok=False)
     _write_yaml(attempt_dir / "audit-attempt.yaml", attempt)
     _write_yaml(attempt_dir / "audit-verification-matrix.yaml", matrix)
+    packet = {
+        "schema_version": 1,
+        "epic_id": epic_id,
+        "attempt_id": attempt_id,
+        "mode": args.mode,
+        "risk_level": risk,
+        "capability_focus": capability_focus,
+        "scope": attempt["scope"],
+        "changed_files": attempt["changed_files"],
+        "artifacts": [
+            str(path.relative_to(repo_root))
+            for path in (
+                epic_dir / "refinement-profile.yaml",
+                epic_dir / "refinement-manifest.yaml",
+                epic_dir / "acceptance-criteria.md",
+                epic_dir / "design.md",
+                epic_dir / "acceptance-traceability.yaml",
+                epic_dir / "implementation-evidence.yaml",
+                attempt_dir / "audit-attempt.yaml",
+                attempt_dir / "audit-verification-matrix.yaml",
+            )
+        ],
+        "deterministic_guarantees": [
+            "implementation evidence schema and audit readiness are valid",
+            "cited implementation, test, and evidence paths exist",
+            "proof output hashes and statuses are coherent",
+            "traceability rows have current fingerprint-matched proof",
+            "changed implementation files are classified by story",
+        ],
+    }
+    _write_yaml(attempt_dir / "review-packet.yaml", packet)
     if not (epic_dir / "audit-findings.yaml").is_file():
         _write_yaml(epic_dir / "audit-findings.yaml", findings)
     print(attempt_dir.relative_to(repo_root))
     return 0
 
 
+def _count_by(values: Iterable[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _attempt_metrics(
+    attempt: Mapping[str, Any],
+    findings: Mapping[str, Any],
+) -> dict[str, Any]:
+    attempt_id = attempt.get("attempt_id")
+    rows = [
+        finding
+        for finding in findings.get("findings", [])
+        if isinstance(finding, dict) and finding.get("first_seen_attempt") == attempt_id
+    ]
+    return {
+        "new_findings": {
+            "total": len(rows),
+            "by_severity": _count_by(
+                str(finding.get("severity")) for finding in rows
+            ),
+            "by_category": _count_by(
+                str(finding.get("category")) for finding in rows
+            ),
+            "by_source": _count_by(
+                str(finding.get("source")) for finding in rows
+            ),
+            "by_provider": _count_by(
+                provider
+                for finding in rows
+                for provider in set(_string_list(finding.get("detected_by")))
+            ),
+        },
+        "targeted_verification_required": any(
+            finding.get("disposition") == "remediation_required"
+            and finding.get("status") not in {"verified", "accepted_risk", "rejected"}
+            for finding in rows
+        ),
+    }
+
+
+def record_metrics(args: argparse.Namespace) -> int:
+    attempt_path = args.attempt_dir.resolve() / "audit-attempt.yaml"
+    attempt = _load_yaml(attempt_path, "audit attempt")
+    findings = _load_yaml(args.epic_dir.resolve() / "audit-findings.yaml", "audit findings")
+    attempt["metrics"] = _attempt_metrics(attempt, findings)
+    _write_yaml(attempt_path, attempt)
+    print(f"Audit metrics recorded: attempt={attempt.get('attempt_id')}")
+    return 0
+
+
+def verify_evidence(args: argparse.Namespace) -> int:
+    verifier = ImplementationEvidenceVerifier(
+        args.epic_dir,
+        args.policy,
+        args.repo_root,
+        args.story,
+    )
+    errors = verifier.validate()
+    if errors:
+        print(
+            f"Implementation evidence verification failed with {len(errors)} error(s):",
+            file=sys.stderr,
+        )
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
+    scope = f"story={args.story}" if args.story else "audit-ready handoff"
+    print(
+        "Implementation evidence verification passed: "
+        f"{scope} fingerprint={verifier.current_fingerprint}"
+    )
+    return 0
+
+
+def print_fingerprint(args: argparse.Namespace) -> int:
+    epic_dir = args.epic_dir.resolve()
+    repo_root = (args.repo_root or _infer_repo_root(epic_dir)).resolve()
+    print(repository_fingerprint(repo_root, epic_dir))
+    return 0
+
+
 class AuditValidator:
-    """Validate one prepared Audit Epic v2 attempt."""
+    """Validate one prepared Audit Epic v3 attempt."""
 
     def __init__(
         self,
@@ -517,6 +1231,14 @@ class AuditValidator:
             return [str(exc)]
 
         self._validate_all_yaml()
+        evidence_errors = ImplementationEvidenceVerifier(
+            self.epic_dir,
+            self.policy_path,
+            self.repo_root,
+        ).validate()
+        self.errors.extend(
+            f"implementation evidence: {error}" for error in evidence_errors
+        )
         self._validate_attempt()
         self._validate_matrix()
         self._validate_matrix_derivation()
@@ -555,9 +1277,15 @@ class AuditValidator:
         self._require_allowed(
             self.attempt.get("status"), self.policy.get("attempt_statuses"), "status", path
         )
-        for field in ("capabilities", "specialist_focus", "changed_files"):
+        for field in ("capabilities", "capability_focus", "changed_files"):
             self._require_string_list(self.attempt.get(field), field, path)
+        self._require_string(self.attempt, "repository_fingerprint", path)
         self._require_string(self.attempt, "decision_reason", path, allow_empty=True)
+        if not isinstance(self.attempt.get("metrics"), dict):
+            self.errors.append(f"{path} metrics must be a mapping")
+        packet = self.attempt_dir / "review-packet.yaml"
+        if not packet.is_file():
+            self.errors.append(f"missing review packet: {packet}")
 
     def _validate_matrix(self) -> None:
         path = self.attempt_dir / "audit-verification-matrix.yaml"
@@ -718,13 +1446,19 @@ class AuditValidator:
                     else []
                 )
                 self._require_allowed(finding.get(field), allowed, field, path, context)
+            sources = (
+                finding_policy.get("sources", [])
+                if isinstance(finding_policy, dict)
+                else []
+            )
+            self._require_allowed(finding.get("source"), sources, "source", path, context)
             for field in ("title", "impact", "owner", "closure_test"):
                 self._require_string(finding, field, path, context=context)
             for field in (
                 "evidence",
                 "affected_acceptance_ids",
                 "affected_files",
-                "reviewer_roles",
+                "detected_by",
             ):
                 values = self._require_string_list(finding.get(field), field, path, context)
                 if field == "affected_acceptance_ids":
@@ -733,8 +1467,20 @@ class AuditValidator:
                         self.errors.append(
                             f"{context} references unknown acceptance rows: {', '.join(unknown)}"
                         )
+                if field == "detected_by":
+                    unknown = sorted(
+                        set(values) - set(_string_list(self.policy.get("review_providers")))
+                    )
+                    if unknown:
+                        self.errors.append(
+                            f"{context} references unknown providers: {', '.join(unknown)}"
+                        )
             if not finding.get("evidence"):
                 self.errors.append(f"{context} evidence must not be empty")
+            if finding.get("source") == "reviewer" and not finding.get("detected_by"):
+                self.errors.append(f"{context} reviewer finding requires detected_by")
+            if finding.get("source") == "deterministic" and finding.get("detected_by"):
+                self.errors.append(f"{context} deterministic finding must not list providers")
         self._check_unique(ids, "finding ids", path)
         self._check_unique(fingerprints, "finding fingerprints", path)
 
@@ -826,8 +1572,8 @@ class AuditValidator:
                     self.errors.append(f"matrix row {row_id} has no runtime command")
                 if not runtime.get("evidence"):
                     self.errors.append(f"matrix row {row_id} has no runtime evidence")
-            if row.get("status") == "pending":
-                self.errors.append(f"matrix row {row_id} remains pending")
+            if self.phase == "complete" and row.get("status") == "ready":
+                self.errors.append(f"matrix row {row_id} remains ready")
 
         gates = self.attempt.get("gates")
         if not isinstance(gates, list):
@@ -844,6 +1590,18 @@ class AuditValidator:
                 gate_ids.append(gate_id)
             self._require_string(gate, "source", path, context=context)
             self._require_string(gate, "command", path, context=context)
+            self._require_string_list(
+                gate.get("acceptance_rows"), "acceptance_rows", path, context
+            )
+            self._require_allowed(
+                gate.get("freshness"),
+                ["reusable", "fresh"],
+                "freshness",
+                path,
+                context,
+            )
+            if not isinstance(gate.get("reused"), bool):
+                self.errors.append(f"{context} reused must be boolean")
             status = gate.get("status")
             self._require_allowed(status, self.policy.get("gate_statuses"), "status", path, context)
             evidence = self._require_string_list(gate.get("evidence"), "evidence", path, context)
@@ -854,6 +1612,8 @@ class AuditValidator:
                 self.errors.append(f"{context} not_applicable requires reason")
             elif status != "not_applicable" and not evidence:
                 self.errors.append(f"{context} requires evidence")
+            if gate.get("reused") is True and status != "pass":
+                self.errors.append(f"{context} reused gate must pass")
         self._check_unique(gate_ids, "gate ids", path)
 
     def _validate_reviews(self) -> None:
@@ -862,23 +1622,32 @@ class AuditValidator:
         if not isinstance(review, dict):
             self.errors.append(f"{path} review must be a mapping")
             return
-        required_roles = self._require_string_list(
-            review.get("required_roles"), "review.required_roles", path
-        )
-        known_roles = set(self.policy.get("roles", {}))
-        unknown_roles = sorted(set(required_roles) - known_roles)
-        if unknown_roles:
-            self.errors.append(
-                f"{path} review.required_roles contains unknown roles: {', '.join(unknown_roles)}"
+        required = review.get("required_assignments")
+        if not isinstance(required, list):
+            self.errors.append(f"{path} review.required_assignments must be a list")
+            required = []
+        required_keys = self._validate_assignments(required, "review.required_assignments", path)
+        if self.attempt.get("mode") == "full":
+            expected = _full_assignments(
+                self.policy,
+                str(self.attempt.get("risk_level", "")),
             )
-        risk_policy = self.policy.get("risk_review_policy", {}).get(
-            self.attempt.get("risk_level"), {}
-        )
-        policy_roles = risk_policy.get("roles", []) if isinstance(risk_policy, dict) else []
-        missing_policy_roles = sorted(set(policy_roles) - set(required_roles))
-        if missing_policy_roles:
+        else:
+            finding_ids = set(
+                _string_list(_mapping(self.attempt.get("scope")).get("finding_ids"))
+            )
+            selected = [
+                finding
+                for finding in self.findings.get("findings", [])
+                if isinstance(finding, dict) and finding.get("id") in finding_ids
+            ]
+            expected = _targeted_assignments(self.policy, selected)
+        expected_keys = {
+            (assignment["provider"], assignment["mission"]) for assignment in expected
+        }
+        if required_keys != expected_keys:
             self.errors.append(
-                f"{path} review.required_roles missing policy roles: {', '.join(missing_policy_roles)}"
+                f"{path} review.required_assignments do not match policy-selected assignments"
             )
         skipped_reason = self._require_string(
             review, "skipped_reason", path, context=str(path), allow_empty=True
@@ -891,39 +1660,92 @@ class AuditValidator:
             if outputs:
                 self.errors.append(f"{path} skipped review must not list outputs")
             return
-        output_roles: list[str] = []
+        output_keys: list[tuple[str, str]] = []
         for index, output in enumerate(outputs, start=1):
             context = f"{path} review.outputs[{index}]"
             if not isinstance(output, dict):
                 self.errors.append(f"{context} must be a mapping")
                 continue
-            role = self._require_string(output, "role", path, context=context)
+            provider = self._require_string(output, "provider", path, context=context)
+            mission = self._require_string(output, "mission", path, context=context)
             output_path = self._require_string(output, "path", path, context=context)
-            if role:
-                output_roles.append(role)
+            metadata_path = self._require_string(
+                output, "metadata_path", path, context=context
+            )
+            if provider and mission:
+                output_keys.append((provider, mission))
             if output_path:
                 resolved = self._resolve_path(output_path)
                 if not resolved.is_file():
                     self.errors.append(f"{context} output file does not exist: {output_path}")
                 else:
-                    self._validate_review_role(resolved, role, context)
-        self._check_unique(output_roles, "review output roles", path)
-        missing_outputs = sorted(set(required_roles) - set(output_roles))
+                    self._validate_review_output(
+                        resolved, provider, mission, context
+                    )
+            if metadata_path and not self._resolve_path(metadata_path).is_file():
+                self.errors.append(
+                    f"{context} metadata file does not exist: {metadata_path}"
+                )
+        if len(output_keys) != len(set(output_keys)):
+            self.errors.append(f"{path} duplicate review output assignments")
+        missing_outputs = sorted(required_keys - set(output_keys))
         if missing_outputs:
-            self.errors.append(f"{path} has no output for roles: {', '.join(missing_outputs)}")
+            formatted = ", ".join(f"{provider}/{mission}" for provider, mission in missing_outputs)
+            self.errors.append(f"{path} has no output for assignments: {formatted}")
 
-    def _validate_review_role(self, output_path: Path, expected_role: str, context: str) -> None:
+    def _validate_assignments(
+        self,
+        assignments: Sequence[Any],
+        field: str,
+        path: Path,
+    ) -> set[tuple[str, str]]:
+        providers = set(_string_list(self.policy.get("review_providers")))
+        missions = set(_string_list(self.policy.get("review_missions")))
+        keys: list[tuple[str, str]] = []
+        for index, assignment in enumerate(assignments, start=1):
+            context = f"{path} {field}[{index}]"
+            if not isinstance(assignment, dict):
+                self.errors.append(f"{context} must be a mapping")
+                continue
+            provider = assignment.get("provider")
+            mission = assignment.get("mission")
+            if provider not in providers:
+                self.errors.append(f"{context} has unknown provider {provider!r}")
+            if mission not in missions:
+                self.errors.append(f"{context} has unknown mission {mission!r}")
+            if isinstance(provider, str) and isinstance(mission, str):
+                keys.append((provider, mission))
+        if len(keys) != len(set(keys)):
+            self.errors.append(f"{path} duplicate {field}")
+        return set(keys)
+
+    def _validate_review_output(
+        self,
+        output_path: Path,
+        expected_provider: str,
+        expected_mission: str,
+        context: str,
+    ) -> None:
         try:
             text = output_path.read_text(encoding="utf-8")
         except OSError as exc:
             self.errors.append(f"{context} cannot read review output: {exc}")
             return
-        match = re.search(r"(?m)^AUDIT_ROLE:\s*([a-z][a-z0-9_]*)\s*$", text)
-        if not match:
-            self.errors.append(f"{context} output has no valid AUDIT_ROLE")
-        elif expected_role and match.group(1) != expected_role:
+        provider = re.search(r"(?m)^AUDIT_PROVIDER:\s*([a-z][a-z0-9_]*)\s*$", text)
+        if not provider:
+            self.errors.append(f"{context} output has no valid AUDIT_PROVIDER")
+        elif expected_provider and provider.group(1) != expected_provider:
             self.errors.append(
-                f"{context} declares AUDIT_ROLE {match.group(1)!r}, expected {expected_role!r}"
+                f"{context} declares AUDIT_PROVIDER {provider.group(1)!r}, "
+                f"expected {expected_provider!r}"
+            )
+        mission = re.search(r"(?m)^AUDIT_MISSION:\s*([a-z][a-z0-9_]*)\s*$", text)
+        if not mission:
+            self.errors.append(f"{context} output has no valid AUDIT_MISSION")
+        elif expected_mission and mission.group(1) != expected_mission:
+            self.errors.append(
+                f"{context} declares AUDIT_MISSION {mission.group(1)!r}, "
+                f"expected {expected_mission!r}"
             )
         decision = re.search(r"(?m)^DECISION:\s*([a-z][a-z0-9_]*)\s*$", text)
         allowed = self.policy.get("review_decisions", [])
@@ -933,6 +1755,24 @@ class AuditValidator:
             self.errors.append(
                 f"{context} declares unsupported DECISION {decision.group(1)!r}"
             )
+        covered = re.search(r"(?m)^COVERED_ACCEPTANCE_IDS:\s*(\[.*\])\s*$", text)
+        if not covered:
+            self.errors.append(f"{context} output has no COVERED_ACCEPTANCE_IDS")
+        else:
+            try:
+                values = yaml.safe_load(covered.group(1))
+            except yaml.YAMLError:
+                values = None
+            if not isinstance(values, list) or not all(
+                isinstance(value, str) and value for value in values
+            ):
+                self.errors.append(f"{context} COVERED_ACCEPTANCE_IDS must be a string list")
+            else:
+                missing = sorted(self.scoped_rows - set(values))
+                if missing:
+                    self.errors.append(
+                        f"{context} did not cover acceptance rows: {', '.join(missing)}"
+                    )
 
     def _validate_completion(self) -> None:
         attempt_path = self.attempt_dir / "audit-attempt.yaml"
@@ -969,6 +1809,11 @@ class AuditValidator:
         findings = [
             finding for finding in self.findings.get("findings", []) if isinstance(finding, dict)
         ]
+        expected_metrics = _attempt_metrics(self.attempt, self.findings)
+        if self.attempt.get("metrics") != expected_metrics:
+            self.errors.append(
+                f"{attempt_path} metrics do not match mechanically derived finding counts"
+            )
         terminal_statuses = set(self.policy.get("terminal_finding_statuses", []))
         active = [finding for finding in findings if finding.get("status") not in terminal_statuses]
         nonpass_rows = {
@@ -993,8 +1838,9 @@ class AuditValidator:
         if status == "pass":
             if nonpass_rows or nonpass_gates or active:
                 self.errors.append("PASS requires passing scoped rows/gates and no active findings")
-            if self.attempt.get("review", {}).get("skipped_reason"):
-                self.errors.append("PASS cannot skip required review roles")
+            review = _mapping(self.attempt.get("review"))
+            if review.get("skipped_reason") and review.get("required_assignments"):
+                self.errors.append("PASS cannot skip required review assignments")
         elif status == "fail":
             remediation = [
                 finding
@@ -1133,7 +1979,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--repo-root", type=Path)
     prepare_parser.add_argument("--policy", type=Path, default=_default_policy_path())
     prepare_parser.add_argument("--mode", choices=("full", "targeted"), required=True)
-    prepare_parser.add_argument("--cycle-id", default="audit-v2")
+    prepare_parser.add_argument("--cycle-id", default="audit-v3")
     prepare_parser.add_argument("--finding", action="append", default=[])
     prepare_parser.add_argument("--sibling-surface", action="append", default=[])
     prepare_parser.add_argument("--reason", default="")
@@ -1147,6 +1993,32 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--repo-root", type=Path)
     validate_parser.add_argument("--policy", type=Path, default=_default_policy_path())
     validate_parser.set_defaults(handler=validate)
+
+    evidence_parser = subparsers.add_parser(
+        "verify-evidence",
+        help="Verify implementation evidence provenance",
+    )
+    evidence_parser.add_argument("epic_dir", type=Path)
+    evidence_parser.add_argument("--repo-root", type=Path)
+    evidence_parser.add_argument("--policy", type=Path, default=_default_policy_path())
+    evidence_parser.add_argument("--story", default="")
+    evidence_parser.set_defaults(handler=verify_evidence)
+
+    fingerprint_parser = subparsers.add_parser(
+        "fingerprint",
+        help="Print the current repository-state fingerprint",
+    )
+    fingerprint_parser.add_argument("epic_dir", type=Path)
+    fingerprint_parser.add_argument("--repo-root", type=Path)
+    fingerprint_parser.set_defaults(handler=print_fingerprint)
+
+    metrics_parser = subparsers.add_parser(
+        "record-metrics",
+        help="Record mechanically derived finding metrics for an attempt",
+    )
+    metrics_parser.add_argument("epic_dir", type=Path)
+    metrics_parser.add_argument("attempt_dir", type=Path)
+    metrics_parser.set_defaults(handler=record_metrics)
     return parser
 
 

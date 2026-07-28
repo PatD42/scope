@@ -19,7 +19,7 @@ Do NOT rely on memory. Do NOT summarize. READ THE FILE every time.
   - Remaining unproven work, if any
 - [ ] **Runtime path proven for integration work** — If the story adds or changes an adapter, mapper, importer, writer, parser, service call, queue/worker path, scheduled job, backfill, migration, CLI, dashboard/API integration, or any side-effecting component, unit tests alone are insufficient. Prove the intended entrypoint calls the component, upstream inputs are available there, and downstream output/state is produced.
 - [ ] **Promised outputs observed** — If the story promises new output, persisted rows, generated files, extracted items, metrics, events, or side effects, provide a representative run showing the output exists. If an acceptance criterion names a threshold, measure it. If zero output is valid, the acceptance criterion or boundary plan must explicitly say zero is valid.
-- [ ] **Precise completion status used** — Do not use `complete` unless promised value was observed through the intended path. Use a non-complete status such as `implementation_complete_unverified`, `unit_verified`, `integration_verified`, `runtime_verified`, or `blocked_missing_runtime_input` when proof is partial.
+- [ ] **Precise completion status used** — Use `verified` only when every required proof passed and promised value was observed through the intended path. Use `implementation_complete_unverified` or `blocked` when proof is partial, and record the missing proof in `remaining_unproven_work`.
 
 ### Code Quality (see production-code-rules.md for details)
 
