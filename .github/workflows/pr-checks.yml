@@ -38,44 +38,107 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Scope runtime and test dependencies
+        run: python -m pip install -r requirements-dev.txt
+
       - name: Exercise project and user installs
         shell: pwsh
         run: |
           $projectTarget = Join-Path $env:RUNNER_TEMP "scope project target"
           New-Item -ItemType Directory -Force -Path $projectTarget | Out-Null
 
+          $generatedPaths = @(
+            ".claude/scripts/__pycache__/stale.pyc",
+            ".claude/scripts/.pytest_cache/stale",
+            ".claude/scripts/.DS_Store",
+            "plugins/scope/scripts/__pycache__/stale.pyc",
+            "plugins/scope/scripts/.pytest_cache/stale",
+            "plugins/scope/scripts/.DS_Store"
+          )
+          foreach ($relativePath in $generatedPaths) {
+            $path = Join-Path $projectTarget $relativePath
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+            Set-Content -LiteralPath $path -Value "generated"
+          }
+
           & .\install.bat $projectTarget
           if ($LASTEXITCODE -ne 0) { throw "Project install failed" }
 
           $requiredProjectPaths = @(
+            ".claude/commands/wrap_epic.md",
             ".claude/commands/implement.md",
             ".claude/commands/epic_refine/reviewer-refinement.md",
             ".claude/commands/audit_epic/reviewer-audit.md",
             ".claude/agents/developer.md",
             ".claude/skills/project-documentation/SKILL.md",
             ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/design.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/delivery-manifest.yaml",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-state.yaml",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-findings.yaml",
             ".claude/governance/developer-checklist.md",
             ".claude/config/refinement-policy.yaml",
             ".claude/config/audit-policy.yaml",
+            ".claude/config/reviewer-policy.yaml",
+            ".claude/config/worker-policy.yaml",
+            ".claude/config/codegraph-policy.yaml",
+            ".claude/config/worker-job.schema.json",
+            ".claude/config/worker-result.schema.json",
+            ".claude/config/wrap-policy.yaml",
             ".claude/scripts/validate-refinement.py",
             ".claude/scripts/audit-artifacts.py",
-            ".claude/scripts/scope-reviewer-claude-pexpect.py",
+            ".claude/scripts/scope-reviewer.py",
+            ".claude/scripts/scope-worker.py",
+            ".claude/scripts/scope-dependency-merge.py",
+            ".claude/scripts/scope-wrap-finalize.py",
+            ".claude/scripts/scope_git.py",
+            ".claude/scripts/scope_fingerprint.py",
+            ".claude/scripts/scope_codegraph.py",
+            ".claude/workers/refinement-worker.md",
+            ".claude/workers/implementation-worker.md",
+            ".claude/workers/audit-worker.md",
+            ".claude/workers/diagnostic-worker.md",
             ".claude/requirements.txt",
+            "plugins/scope/commands/wrap_epic.md",
             "plugins/scope/commands/implement.md",
             "plugins/scope/commands/epic_refine/reviewer-refinement.md",
             "plugins/scope/commands/audit_epic/reviewer-audit.md",
             "plugins/scope/agents/developer.md",
             "plugins/scope/skills/project-documentation/SKILL.md",
             "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/design.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/delivery-manifest.yaml",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-state.yaml",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-findings.yaml",
             "plugins/scope/governance/developer-checklist.md",
             "plugins/scope/config/refinement-policy.yaml",
             "plugins/scope/config/audit-policy.yaml",
+            "plugins/scope/config/reviewer-policy.yaml",
+            "plugins/scope/config/worker-policy.yaml",
+            "plugins/scope/config/codegraph-policy.yaml",
+            "plugins/scope/config/worker-job.schema.json",
+            "plugins/scope/config/worker-result.schema.json",
+            "plugins/scope/config/wrap-policy.yaml",
             "plugins/scope/docs/reverse-engineering-guide.md",
             "plugins/scope/docs/SCOPE-README.md",
             "plugins/scope/scripts/validate-refinement.py",
             "plugins/scope/scripts/audit-artifacts.py",
-            "plugins/scope/scripts/scope-reviewer-claude-pexpect.py",
+            "plugins/scope/scripts/scope-reviewer.py",
+            "plugins/scope/scripts/scope-worker.py",
+            "plugins/scope/scripts/scope-dependency-merge.py",
+            "plugins/scope/scripts/scope-wrap-finalize.py",
+            "plugins/scope/scripts/scope_git.py",
+            "plugins/scope/scripts/scope_fingerprint.py",
+            "plugins/scope/scripts/scope_codegraph.py",
             "plugins/scope/scripts/scope-command",
+            "plugins/scope/workers/refinement-worker.md",
+            "plugins/scope/workers/implementation-worker.md",
+            "plugins/scope/workers/audit-worker.md",
+            "plugins/scope/workers/diagnostic-worker.md",
             "plugins/scope/requirements.txt",
             "plugins/scope/.codex-plugin/plugin.json",
             "plugins/scope/README.md",
@@ -85,12 +148,21 @@ jobs:
             $path = Join-Path $projectTarget $relativePath
             if (-not (Test-Path -LiteralPath $path)) { throw "Missing installed path: $relativePath" }
           }
+          foreach ($relativePath in $generatedPaths) {
+            $path = Join-Path $projectTarget $relativePath
+            if (Test-Path -LiteralPath $path) { throw "Generated path was installed: $relativePath" }
+          }
 
           $configPath = Join-Path $projectTarget ".scope/config.yaml"
           Set-Content -LiteralPath $configPath -Value "preserve: true"
           $stalePaths = @(
             ".claude/commands/scripts/scope-reviewer-tmux.sh",
             ".claude/commands/scripts/scope-reviewer-claude-pexpect.py",
+            ".claude/scripts/scope-reviewer-claude-pexpect.py",
+            ".claude/scripts/scope-proof-preflight.py",
+            ".claude/config/worker-runtime-policy.yaml",
+            ".claude/commands/implement_tdd.md",
+            ".claude/governance/agent-lifecycle.md",
             ".claude/commands/scripts/validate-architecture-contracts.sh",
             ".claude/commands/scripts/validate-epic-docs.sh",
             ".claude/commands/audit_epic/reviewer-gemini.md",
@@ -104,6 +176,12 @@ jobs:
             ".claude/commands/epic_refine/reviewer-architecture-agy.md",
             ".claude/commands/epic_refine/reviewer-architecture-glm.md",
             "plugins/scope/scripts/scope-reviewer-tmux.sh",
+            "plugins/scope/scripts/scope-reviewer-claude-pexpect.py",
+            "plugins/scope/scripts/scope-proof-preflight.py",
+            "plugins/scope/config/worker-runtime-policy.yaml",
+            "plugins/scope/commands/implement_tdd.md",
+            "plugins/scope/docs/epic-workflow.md",
+            "plugins/scope/governance/agent-lifecycle.md",
             "plugins/scope/commands/audit_epic/reviewer-gemini.md",
             "plugins/scope/commands/epic_refine/reviewer-architecture-gemini.md",
             "plugins/scope/commands/audit_epic/reviewer-codex.md",
@@ -119,11 +197,13 @@ jobs:
             ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/adr.md",
             ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/pdr.md",
             ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/test-strategy.md",
+            ".claude/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml",
             "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/system-context.md",
             "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/architecture.md",
             "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/adr.md",
             "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/pdr.md",
-            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/test-strategy.md"
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/test-strategy.md",
+            "plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml"
           )
           foreach ($relativePath in $stalePaths) {
             $path = Join-Path $projectTarget $relativePath
@@ -175,3 +255,8 @@ jobs:
           } finally {
             Pop-Location
           }
+
+      - name: Exercise Windows worker supervisor recovery
+        run: >-
+          python -m pytest -q
+          tests/unit/test_scope_worker.py::test_host_process_supervisor_death_maps_observed_provider_state_to_recovery

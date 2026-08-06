@@ -152,9 +152,44 @@ check_install() {
   section "Install smoke test"
 
   tmpdir="$(mktemp -d)"
+  mkdir -p \
+    "$tmpdir/.claude/scripts/__pycache__" \
+    "$tmpdir/.claude/scripts/.pytest_cache" \
+    "$tmpdir/.claude/config" \
+    "$tmpdir/.claude/commands" \
+    "$tmpdir/.claude/governance" \
+    "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic" \
+    "$tmpdir/plugins/scope/scripts/__pycache__" \
+    "$tmpdir/plugins/scope/scripts/.pytest_cache" \
+    "$tmpdir/plugins/scope/config" \
+    "$tmpdir/plugins/scope/commands" \
+    "$tmpdir/plugins/scope/docs" \
+    "$tmpdir/plugins/scope/governance" \
+    "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic"
+  touch \
+    "$tmpdir/.claude/scripts/.DS_Store" \
+    "$tmpdir/.claude/scripts/scope-reviewer-claude-pexpect.py" \
+    "$tmpdir/.claude/scripts/scope-proof-preflight.py" \
+    "$tmpdir/.claude/config/worker-runtime-policy.yaml" \
+    "$tmpdir/.claude/commands/implement_tdd.md" \
+    "$tmpdir/.claude/governance/agent-lifecycle.md" \
+    "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml" \
+    "$tmpdir/.claude/scripts/__pycache__/stale.pyc" \
+    "$tmpdir/.claude/scripts/.pytest_cache/stale" \
+    "$tmpdir/plugins/scope/scripts/.DS_Store" \
+    "$tmpdir/plugins/scope/scripts/scope-reviewer-claude-pexpect.py" \
+    "$tmpdir/plugins/scope/scripts/scope-proof-preflight.py" \
+    "$tmpdir/plugins/scope/config/worker-runtime-policy.yaml" \
+    "$tmpdir/plugins/scope/commands/implement_tdd.md" \
+    "$tmpdir/plugins/scope/docs/epic-workflow.md" \
+    "$tmpdir/plugins/scope/governance/agent-lifecycle.md" \
+    "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml" \
+    "$tmpdir/plugins/scope/scripts/__pycache__/stale.pyc" \
+    "$tmpdir/plugins/scope/scripts/.pytest_cache/stale"
   ./install.sh "$tmpdir" >/tmp/scope-install-smoke.log
 
   test -f "$tmpdir/.claude/commands/wrap_epic.md"
+  cmp -s src_shared/commands/wrap_epic.md "$tmpdir/.claude/commands/wrap_epic.md"
   test -f "$tmpdir/.claude/commands/implement.md"
   test -f "$tmpdir/.claude/commands/audit_epic.md"
   test -f "$tmpdir/.claude/commands/epic_refine/reviewer-refinement.md"
@@ -162,12 +197,30 @@ check_install() {
   test -f "$tmpdir/.claude/agents/developer.md"
   test -f "$tmpdir/.claude/config/refinement-policy.yaml"
   test -f "$tmpdir/.claude/config/audit-policy.yaml"
+  test -f "$tmpdir/.claude/config/reviewer-policy.yaml"
+  test -f "$tmpdir/.claude/config/worker-policy.yaml"
+  test -f "$tmpdir/.claude/config/codegraph-policy.yaml"
+  test -f "$tmpdir/.claude/config/worker-job.schema.json"
+  test -f "$tmpdir/.claude/config/worker-result.schema.json"
+  test -f "$tmpdir/.claude/config/wrap-policy.yaml"
   test -f "$tmpdir/.claude/scripts/validate-refinement.py"
   test -f "$tmpdir/.claude/scripts/audit-artifacts.py"
-  test -f "$tmpdir/.claude/scripts/scope-reviewer-claude-pexpect.py"
+  test ! -e "$tmpdir/.claude/scripts/scope-reviewer-claude-pexpect.py"
+  test -x "$tmpdir/.claude/scripts/scope-reviewer.py"
+  test -x "$tmpdir/.claude/scripts/scope-worker.py"
+  test -x "$tmpdir/.claude/scripts/scope-dependency-merge.py"
+  test -x "$tmpdir/.claude/scripts/scope-wrap-finalize.py"
+  test -f "$tmpdir/.claude/scripts/scope_git.py"
+  test -f "$tmpdir/.claude/scripts/scope_fingerprint.py"
+  test -f "$tmpdir/.claude/scripts/scope_codegraph.py"
+  test -f "$tmpdir/.claude/workers/refinement-worker.md"
+  test -f "$tmpdir/.claude/workers/implementation-worker.md"
+  test -f "$tmpdir/.claude/workers/audit-worker.md"
+  test -f "$tmpdir/.claude/workers/diagnostic-worker.md"
   test -f "$tmpdir/.claude/requirements.txt"
 
   test -f "$tmpdir/plugins/scope/commands/wrap_epic.md"
+  cmp -s src_shared/commands/wrap_epic.md "$tmpdir/plugins/scope/commands/wrap_epic.md"
   test -f "$tmpdir/plugins/scope/commands/implement.md"
   test -f "$tmpdir/plugins/scope/commands/audit_epic.md"
   test -f "$tmpdir/plugins/scope/commands/epic_refine/reviewer-refinement.md"
@@ -175,12 +228,45 @@ check_install() {
   test -f "$tmpdir/plugins/scope/agents/developer.md"
   test -f "$tmpdir/plugins/scope/config/refinement-policy.yaml"
   test -f "$tmpdir/plugins/scope/config/audit-policy.yaml"
+  test -f "$tmpdir/plugins/scope/config/reviewer-policy.yaml"
+  test -f "$tmpdir/plugins/scope/config/worker-policy.yaml"
+  test -f "$tmpdir/plugins/scope/config/codegraph-policy.yaml"
+  test -f "$tmpdir/plugins/scope/config/worker-job.schema.json"
+  test -f "$tmpdir/plugins/scope/config/worker-result.schema.json"
+  test -f "$tmpdir/plugins/scope/config/wrap-policy.yaml"
   test -f "$tmpdir/plugins/scope/scripts/validate-refinement.py"
   test -f "$tmpdir/plugins/scope/scripts/audit-artifacts.py"
-  test -f "$tmpdir/plugins/scope/scripts/scope-reviewer-claude-pexpect.py"
+  test ! -e "$tmpdir/plugins/scope/scripts/scope-reviewer-claude-pexpect.py"
+  test -x "$tmpdir/plugins/scope/scripts/scope-reviewer.py"
+  test -x "$tmpdir/plugins/scope/scripts/scope-worker.py"
+  test -x "$tmpdir/plugins/scope/scripts/scope-dependency-merge.py"
+  test -x "$tmpdir/plugins/scope/scripts/scope-wrap-finalize.py"
+  test -f "$tmpdir/plugins/scope/scripts/scope_git.py"
+  test -f "$tmpdir/plugins/scope/scripts/scope_fingerprint.py"
+  test -f "$tmpdir/plugins/scope/scripts/scope_codegraph.py"
+  test -f "$tmpdir/plugins/scope/workers/refinement-worker.md"
+  test -f "$tmpdir/plugins/scope/workers/implementation-worker.md"
+  test -f "$tmpdir/plugins/scope/workers/audit-worker.md"
+  test -f "$tmpdir/plugins/scope/workers/diagnostic-worker.md"
   test -f "$tmpdir/plugins/scope/requirements.txt"
   test -f "$tmpdir/plugins/scope/.codex-plugin/plugin.json"
   test -f "$tmpdir/.scope/config.yaml"
+
+  test ! -e "$tmpdir/.claude/scripts/.DS_Store"
+  test ! -e "$tmpdir/.claude/scripts/__pycache__"
+  test ! -e "$tmpdir/.claude/scripts/.pytest_cache"
+  test ! -e "$tmpdir/plugins/scope/scripts/.DS_Store"
+  test ! -e "$tmpdir/plugins/scope/scripts/__pycache__"
+  test ! -e "$tmpdir/plugins/scope/scripts/.pytest_cache"
+  test ! -e "$tmpdir/.claude/scripts/scope-proof-preflight.py"
+  test ! -e "$tmpdir/plugins/scope/scripts/scope-proof-preflight.py"
+  test ! -e "$tmpdir/.claude/config/worker-runtime-policy.yaml"
+  test ! -e "$tmpdir/plugins/scope/config/worker-runtime-policy.yaml"
+  test ! -e "$tmpdir/.claude/commands/implement_tdd.md"
+  test ! -e "$tmpdir/plugins/scope/commands/implement_tdd.md"
+  test ! -e "$tmpdir/plugins/scope/docs/epic-workflow.md"
+  test ! -e "$tmpdir/.claude/governance/agent-lifecycle.md"
+  test ! -e "$tmpdir/plugins/scope/governance/agent-lifecycle.md"
 
   grep -n '^  skill: local-tracking-bash' "$tmpdir/.scope/config.yaml"
   grep -n '^  project_key: PROJECT' "$tmpdir/.scope/config.yaml"
@@ -197,9 +283,17 @@ check_install() {
   test -f "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/design.md"
   test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/implementation-evidence.yaml"
+  test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/delivery-manifest.yaml"
+  test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-state.yaml"
+  test -f "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-findings.yaml"
+  test ! -e "$tmpdir/.claude/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml"
   test -f "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
   test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/design.md"
   test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/implementation-evidence.yaml"
+  test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/delivery-manifest.yaml"
+  test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-state.yaml"
+  test -f "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/refinement-findings.yaml"
+  test ! -e "$tmpdir/plugins/scope/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml"
   grep -n "Path selection rule" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "docs/architecture/backend/01-intro.md" "$tmpdir/.claude/skills/project-documentation/SKILL.md"
   grep -n "Path selection rule" "$tmpdir/plugins/scope/skills/project-documentation/SKILL.md"
@@ -247,7 +341,7 @@ check_windows_installer() {
   grep -n 'set "CLAUDE_DIR=%~1\\.claude"' install.bat
   grep -n 'set "CODEX_DIR=%~1\\plugins\\scope"' install.bat
 
-  for required_path in commands scripts skills agents governance config docs .codex-plugin; do
+  for required_path in commands scripts skills agents workers governance config docs .codex-plugin; do
     grep -n "${required_path}" install.bat >/dev/null
   done
 
@@ -257,6 +351,9 @@ check_windows_installer() {
   grep -n 'reviewer-codex reviewer-claude reviewer-agy reviewer-glm' install.bat
   grep -n 'reviewer-architecture-codex reviewer-architecture-claude reviewer-architecture-agy reviewer-architecture-glm' install.bat
   grep -n 'system-context architecture adr pdr test-strategy' install.bat
+  grep -n '__pycache__ .pytest_cache' install.bat
+  grep -n '\*.pyc \*.pyo' install.bat
+  grep -n '\.DS_Store' install.bat
   grep -n 'install.bat --user' README.md
   grep -n 'install.bat "C:\\path\\to\\your-project"' README.md
 }
@@ -280,6 +377,7 @@ check_actions_runtime() {
   fi
 
   grep -n 'actions/checkout@v6' .github/workflows/pr-checks.yml
+  grep -n 'actions/setup-python@v6' .github/workflows/pr-checks.yml
 }
 
 check_codex_plugin_naming() {
@@ -292,12 +390,38 @@ check_codex_plugin_naming() {
   grep -n -E '"name"[[:space:]]*:[[:space:]]*"scope"' src_codex/.codex-plugin/plugin.json
 }
 
-check_codegraph_guidance() {
-  section "Check CodeGraph guidance"
+check_worker_contracts() {
+  section "Check worker protocol ownership"
 
-  grep -n "CodeGraph" src_shared/commands/epic_refine.md
-  grep -n "CodeGraph" src_claude/commands/implement.md
-  grep -n "CodeGraph" src_codex/commands/implement.md
+  for command in \
+    src_shared/commands/epic_refine.md \
+    src_shared/commands/audit_epic.md \
+    src_claude/commands/implement.md \
+    src_codex/commands/implement.md; do
+    test -f "$command"
+  done
+
+  for worker in refinement implementation audit diagnostic; do
+    test -f "src_shared/workers/${worker}-worker.md"
+  done
+  test -f src_shared/config/worker-job.schema.json
+  test -f src_shared/config/worker-result.schema.json
+
+  if grep -R -n -E 'codex exec|agy --model|claude --model' \
+    src_shared/commands/epic_refine.md \
+    src_shared/commands/audit_epic.md \
+    src_claude/commands/implement.md \
+    src_codex/commands/implement.md; then
+    fail "public orchestrators must not duplicate provider launcher syntax"
+  fi
+
+  if grep -R -n -E 'scope-proof-preflight|worker-runtime-policy|unattributed_change_incidents|question_discovery|metadata-job|materialize_handoff|finalize_candidate|operate --' \
+    src_shared/commands \
+    src_claude/commands/implement.md \
+    src_codex/commands/implement.md \
+    src_shared/workers; then
+    fail "active workflow surfaces still mention a removed lifecycle subsystem"
+  fi
 }
 
 check_codex_override_sources() {
@@ -318,22 +442,31 @@ check_codex_invocation() {
     fail "Codex exec no longer supports --ask-for-approval; use supported flags only"
   fi
 
-  if grep -R -n -F 'gpt-5.5' src_shared/commands/epic_refine.md src_shared/commands/epic_refine src_shared/commands/audit_epic.md src_shared/commands/audit_epic; then
-    fail "OpenAI architecture and audit reviewer defaults must use gpt-5.6-terra"
+  if grep -R -n -F 'gpt-5.5' \
+    src_shared/config src_shared/scripts src_codex/config src_claude/config; then
+    fail "Scope worker/reviewer defaults must use the GPT-5.6 family"
   fi
 
-  grep -n "codex exec" src_shared/commands/audit_epic.md
-  grep -n "codex exec" src_shared/commands/epic_refine.md
-  grep -n -- "--sandbox read-only" src_shared/commands/audit_epic.md
-  grep -n -- "--sandbox read-only" src_shared/commands/epic_refine.md
-  grep -n "fresh reviewer process" src_shared/commands/audit_epic.md
-  grep -n "fresh process" src_shared/commands/epic_refine.md
-  grep -n 'SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra' src_shared/commands/audit_epic.md
-  grep -n 'SCOPE_CODEX_MODEL_ID:-gpt-5.6-terra' src_shared/commands/epic_refine.md
-  grep -n 'SCOPE_CODEX_REASONING_EFFORT:-high' src_shared/commands/audit_epic.md
-  grep -n 'SCOPE_CODEX_REASONING_EFFORT:-high' src_shared/commands/epic_refine.md
+  grep -n -- "--ephemeral" src_shared/scripts/scope-worker.py
+  grep -n -- "--ignore-user-config" src_shared/scripts/scope-worker.py
+  grep -n -- "--output-schema" src_shared/scripts/scope-worker.py
+  grep -n -- "--sandbox" src_shared/scripts/scope-worker.py
+  grep -n 'model_reasoning_effort' src_shared/scripts/scope-worker.py
+  grep -n 'model: gpt-5.6-terra' src_codex/config/worker-policy.yaml
+  grep -n -- "--ignore-user-config" src_shared/config/reviewer-policy.yaml
+  grep -n -- "- read-only" src_shared/config/reviewer-policy.yaml
   grep -n '^model: gpt-5.6-terra$' src_codex/agents/developer.md
   grep -n '^model_reasoning_effort: max$' src_codex/agents/developer.md
+  grep -n 'minimum_version: 1.5.0' src_shared/config/codegraph-policy.yaml
+  grep -n 'sync_on_prepare: true' src_shared/config/codegraph-policy.yaml
+  grep -n 'index_directory_not_ignored' src_shared/scripts/scope_codegraph.py
+  grep -n -- '--add-dir' src_shared/scripts/scope-worker.py
+  grep -n -- '--add-dir' src_shared/scripts/scope-reviewer.py
+
+  if grep -R -n -E 'codegraph (context|sync-if-dirty)|Prefer CodeGraph MCP' \
+    src_shared src_claude src_codex; then
+    fail "Scope must use the CodeGraph 1.5 CLI contract, not removed commands or MCP preference"
+  fi
 }
 
 check_claude_invocation() {
@@ -343,62 +476,70 @@ check_claude_invocation() {
     fail "Claude reviewer must use local Opus alias naming, not a stale pinned Opus version label"
   fi
 
-  if grep -R -n -E 'permission-mode (acceptEdits|bypassPermissions)' src_shared/commands/audit_epic.md src_shared/commands/epic_refine.md; then
-    fail "Claude reviewer automation must use --dangerously-skip-permissions to avoid interactive permission prompts"
+  if grep -R -n -E 'permission_mode:[[:space:]]*(acceptEdits|bypassPermissions)' src_claude/config/worker-policy.yaml; then
+    fail "Claude write workers must use the tested non-interactive permission mode"
   fi
 
-  grep -n "Claude Opus (local alias)" src_shared/commands/audit_epic.md
-  grep -n "Claude Opus (local alias)" src_shared/commands/epic_refine.md
-  grep -n -- "--dangerously-skip-permissions" src_shared/commands/audit_epic.md
-  grep -n -- "--dangerously-skip-permissions" src_shared/commands/epic_refine.md
-  grep -n "Before terminating Claude, inspected PTY log" src_shared/scripts/scope-reviewer-claude-pexpect.py
-  grep -n "Last PTY log lines before termination" src_shared/scripts/scope-reviewer-claude-pexpect.py
+  if grep -R -n -F -- "--mcp-config '{}'" \
+    src_shared/config/reviewer-policy.yaml \
+    src_shared/scripts/scope-worker.py; then
+    fail "Scope Claude reviewer automation must not pass a version-sensitive empty MCP configuration"
+  fi
+
+  grep -n 'permission_mode: dontAsk' src_claude/config/worker-policy.yaml
+  if grep -n 'reported_fallback_model_families:' src_claude/config/worker-policy.yaml; then
+    fail "worker policy must record raw model usage without fallback-family taxonomy"
+  fi
+  grep -n 'product: {model: fable' src_claude/config/worker-policy.yaml
+  grep -n 'epic_verify: {model: opus' src_claude/config/worker-policy.yaml
+  grep -n -- "--strict-mcp-config" src_shared/scripts/scope-worker.py
+  grep -n -- "--no-session-persistence" src_shared/scripts/scope-worker.py
+  grep -n -- "--permission-mode" src_shared/scripts/scope-worker.py
+  grep -n -- "--allowedTools" src_shared/scripts/scope-worker.py
+  grep -n -- "--disallowedTools" src_shared/scripts/scope-worker.py
+  grep -n 'claude: {model: fable' src_shared/config/reviewer-policy.yaml
+  grep -n 'claude: {model: opus' src_shared/config/reviewer-policy.yaml
+  grep -n 'opencode: {model: zai-coding-plan/glm-5.2' src_shared/config/reviewer-policy.yaml
+  grep -n -- "--safe-mode" src_shared/config/reviewer-policy.yaml
+  grep -n -- "--strict-mcp-config" src_shared/config/reviewer-policy.yaml
+  grep -n -- "--permission-mode" src_shared/config/reviewer-policy.yaml
+  grep -n -- "      - dontAsk" src_shared/config/reviewer-policy.yaml
+  grep -n -- "--disallowedTools" src_shared/config/reviewer-policy.yaml
+  grep -n -- "      - Write,Edit,NotebookEdit,Task,Agent" src_shared/config/reviewer-policy.yaml
+  if grep -n -- "--dangerously-skip-permissions" src_shared/config/reviewer-policy.yaml; then
+    fail "external reviewers must not bypass provider permission checks"
+  fi
+  grep -n -- "--no-chrome" src_shared/config/reviewer-policy.yaml
+  grep -n 'backend: claude' src_shared/config/reviewer-policy.yaml
+  grep -n 'prompt_transport: stdin' src_shared/config/reviewer-policy.yaml
+  grep -n -- '--print' src_shared/config/reviewer-policy.yaml
+  test ! -e src_shared/scripts/scope-reviewer-claude-pexpect.py
+  test ! -e tests/unit/test_scope_reviewer_claude_pexpect.py
+  if grep -R -n -i -E --exclude-dir='__pycache__' 'pexpect|claude_pty' \
+    requirements.txt src_shared/config src_shared/scripts tests/unit/test_scope_reviewer.py; then
+    fail "Scope Claude reviewers must use the CLI directly without PTY or pexpect"
+  fi
 }
 
 check_command_expectations() {
-  local command
+  section "Check lean workflow assets"
 
-  section "Check v3 command expectations"
-
-  for command in implement wrap_epic; do
-    test -f "src_claude/commands/${command}.md"
-    test -f "src_codex/commands/${command}.md"
-  done
+  test -f src_claude/commands/implement.md
+  test -f src_codex/commands/implement.md
+  test -f src_shared/commands/wrap_epic.md
+  test ! -e src_claude/commands/wrap_epic.md
+  test ! -e src_codex/commands/wrap_epic.md
 
   test -f src_shared/commands/audit_epic/reviewer-audit.md
   test -f src_shared/commands/epic_refine/reviewer-refinement.md
-  grep -n "Do not invoke another reviewer" src_shared/commands/audit_epic/reviewer-audit.md
-  grep -n "invoke another reviewer" src_shared/commands/epic_refine/reviewer-refinement.md
-  grep -n "Reviewer identity" src_shared/commands/audit_epic/reviewer-audit.md
-  grep -n "AUDIT_PROVIDER" src_shared/commands/audit_epic/reviewer-audit.md
-  grep -n "COVERED_ACCEPTANCE_IDS" src_shared/commands/audit_epic/reviewer-audit.md
-  grep -n "REVIEW_PROVIDER" src_shared/commands/epic_refine/reviewer-refinement.md
-  grep -n "REVIEW_MISSION" src_shared/commands/epic_refine/reviewer-refinement.md
-  grep -n "semantic_core" src_shared/commands/epic_refine/reviewer-refinement.md
-  grep -n "capability_specialist" src_shared/commands/epic_refine/reviewer-refinement.md
 
-  grep -n "Nested Scope Command Execution" src_codex/skills/scope-workflows/SKILL.md
-  grep -n "audit-findings.yaml" src_claude/commands/implement.md
-  grep -n "audit-findings.yaml" src_codex/commands/implement.md
-  grep -n "targeted_verification_count" src_shared/commands/epic_refine.md
-  grep -n "Launch all required assignment commands before waiting" src_shared/commands/epic_refine.md
-  grep -n -- "--ignore-user-config" src_shared/commands/epic_refine.md
-  grep -n -- "--safe-mode" src_shared/commands/epic_refine.md
-  grep -n -- "--retries 0" src_shared/commands/epic_refine.md
-  grep -n "design.md" src_shared/commands/epic_refine.md
-  grep -n "tmp_debug/scope-audit" src_shared/commands/audit_epic.md
-  grep -n "Launch all required assignment commands before waiting" src_shared/commands/audit_epic.md
-  grep -n -- "--ignore-user-config" src_shared/commands/audit_epic.md
-  grep -n -- "--safe-mode" src_shared/commands/audit_epic.md
-  grep -n -- "--retries 0" src_shared/commands/audit_epic.md
-  grep -n "gemini-3.1-pro-high" src_shared/commands/audit_epic.md
-  grep -n "verify-evidence" src_claude/commands/implement.md
-  grep -n "verify-evidence" src_codex/commands/implement.md
-  grep -n "schema_version: 3" src_claude/commands/implement.md
-  grep -n "schema_version: 3" src_codex/commands/implement.md
+  test -f tests/unit/test_orchestrator_contracts.py
+  test -f tests/unit/test_scope_worker.py
+  test -f tests/unit/test_scope_codegraph.py
+  test -f tests/unit/test_scope_reviewer.py
+  test -f tests/unit/test_worker_prompts.py
+  test -f tests/unit/test_worker_schema.py
   test -f src_shared/skills/project-documentation/templates-technical-arc42-c4/epic/implementation-evidence.yaml
-  grep -n "tmp_debug.*scope-reviewer-logs" src_shared/scripts/scope-reviewer-claude-pexpect.py
-
   if grep -R -n -E 'LEGACY_VALIDATOR|legacy input mode|maximum_followups|minimum_followups|followup_count|followup-[0-9N]' \
     src_shared/commands/epic_refine.md \
     src_shared/commands/audit_epic.md \
@@ -408,22 +549,18 @@ check_command_expectations() {
   fi
 }
 
-check_validator_tests() {
+check_unit_tests() {
   local python_cmd
 
-  section "Run validator tests and coverage"
+  section "Run unit tests"
 
   python_cmd="${SCOPE_PYTHON:-python3}"
   command -v "$python_cmd" >/dev/null 2>&1 || fail "Python is required; set SCOPE_PYTHON to a Python 3 executable"
-  "$python_cmd" -c 'import coverage, pytest, yaml' >/dev/null 2>&1 ||
+  "$python_cmd" -c 'import filelock, jsonschema, psutil, pytest, yaml' >/dev/null 2>&1 ||
     fail "Missing Python dependencies; run: python3 -m pip install -r requirements-dev.txt"
 
-  mkdir -p tmp_debug
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-validators "$python_cmd" -m coverage erase
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-validators "$python_cmd" -m coverage run -m pytest -q tests/unit
-  PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=tmp_debug/.coverage-validators "$python_cmd" -m coverage report \
-    --fail-under=90 \
-    --include='*/src_shared/scripts/validate-refinement.py,*/src_shared/scripts/audit-artifacts.py'
+  PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+    "$python_cmd" -m pytest -q tests/unit
 }
 
 main() {
@@ -439,12 +576,12 @@ main() {
   check_git_hooks
   check_actions_runtime
   check_codex_plugin_naming
-  check_codegraph_guidance
+  check_worker_contracts
   check_codex_override_sources
   check_codex_invocation
   check_claude_invocation
   check_command_expectations
-  check_validator_tests
+  check_unit_tests
 
   section "All PR checks passed"
 }

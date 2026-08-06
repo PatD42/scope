@@ -3,5 +3,10 @@
 .claude
 .DS_Store
 tmp_debug/
-wip/
+worktree/
 /session-handoff.md
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+.coverage
+.coverage.*

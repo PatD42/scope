@@ -54,6 +54,8 @@ call :ensure_dir "%CLAUDE_DIR%\skills"
 if errorlevel 1 goto :install_failed
 call :ensure_dir "%CLAUDE_DIR%\agents"
 if errorlevel 1 goto :install_failed
+call :ensure_dir "%CLAUDE_DIR%\workers"
+if errorlevel 1 goto :install_failed
 call :ensure_dir "%CLAUDE_DIR%\governance"
 if errorlevel 1 goto :install_failed
 call :ensure_dir "%CLAUDE_DIR%\config"
@@ -66,6 +68,8 @@ if errorlevel 1 goto :install_failed
 call :ensure_dir "%CODEX_DIR%\skills"
 if errorlevel 1 goto :install_failed
 call :ensure_dir "%CODEX_DIR%\agents"
+if errorlevel 1 goto :install_failed
+call :ensure_dir "%CODEX_DIR%\workers"
 if errorlevel 1 goto :install_failed
 call :ensure_dir "%CODEX_DIR%\governance"
 if errorlevel 1 goto :install_failed
@@ -86,11 +90,33 @@ call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\scope-reviewer-tmux.sh"
 if errorlevel 1 goto :install_failed
 call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\scope-reviewer-claude-pexpect.py"
 if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\scripts\scope-reviewer-claude-pexpect.py"
+if errorlevel 1 goto :install_failed
 call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\validate-architecture-contracts.sh"
 if errorlevel 1 goto :install_failed
 call :delete_if_exists "%CLAUDE_DIR%\commands\scripts\validate-epic-docs.sh"
 if errorlevel 1 goto :install_failed
 call :delete_if_exists "%CODEX_DIR%\scripts\scope-reviewer-tmux.sh"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CODEX_DIR%\scripts\scope-reviewer-claude-pexpect.py"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\scripts\scope-proof-preflight.py"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CODEX_DIR%\scripts\scope-proof-preflight.py"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\config\worker-runtime-policy.yaml"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CODEX_DIR%\config\worker-runtime-policy.yaml"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\commands\implement_tdd.md"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CODEX_DIR%\commands\implement_tdd.md"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CODEX_DIR%\docs\epic-workflow.md"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CLAUDE_DIR%\governance\agent-lifecycle.md"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CODEX_DIR%\governance\agent-lifecycle.md"
 if errorlevel 1 goto :install_failed
 call :delete_if_exists "%CLAUDE_DIR%\commands\audit_epic\reviewer-gemini.md"
 if errorlevel 1 goto :install_failed
@@ -118,6 +144,10 @@ for %%F in (system-context architecture adr pdr test-strategy) do (
     call :delete_if_exists "%CODEX_DIR%\skills\project-documentation\templates-technical-arc42-c4\epic\%%F.md"
     if errorlevel 1 goto :install_failed
 )
+call :delete_if_exists "%CLAUDE_DIR%\skills\project-documentation\templates-technical-arc42-c4\epic\acceptance-traceability.yaml"
+if errorlevel 1 goto :install_failed
+call :delete_if_exists "%CODEX_DIR%\skills\project-documentation\templates-technical-arc42-c4\epic\acceptance-traceability.yaml"
+if errorlevel 1 goto :install_failed
 
 echo.
 echo Installing Claude Files
@@ -133,6 +163,8 @@ call :copy_overlay "%CLAUDE_SRC%\scripts" "%CLAUDE_DIR%\scripts"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%SHARED_SRC%\config" "%CLAUDE_DIR%\config"
 if errorlevel 1 goto :install_failed
+call :copy_overlay "%CLAUDE_SRC%\config" "%CLAUDE_DIR%\config"
+if errorlevel 1 goto :install_failed
 call :copy_overlay "%SHARED_SRC%\skills" "%CLAUDE_DIR%\skills"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%CLAUDE_SRC%\skills" "%CLAUDE_DIR%\skills"
@@ -140,6 +172,8 @@ if errorlevel 1 goto :install_failed
 call :copy_overlay "%SHARED_SRC%\agents" "%CLAUDE_DIR%\agents"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%CLAUDE_SRC%\agents" "%CLAUDE_DIR%\agents"
+if errorlevel 1 goto :install_failed
+call :copy_overlay "%SHARED_SRC%\workers" "%CLAUDE_DIR%\workers"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%SHARED_SRC%\governance" "%CLAUDE_DIR%\governance"
 if errorlevel 1 goto :install_failed
@@ -154,6 +188,8 @@ echo   Skills:
 call :list_directories "%CLAUDE_DIR%\skills" "" ""
 echo   Agents:
 call :list_markdown_files "%CLAUDE_DIR%\agents" ""
+echo   Workers:
+call :list_markdown_files "%CLAUDE_DIR%\workers" ""
 echo   Governance:
 call :list_markdown_files "%CLAUDE_DIR%\governance" ""
 
@@ -173,6 +209,8 @@ call :copy_overlay "%SHARED_SRC%\agents" "%CODEX_DIR%\agents"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%CODEX_SRC%\agents" "%CODEX_DIR%\agents"
 if errorlevel 1 goto :install_failed
+call :copy_overlay "%SHARED_SRC%\workers" "%CODEX_DIR%\workers"
+if errorlevel 1 goto :install_failed
 call :copy_overlay "%SHARED_SRC%\governance" "%CODEX_DIR%\governance"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%CODEX_SRC%\governance" "%CODEX_DIR%\governance"
@@ -186,6 +224,8 @@ if errorlevel 1 goto :install_failed
 call :copy_overlay "%CODEX_SRC%\scripts" "%CODEX_DIR%\scripts"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%SHARED_SRC%\config" "%CODEX_DIR%\config"
+if errorlevel 1 goto :install_failed
+call :copy_overlay "%CODEX_SRC%\config" "%CODEX_DIR%\config"
 if errorlevel 1 goto :install_failed
 call :copy_overlay "%CODEX_SRC%\.codex-plugin" "%CODEX_DIR%\.codex-plugin"
 if errorlevel 1 goto :install_failed
@@ -208,6 +248,8 @@ echo   Skills:
 call :list_directories "%CODEX_DIR%\skills" "" ""
 echo   Agents:
 call :list_markdown_files "%CODEX_DIR%\agents" ""
+echo   Workers:
+call :list_markdown_files "%CODEX_DIR%\workers" ""
 echo   Docs:
 call :list_markdown_files "%CODEX_DIR%\docs" ""
 echo   Scripts:
@@ -287,6 +329,14 @@ if errorlevel 1 exit /b 1
 xcopy "%~1\*" "%~2\" /E /H /I /Q /R /Y >nul
 if errorlevel 1 exit /b 1
 for /R "%~2" %%F in (.DS_Store) do (
+    if exist "%%F" del /F /Q "%%F"
+    if errorlevel 1 exit /b 1
+)
+for /D /R "%~2" %%D in (__pycache__ .pytest_cache) do (
+    if exist "%%D" rmdir /S /Q "%%D"
+    if errorlevel 1 exit /b 1
+)
+for /R "%~2" %%F in (*.pyc *.pyo) do (
     if exist "%%F" del /F /Q "%%F"
     if errorlevel 1 exit /b 1
 )

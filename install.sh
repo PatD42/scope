@@ -61,6 +61,9 @@ copy_overlay() {
         mkdir -p "$dest"
         cp -R "$src/." "$dest/"
         find "$dest" -name ".DS_Store" -delete
+        find "$dest" -type d \( -name "__pycache__" -o -name ".pytest_cache" \) \
+            -prune -exec rm -rf -- {} +
+        find "$dest" -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
     fi
 }
 
@@ -84,20 +87,29 @@ list_markdown_commands() {
 echo -e "${YELLOW}Creating Directory Structure${NC}"
 echo ""
 
-mkdir -p "${CLAUDE_DIR}/commands" "${CLAUDE_DIR}/skills" "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/governance" "${CLAUDE_DIR}/config" "${CLAUDE_DIR}/scripts"
-mkdir -p "${CODEX_DIR}/commands" "${CODEX_DIR}/skills" "${CODEX_DIR}/agents" "${CODEX_DIR}/governance" "${CODEX_DIR}/docs" "${CODEX_DIR}/scripts" "${CODEX_DIR}/config" "${CODEX_DIR}/.codex-plugin"
+mkdir -p "${CLAUDE_DIR}/commands" "${CLAUDE_DIR}/skills" "${CLAUDE_DIR}/agents" "${CLAUDE_DIR}/workers" "${CLAUDE_DIR}/governance" "${CLAUDE_DIR}/config" "${CLAUDE_DIR}/scripts"
+mkdir -p "${CODEX_DIR}/commands" "${CODEX_DIR}/skills" "${CODEX_DIR}/agents" "${CODEX_DIR}/workers" "${CODEX_DIR}/governance" "${CODEX_DIR}/docs" "${CODEX_DIR}/scripts" "${CODEX_DIR}/config" "${CODEX_DIR}/.codex-plugin"
 
 echo "  Created ${CLAUDE_DIR}/"
 echo "  Created ${CODEX_DIR}/"
 
-# Remove obsolete transports that are no longer installed from source. The
-# Claude reviewer now uses the pexpect file-output wrapper; leaving the old tmux
-# helper behind makes installed Scope trees ambiguous after upgrades.
+# Remove obsolete reviewer transports left by older Scope installations.
 rm -f "${CLAUDE_DIR}/commands/scripts/scope-reviewer-tmux.sh"
 rm -f "${CLAUDE_DIR}/commands/scripts/scope-reviewer-claude-pexpect.py"
+rm -f "${CLAUDE_DIR}/scripts/scope-reviewer-claude-pexpect.py"
 rm -f "${CLAUDE_DIR}/commands/scripts/validate-architecture-contracts.sh"
 rm -f "${CLAUDE_DIR}/commands/scripts/validate-epic-docs.sh"
 rm -f "${CODEX_DIR}/scripts/scope-reviewer-tmux.sh"
+rm -f "${CODEX_DIR}/scripts/scope-reviewer-claude-pexpect.py"
+rm -f "${CLAUDE_DIR}/scripts/scope-proof-preflight.py"
+rm -f "${CODEX_DIR}/scripts/scope-proof-preflight.py"
+rm -f "${CLAUDE_DIR}/config/worker-runtime-policy.yaml"
+rm -f "${CODEX_DIR}/config/worker-runtime-policy.yaml"
+rm -f "${CLAUDE_DIR}/commands/implement_tdd.md"
+rm -f "${CODEX_DIR}/commands/implement_tdd.md"
+rm -f "${CODEX_DIR}/docs/epic-workflow.md"
+rm -f "${CLAUDE_DIR}/governance/agent-lifecycle.md"
+rm -f "${CODEX_DIR}/governance/agent-lifecycle.md"
 rm -f "${CLAUDE_DIR}/commands/audit_epic/reviewer-gemini.md"
 rm -f "${CODEX_DIR}/commands/audit_epic/reviewer-gemini.md"
 rm -f "${CLAUDE_DIR}/commands/epic_refine/reviewer-architecture-gemini.md"
@@ -114,6 +126,8 @@ for removed_template in system-context architecture adr pdr test-strategy; do
     rm -f "${CLAUDE_DIR}/skills/project-documentation/templates-technical-arc42-c4/epic/${removed_template}.md"
     rm -f "${CODEX_DIR}/skills/project-documentation/templates-technical-arc42-c4/epic/${removed_template}.md"
 done
+rm -f "${CLAUDE_DIR}/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml"
+rm -f "${CODEX_DIR}/skills/project-documentation/templates-technical-arc42-c4/epic/acceptance-traceability.yaml"
 
 echo ""
 echo -e "${YELLOW}Installing Claude Files${NC}"
@@ -124,12 +138,17 @@ copy_overlay "${CLAUDE_SRC}/commands" "${CLAUDE_DIR}/commands"
 copy_overlay "${SHARED_SRC}/scripts" "${CLAUDE_DIR}/scripts"
 copy_overlay "${CLAUDE_SRC}/scripts" "${CLAUDE_DIR}/scripts"
 copy_overlay "${SHARED_SRC}/config" "${CLAUDE_DIR}/config"
+copy_overlay "${CLAUDE_SRC}/config" "${CLAUDE_DIR}/config"
 copy_overlay "${SHARED_SRC}/skills" "${CLAUDE_DIR}/skills"
 copy_overlay "${CLAUDE_SRC}/skills" "${CLAUDE_DIR}/skills"
 copy_overlay "${SHARED_SRC}/agents" "${CLAUDE_DIR}/agents"
 copy_overlay "${CLAUDE_SRC}/agents" "${CLAUDE_DIR}/agents"
+copy_overlay "${SHARED_SRC}/workers" "${CLAUDE_DIR}/workers"
 copy_overlay "${SHARED_SRC}/governance" "${CLAUDE_DIR}/governance"
 copy_overlay "${CLAUDE_SRC}/governance" "${CLAUDE_DIR}/governance"
+for executable in scope-worker.py scope-reviewer.py scope-dependency-merge.py scope-wrap-finalize.py; do
+    [[ ! -f "${CLAUDE_DIR}/scripts/${executable}" ]] || chmod +x "${CLAUDE_DIR}/scripts/${executable}"
+done
 
 echo "  Commands:"
 while IFS= read -r cmd; do
@@ -151,6 +170,11 @@ while IFS= read -r agent_name; do
     [[ -n "$agent_name" ]] && echo "    ✓ $agent_name"
 done < <(find "${CLAUDE_DIR}/agents" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort)
 
+echo "  Workers:"
+while IFS= read -r worker_name; do
+    [[ -n "$worker_name" ]] && echo "    ✓ $worker_name"
+done < <(find "${CLAUDE_DIR}/workers" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort)
+
 echo "  Governance:"
 while IFS= read -r governance_name; do
     [[ -n "$governance_name" ]] && echo "    ✓ $governance_name"
@@ -166,6 +190,7 @@ copy_overlay "${SHARED_SRC}/skills" "${CODEX_DIR}/skills"
 copy_overlay "${CODEX_SRC}/skills" "${CODEX_DIR}/skills"
 copy_overlay "${SHARED_SRC}/agents" "${CODEX_DIR}/agents"
 copy_overlay "${CODEX_SRC}/agents" "${CODEX_DIR}/agents"
+copy_overlay "${SHARED_SRC}/workers" "${CODEX_DIR}/workers"
 copy_overlay "${SHARED_SRC}/governance" "${CODEX_DIR}/governance"
 copy_overlay "${CODEX_SRC}/governance" "${CODEX_DIR}/governance"
 copy_overlay "${SHARED_SRC}/docs" "${CODEX_DIR}/docs"
@@ -173,11 +198,15 @@ copy_overlay "${CODEX_SRC}/docs" "${CODEX_DIR}/docs"
 copy_overlay "${SHARED_SRC}/scripts" "${CODEX_DIR}/scripts"
 copy_overlay "${CODEX_SRC}/scripts" "${CODEX_DIR}/scripts"
 copy_overlay "${SHARED_SRC}/config" "${CODEX_DIR}/config"
+copy_overlay "${CODEX_SRC}/config" "${CODEX_DIR}/config"
 copy_overlay "${CODEX_SRC}/.codex-plugin" "${CODEX_DIR}/.codex-plugin"
 copy_file_if_exists "${CODEX_SRC}/README.md" "${CODEX_DIR}/README.md"
 copy_file_if_exists "${CODEX_SRC}/.mcp.json" "${CODEX_DIR}/.mcp.json"
 copy_file_if_exists "${SCRIPT_DIR}/requirements.txt" "${CLAUDE_DIR}/requirements.txt"
 copy_file_if_exists "${SCRIPT_DIR}/requirements.txt" "${CODEX_DIR}/requirements.txt"
+for executable in scope-worker.py scope-reviewer.py scope-dependency-merge.py scope-wrap-finalize.py; do
+    [[ ! -f "${CODEX_DIR}/scripts/${executable}" ]] || chmod +x "${CODEX_DIR}/scripts/${executable}"
+done
 
 echo "  Plugin root:"
 [[ -f "${CODEX_DIR}/README.md" ]] && echo "    ✓ README.md"
@@ -198,6 +227,11 @@ echo "  Agents:"
 while IFS= read -r agent_name; do
     [[ -n "$agent_name" ]] && echo "    ✓ $agent_name"
 done < <(find "${CODEX_DIR}/agents" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort)
+
+echo "  Workers:"
+while IFS= read -r worker_name; do
+    [[ -n "$worker_name" ]] && echo "    ✓ $worker_name"
+done < <(find "${CODEX_DIR}/workers" -maxdepth 1 -type f -name "*.md" -exec basename {} .md \; | sort)
 
 echo "  Docs:"
 while IFS= read -r doc_name; do

@@ -1,1185 +1,1045 @@
 from __future__ import annotations
 
-import copy
+import hashlib
 import importlib.util
+import json
+import os
 import subprocess
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
 
 import pytest
 import yaml
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-AUDIT_TOOL_PATH = REPO_ROOT / "src_shared/scripts/audit-artifacts.py"
-POLICY_PATH = REPO_ROOT / "src_shared/config/audit-policy.yaml"
-AUDIT_COMMAND_PATH = REPO_ROOT / "src_shared/commands/audit_epic.md"
-REVIEWER_PATH = REPO_ROOT / "src_shared/commands/audit_epic/reviewer-audit.md"
+SCRIPT = Path(__file__).parents[2] / "src_shared" / "scripts" / "audit-artifacts.py"
+SPEC = importlib.util.spec_from_file_location("scope_audit_artifacts", SCRIPT)
+assert SPEC and SPEC.loader
+AUDIT = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(AUDIT)
 
-
-def _load_audit_module() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("scope_audit_artifacts", AUDIT_TOOL_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-AUDIT = _load_audit_module()
-
-
-def _write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+REFINEMENT_SCRIPT = SCRIPT.with_name("validate-refinement.py")
+REFINEMENT_SPEC = importlib.util.spec_from_file_location(
+    "scope_validate_refinement_for_audit_tests", REFINEMENT_SCRIPT
+)
+assert REFINEMENT_SPEC and REFINEMENT_SPEC.loader
+REFINEMENT = importlib.util.module_from_spec(REFINEMENT_SPEC)
+REFINEMENT_SPEC.loader.exec_module(REFINEMENT)
 
 
 def _dump(path: Path, value: object) -> None:
-    _write(path, yaml.safe_dump(value, sort_keys=False))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
 
 
-def _load(path: Path) -> dict[str, object]:
-    value = yaml.safe_load(path.read_text(encoding="utf-8"))
-    assert isinstance(value, dict)
-    return value
+def _sha(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
-def _build_repo(
-    tmp_path: Path,
-    *,
-    risk: str = "low",
-    capabilities: list[str] | None = None,
-    runtime_required: bool = False,
-) -> tuple[Path, Path]:
-    repo = tmp_path / "repo"
-    epic = repo / "docs/epics/E-001-auditable-delivery"
-    source = repo / "src/delivery.py"
-    test = repo / "tests/test_delivery.py"
-    evidence = repo / "tmp_debug/runtime-evidence.txt"
+def _relative(path: Path, root: Path) -> str:
+    return path.relative_to(root).as_posix()
 
-    _write(epic / "acceptance-criteria.md", "# Acceptance Criteria\n\n## AC-001\nDeliver it.\n")
-    _write(source, "def delivered() -> bool:\n    return True\n")
-    _write(test, "def test_delivered() -> None:\n    assert True\n")
-    _write(evidence, "1 passed, 0 failed, 0 errors, 0 skipped\n")
-    _dump(
-        epic / "refinement-profile.yaml",
-        {
-            "schema_version": 3,
-            "epic_id": "E-001",
-            "author_provider": "codex",
-            "architecture_scope": "backend",
-            "risk_level": risk,
-            "capabilities": capabilities or ["content_configuration"],
-            "review": {
-                "assignments": [
-                    {"provider": "claude", "mission": "semantic_core"}
-                ],
-                "maximum_full_reviews": 1,
-                "maximum_targeted_verifications": 1,
-            },
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def _refinement_receipt(repo: Path, packet_path: Path) -> Path:
+    packet = yaml.safe_load(packet_path.read_text(encoding="utf-8"))
+    template = repo / "refinement-template.md"
+    template.write_text("template", encoding="utf-8")
+    assignments = []
+    for assignment in packet["assignments"]:
+        provider = assignment["provider"]
+        mission = assignment["mission"]
+        output = packet_path.parent / f"refinement-review-{provider}.md"
+        output.write_text(f"refinement review from {provider}\n", encoding="utf-8")
+        assignments.append(
+            {
+                "provider": provider,
+                "mission": mission,
+                "status": "completed",
+                "paths": {
+                    "prompt": _relative(packet_path.parent / f"prompt-{provider}.md", repo),
+                    "output": _relative(output, repo),
+                    "log": _relative(packet_path.parent / f"log-{provider}.txt", repo),
+                },
+                "output_sha256": _sha(output),
+                "decision": "approved",
+                "questions": [],
+                "candidates": [],
+                "targeted_verifications": [],
+            }
+        )
+    receipt = {
+        "schema_version": 2,
+        "workflow": "refinement",
+        "reviewer_profile": packet["reviewer_profile"],
+        "reviewer_set": packet["reviewer_set"],
+        "status": "completed",
+        "packet_path": _relative(packet_path, repo),
+        "packet_sha256": _sha(packet_path),
+        "template_path": _relative(template, repo),
+        "template_sha256": _sha(template),
+        "assignment_manifest_sha256": REFINEMENT._structured_sha256(
+            packet["assignments"]
+        ),
+        "git_identity": {
+            "before": {"head": "abc", "tree": "def"},
+            "after": {"head": "abc", "tree": "def"},
+            "unchanged": True,
         },
-    )
-    _dump(
-        epic / "refinement-manifest.yaml",
-        {
-            "schema_version": 3,
-            "epic_id": "E-001",
-            "requirements": [
-                {
-                    "id": "AC-001",
-                    "source": {
-                        "artifact": "acceptance-criteria.md",
-                        "anchor": "AC-001",
-                    },
-                    "summary": "The real delivery path succeeds.",
-                    "type": "behavior",
-                    "risk": risk,
-                    "implementation_required": True,
-                    "affected_surfaces": ["src/delivery.py"],
-                    "proof_obligations": ["Run the delivery test."],
-                    "owner_story": "story-01",
-                }
-            ],
-            "decisions": [],
-            "artifacts": [],
-            "open_items": [],
-        },
-    )
-    _dump(
-        epic / "acceptance-traceability.yaml",
-        {
-            "schema_version": 3,
-            "epic_id": "E-001",
-            "acceptance_items": [
-                {
-                    "id": "AC-001",
-                    "story": "story-01",
-                    "source": {
-                        "artifact": "acceptance-criteria.md",
-                        "anchor": "AC-001",
-                    },
-                    "proof_obligation_ids": ["proof-001"],
-                    "implementation": {
-                        "actual_files": ["src/delivery.py"],
-                    },
-                    "tests": {
-                        "actual_tests": ["tests/test_delivery.py"],
-                    },
-                    "runtime_evidence": {
-                        "required": runtime_required,
-                        "commands": ["pytest -q tests/test_delivery.py"]
-                        if runtime_required
-                        else [],
-                        "evidence": ["tmp_debug/runtime-evidence.txt"]
-                        if runtime_required
-                        else [],
-                    },
-                    "status": "verified",
-                    "audit_notes": "Implementation handoff evidence.",
-                }
-            ],
-        },
-    )
-    _dump(
-        epic / "file-plan-story-01.yaml",
-        {
-            "epic_id": "E-001",
-            "story_id": "story-01",
-            "story_title": "Deliver the behavior",
-            "depends_on": [],
-            "required_contracts": [],
-            "required_touchpoints": [],
-            "candidate_files": ["src/delivery.py"],
-            "forbidden_changes": [],
-            "proof_obligations": [
-                {
-                    "id": "proof-001",
-                    "acceptance_rows": ["AC-001"],
-                    "required_evidence": "unit",
-                    "command": "pytest -q tests/test_delivery.py",
-                    "success_condition": "The delivery test passes.",
-                    "freshness": "reusable",
-                }
-            ],
-        },
-    )
-    fingerprint = AUDIT.repository_fingerprint(repo, epic)
-    output_hash = AUDIT._file_sha256(evidence)
-    test_record = {
-        "id": "story-01-proof-001",
-        "kind": "test",
-        "command": "pytest -q tests/test_delivery.py",
-        "cwd": ".",
-        "status": "pass",
-        "exit_code": 0,
-        "output": "tmp_debug/runtime-evidence.txt",
-        "output_sha256": output_hash,
-        "started_at": "2026-07-28T10:00:00Z",
-        "completed_at": "2026-07-28T10:00:01Z",
-        "repository_fingerprint": fingerprint,
-        "acceptance_rows": ["AC-001"],
-        "proof_obligation_ids": ["proof-001"],
-        "test_ids": ["tests/test_delivery.py"],
-        "test_summary": {
-            "passed": 1,
-            "failed": 0,
-            "errors": 0,
-            "skipped": 0,
-        },
+        "assignments": assignments,
     }
-    commands = [test_record]
-    if runtime_required:
-        runtime_record = {
-            **test_record,
-            "id": "story-01-runtime-001",
-            "kind": "runtime",
-            "command": "python -m delivery_smoke",
-            "test_ids": [],
-        }
-        commands.append(runtime_record)
-        trace = _load(epic / "acceptance-traceability.yaml")
-        trace["acceptance_items"][0]["runtime_evidence"]["commands"] = [
-            "python -m delivery_smoke"
-        ]
-        _dump(epic / "acceptance-traceability.yaml", trace)
+    path = packet_path.parent / "reviewer-receipt.yaml"
+    _dump(path, receipt)
+    return path
+
+
+def _fixture(
+    tmp_path: Path,
+    epic_directory: str = "E-001",
+    *,
+    documentation_obligation: bool = False,
+) -> tuple[Path, Path, Path]:
+    repo = tmp_path / "repo"
+    repo.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "scope@example.test")
+    _git(repo, "config", "user.name", "Scope Test")
+    (repo / "README.md").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "audit-template.md").write_text("template", encoding="utf-8")
+
+    epic = repo / "docs" / "epics" / epic_directory
+    epic.mkdir(parents=True)
+    for name, text in {
+        "details.md": "# Details\n",
+        "acceptance-criteria.md": "# Acceptance\n\n## AC-001\n",
+        "design.md": (
+            "# Design\n\n### DOC-001\nUpdate the operations guide.\n"
+            if documentation_obligation
+            else "# Design\n"
+        ),
+        "refinement-review.md": "# Refinement Review\n",
+        "proof.txt": "1 passed\n",
+        "native-contract.yaml": "schema_version: 1\n",
+    }.items():
+        (epic / name).write_text(text, encoding="utf-8")
+    documentation_path = repo / "docs" / "operations.md"
+    if documentation_obligation:
+        documentation_path.write_text("# Operations\n\nPending.\n", encoding="utf-8")
     _dump(
-        epic / "implementation-evidence.yaml",
+        epic / "file-plan-story-001.yaml",
         {
-            "schema_version": 3,
+            "schema_version": 1,
             "epic_id": "E-001",
-            "repository": {
-                "head": "no-git-head",
-                "fingerprint": fingerprint,
-            },
-            "stories": [
-                {
-                    "story_id": "story-01",
-                    "status": "verified",
-                    "acceptance_rows": ["AC-001"],
-                    "strategy": {
-                        "inspected_paths": ["src/delivery.py"],
-                        "selected_approach": "Preserve the direct delivery path.",
-                        "candidate_files_used": ["src/delivery.py"],
-                        "candidate_files_skipped": [],
-                        "discovered_files": [],
-                    },
-                    "files_changed": ["src/delivery.py"],
-                    "tests_added_or_updated": ["tests/test_delivery.py"],
-                    "contract_checks": [],
-                    "commands_run": commands,
-                    "value_proof": "The delivery path returns success.",
-                    "remaining_unproven_work": [],
-                }
-            ],
-            "epic_level": {
-                "commands_run": [],
-                "coverage": {},
-                "operational_deliverables": [],
-                "blocked_rows": [],
-            },
-            "audit_ready": True,
+            "story_id": "STORY-001",
+            "acceptance_ids": ["AC-001"],
+            "proof_ids": ["PROOF-001"],
         },
     )
-    return repo, epic
-
-
-def _prepare(
-    repo: Path,
-    epic: Path,
-    *,
-    mode: str = "full",
-    cycle_id: str = "audit-v3",
-    findings: list[str] | None = None,
-    siblings: list[str] | None = None,
-    allow_extra: bool = False,
-    reason: str = "",
-) -> Path:
-    args = SimpleNamespace(
-        epic_dir=epic,
-        repo_root=repo,
-        policy=POLICY_PATH,
-        mode=mode,
-        cycle_id=cycle_id,
-        finding=findings or [],
-        sibling_surface=siblings or [],
-        allow_extra=allow_extra,
-        reason=reason,
+    ownership = [
+        {"path": name, "owner": "architect", "authority": "canonical"}
+        for name in (
+            "details.md",
+            "acceptance-criteria.md",
+            "design.md",
+            "delivery-manifest.yaml",
+            "file-plan-story-001.yaml",
+            "native-contract.yaml",
+        )
+    ] + [{"path": "proof.txt", "owner": "tests", "authority": "evidence"}]
+    manifest = {
+        "schema_version": 2 if documentation_obligation else 1,
+        "epic_id": "E-001",
+        "risk_level": "medium",
+        "capabilities": [],
+        "author_provider": "codex",
+        "acceptance_ids": ["AC-001"],
+        "dependencies": [],
+        "artifact_ownership": ownership,
+        "decisions": [],
+        **(
+            {
+                "documentation_obligations": [
+                    {
+                        "id": "DOC-001",
+                        "story": "STORY-001",
+                        "path": "docs/operations.md",
+                        "requirement_ref": "design.md DOC-001",
+                    }
+                ]
+            }
+            if documentation_obligation
+            else {}
+        ),
+        "stories": [
+            {
+                "id": "STORY-001",
+                "plan_path": "file-plan-story-001.yaml",
+                "acceptance_ids": ["AC-001"],
+                "proof_ids": ["PROOF-001"],
+            }
+        ],
+        "proofs": [
+            {
+                "id": "PROOF-001",
+                "classification": "implementation_created",
+                "level": "unit",
+                "path": "tests/unit/test_one.py",
+                "command": "pytest -q tests/unit/test_one.py",
+                "expected_result": "passes",
+            }
+        ],
+    }
+    _dump(epic / "delivery-manifest.yaml", manifest)
+    scope_root = tmp_path / "scope-install"
+    worker_policy = scope_root / "config" / "worker-policy.yaml"
+    worker_policy.parent.mkdir(parents=True)
+    worker_policy.write_text("schema_version: 2\n", encoding="utf-8")
+    run_binding = {
+        "schema_version": 2,
+        "epic_id": "E-001",
+        "repository_root": str(repo),
+        "working_root": str(repo),
+        "scope_root": str(scope_root),
+        "worker_policy_sha256": _sha(worker_policy),
+        "worker_profile": "default",
+        "active_job": None,
+        "completed_jobs": [],
+    }
+    refinement_run = (
+        repo / "tmp_debug" / "scope-runs" / "E-001" / "epic_refine" / "run.yaml"
     )
-    assert AUDIT.prepare(args) == 0
-    return sorted((epic / "reviews").glob("audit-*"))[-1]
+    _dump(refinement_run, {**run_binding, "command": "epic_refine"})
+    assert REFINEMENT.main([
+        "record-authority", str(epic), "--run", str(refinement_run),
+        "--authority-id", "AUTH-PRODUCT", "--gate", "product_contract",
+        "--source", "user", "--decision", "approved",
+    ]) == 0
+    assert REFINEMENT.main([
+        "create-review-packet", str(epic), "--run", str(refinement_run), "--kind", "full"
+    ]) == 0
+    refinement_packet = epic / "reviews" / "refine-001" / "review-packet.yaml"
+    refinement_receipt = _refinement_receipt(repo, refinement_packet)
+    assert REFINEMENT.main([
+        "apply-review-receipt", str(epic), str(refinement_receipt),
+        "--run", str(refinement_run),
+    ]) == 0
+    assert REFINEMENT.main([
+        "record-authority", str(epic), "--run", str(refinement_run),
+        "--authority-id", "AUTH-FINAL", "--gate", "final_handoff",
+        "--source", "user", "--decision", "approved",
+    ]) == 0
+    _git(repo, "add", "audit-template.md", "refinement-template.md", "docs")
+    _git(repo, "commit", "-q", "-m", "approved refinement")
+    worker = AUDIT._worker_module()
+    before = worker.capture_snapshot(repo)
+    implementation = repo / "src" / "service.py"
+    implementation.parent.mkdir()
+    implementation.write_text("VALUE = 1\n", encoding="utf-8")
+    actual_paths = ["src/service.py"]
+    if documentation_obligation:
+        documentation_path.write_text(
+            "# Operations\n\nThe delivered service is enabled.\n", encoding="utf-8"
+        )
+        actual_paths.append("docs/operations.md")
+    after = worker.capture_snapshot(repo)
+    worker.promote_implementation_evidence(
+        {
+            "job_id": "implementation-story-001",
+            "role": "implementation",
+            "phase": "story",
+            "epic_id": "E-001",
+            "working_root": str(repo),
+            "implementation_evidence_path": _relative(
+                epic / "implementation-evidence.yaml", repo
+            ),
+            "artifacts": [
+                {
+                    "path": _relative(epic / "delivery-manifest.yaml", repo),
+                    "sha256": _sha(epic / "delivery-manifest.yaml"),
+                }
+            ],
+        },
+        {
+            "status": "completed",
+            "payload": {
+                "proof_evidence": [
+                    {
+                        "proof_id": "PROOF-001",
+                        "command": "pytest -q tests/unit/test_one.py",
+                        "exit_code": 0,
+                        "passed": 1,
+                        "failed": 0,
+                        "errors": 0,
+                        "skipped": 0,
+                        "evidence_path": _relative(epic / "proof.txt", repo),
+                        "evidence_sha256": _sha(epic / "proof.txt"),
+                    }
+                ]
+            },
+        },
+        actual_paths,
+        before,
+        after,
+        "sha256:" + "a" * 64,
+    )
+    run = repo / "tmp_debug" / "scope-runs" / "E-001" / "audit_epic" / "run.yaml"
+    _dump(run, {**run_binding, "command": "audit_epic"})
+    return repo, epic, run
 
 
-def _finding(
+def _prepare(epic: Path, run: Path, mode: str = "full", *extra: str) -> Path:
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(run), "--mode", mode, *extra
+    ]) == 0
+    return sorted((epic / "reviews").glob("audit-*/audit-attempt.yaml"))[-1].parent
+
+
+def _record_pass(epic: Path, attempt: Path, run: Path, evidence: Path, *, passed: int = 1) -> int:
+    attempt_doc = yaml.safe_load((attempt / "audit-attempt.yaml").read_text(encoding="utf-8"))
+    gate_id = attempt_doc["gates"][0]["id"]
+    return AUDIT.main([
+        "record-gate",
+        str(epic),
+        str(attempt),
+        "--run",
+        str(run),
+        "--gate",
+        gate_id,
+        "--status",
+        "pass",
+        "--exit-code",
+        "0",
+        "--passed",
+        str(passed),
+        "--failed",
+        "0",
+        "--errors",
+        "0",
+        "--skipped",
+        "0",
+        "--summary",
+        "passed",
+        "--evidence",
+        str(evidence),
+    ])
+
+
+def _receipt(
+    repo: Path,
+    attempt: Path,
     *,
-    finding_id: str = "AUDIT-001",
-    status: str = "open",
+    top_status: str = "completed",
+    row_statuses: list[str] | None = None,
+    candidates: dict[str, list[dict[str, object]]] | None = None,
+    verifications: dict[str, list[dict[str, object]]] | None = None,
+    decisions: dict[str, str] | None = None,
+    questions: dict[str, list[object]] | None = None,
+    unverified: dict[str, list[str]] | None = None,
+) -> Path:
+    packet_path = attempt / "review-packet.yaml"
+    packet = yaml.safe_load(packet_path.read_text(encoding="utf-8"))
+    template = repo / "audit-template.md"
+    assert template.read_text(encoding="utf-8") == "template"
+    statuses = row_statuses or ["completed"] * len(packet["assignments"])
+    rows = []
+    for assignment, status in zip(packet["assignments"], statuses):
+        provider = assignment["provider"]
+        mission = assignment["mission"]
+        output = attempt / f"review-{provider}.md"
+        output.write_text(f"audit review from {provider}\n", encoding="utf-8")
+        raw_candidates = [dict(row) for row in (candidates or {}).get(provider, [])]
+        for row in raw_candidates:
+            row.setdefault("provider", provider)
+            row.setdefault("mission", mission)
+        raw_verifications = [
+            dict(row) for row in (verifications or {}).get(provider, [])
+        ]
+        for row in raw_verifications:
+            row.setdefault("provider", provider)
+            row.setdefault("mission", mission)
+        rows.append(
+            {
+                "provider": provider,
+                "mission": mission,
+                "status": status,
+                "paths": {
+                    "prompt": _relative(attempt / f"prompt-{provider}.md", repo),
+                    "output": _relative(output, repo),
+                    "log": _relative(attempt / f"log-{provider}.txt", repo),
+                },
+                "output_sha256": _sha(output),
+                "decision": (decisions or {}).get(provider, "pass"),
+                "questions": (questions or {}).get(provider, []),
+                "unverified_evidence": (unverified or {}).get(provider, []),
+                "candidates": raw_candidates,
+                "targeted_verifications": raw_verifications,
+            }
+        )
+    receipt = {
+        "schema_version": 2,
+        "workflow": "audit",
+        "reviewer_profile": "default",
+        "reviewer_set": "standard",
+        "status": top_status,
+        "packet_path": _relative(packet_path, repo),
+        "packet_sha256": _sha(packet_path),
+        "template_path": _relative(template, repo),
+        "template_sha256": _sha(template),
+        "assignment_manifest_sha256": AUDIT._structured_sha256(packet["assignments"]),
+        "git_identity": {
+            "before": {"head": "abc", "tree": "def"},
+            "after": {"head": "abc", "tree": "def"},
+            "unchanged": True,
+        },
+        "assignments": rows,
+    }
+    path = attempt / "reviewer-receipt.yaml"
+    _dump(path, receipt)
+    return path
+
+
+def _candidate(
+    source_id: str,
+    *,
+    fingerprint: str = "runtime-defect",
+    severity: str = "major",
     disposition: str = "remediation_required",
 ) -> dict[str, object]:
     return {
-        "id": finding_id,
-        "fingerprint": f"implementation-delivery-{finding_id.lower()}",
-        "first_seen_attempt": "audit-001",
+        "source_id": source_id,
+        "severity": severity,
+        "category": "implementation",
+        "disposition": disposition,
+        "fingerprint": fingerprint,
+        "evidence": "src/service.py:10",
+        "affected_acceptance_ids": ["AC-001"],
+        "affected_files": ["src/service.py"],
+        "impact": "wrong result",
+        "owner": "implementation",
+        "closure_test": "pytest -q tests/unit/test_one.py",
+    }
+
+
+def _remediated_audit_finding(repo: Path, epic: Path) -> dict[str, object]:
+    source_id = "review:audit-000:codex:semantic_core:C-1"
+    return {
+        "id": "AF-001",
+        "fingerprint": "runtime-defect",
+        "first_seen_attempt": "audit-000",
         "severity": "major",
         "category": "implementation",
-        "source": "reviewer",
-        "detected_by": ["codex"],
-        "disposition": disposition,
-        "status": status,
-        "title": "Delivery behavior is not proved",
-        "evidence": ["tmp_debug/runtime-evidence.txt"],
+        "disposition": "remediation_required",
+        "status": "remediated_pending_verification",
+        "title": "Runtime defect",
+        "evidence": ["src/service.py"],
+        "affected_paths": ["src/service.py"],
         "affected_acceptance_ids": ["AC-001"],
-        "affected_files": ["src/delivery.py"],
-        "impact": "The promised outcome may not be delivered.",
-        "owner": "implementation" if disposition == "remediation_required" else "user",
-        "closure_test": "Run the real delivery path and observe success.",
-    }
-
-
-def _refresh_repository_fingerprint(repo: Path, epic: Path) -> None:
-    path = epic / "implementation-evidence.yaml"
-    evidence = _load(path)
-    fingerprint = AUDIT.repository_fingerprint(repo, epic)
-    head = AUDIT._run_git(repo, "rev-parse", "HEAD")
-    evidence["repository"] = {
-        "head": head[0] if head else "no-git-head",
-        "fingerprint": fingerprint,
-    }
-    for story in evidence["stories"]:
-        for record in story["commands_run"]:
-            record["repository_fingerprint"] = fingerprint
-    for record in evidence["epic_level"]["commands_run"]:
-        record["repository_fingerprint"] = fingerprint
-    _dump(path, evidence)
-
-
-def _set_evidence_results(epic: Path, attempt_dir: Path, status: str = "pass") -> None:
-    matrix_path = attempt_dir / "audit-verification-matrix.yaml"
-    matrix = _load(matrix_path)
-    scoped = set(_load(attempt_dir / "audit-attempt.yaml")["scope"]["acceptance_rows"])
-    for row in matrix["rows"]:
-        if row["id"] in scoped:
-            row["status"] = status
-            row["audit_notes"] = f"Direct evidence result: {status}."
-    _dump(matrix_path, matrix)
-
-    attempt_path = attempt_dir / "audit-attempt.yaml"
-    attempt = _load(attempt_path)
-    for gate in attempt["gates"]:
-        gate["status"] = status if status in {"pass", "fail", "blocked"} else "fail"
-        if gate["status"] != "pass":
-            gate["reused"] = False
-        gate["evidence"] = ["tmp_debug/runtime-evidence.txt"]
-        gate["reason"] = "" if gate["status"] != "blocked" else "External proof unavailable."
-    _dump(attempt_path, attempt)
-
-
-def _complete_attempt(
-    repo: Path,
-    epic: Path,
-    attempt_dir: Path,
-    *,
-    status: str = "pass",
-    skip_reviews: bool = False,
-) -> None:
-    _set_evidence_results(epic, attempt_dir, "pass" if status == "pass" else status)
-    attempt_path = attempt_dir / "audit-attempt.yaml"
-    attempt = _load(attempt_path)
-    outputs: list[dict[str, str]] = []
-    if skip_reviews:
-        attempt["review"]["skipped_reason"] = "Mechanical evidence is not reviewable."
-    else:
-        for assignment in attempt["review"]["required_assignments"]:
-            provider = assignment["provider"]
-            mission = assignment["mission"]
-            output_path = attempt_dir / f"review-{provider}-{mission}.md"
-            metadata_path = attempt_dir / f"metadata-{provider}-{mission}.yaml"
-            _write(
-                output_path,
-                f"# Review\n\nAUDIT_PROVIDER: {provider}\n"
-                f"AUDIT_MISSION: {mission}\nDECISION: "
-                f"{'pass' if status == 'pass' else 'findings'}\n"
-                "COVERED_ACCEPTANCE_IDS: [AC-001]\n",
-            )
-            _dump(metadata_path, {"provider": provider, "status": "completed"})
-            outputs.append(
+        "closure_test": "pytest -q tests/unit/test_one.py",
+        "source_ids": [source_id],
+        "detected_by": ["codex"],
+        "authority_ref": None,
+        "remediation": {
+            "source_attempt_id": "audit-000",
+            "source_ids": [source_id],
+            "affected_paths": [_relative(epic / "design.md", repo)],
+            "affected_path_hashes": {
+                _relative(epic / "design.md", repo): _sha(epic / "design.md")
+            },
+            "checks": [
                 {
-                    "provider": provider,
-                    "mission": mission,
-                    "path": str(output_path.relative_to(repo)),
-                    "metadata_path": str(metadata_path.relative_to(repo)),
+                    "command": "pytest -q tests/unit/test_one.py",
+                    "outcome": "pass",
+                    "exit_code": 0,
+                    "passed": 1,
+                    "failed": 0,
+                    "errors": 0,
+                    "skipped": 0,
+                    "summary": "1 passed",
+                    "evidence_hashes": {
+                        _relative(epic / "proof.txt", repo): _sha(epic / "proof.txt")
+                    },
                 }
-            )
-    attempt["review"]["outputs"] = outputs
-    attempt["status"] = status
-    attempt["decision_reason"] = f"Evidence supports {status}."
-    _dump(attempt_path, attempt)
-
-    matrix = _load(attempt_dir / "audit-verification-matrix.yaml")
-    _dump(epic / "audit-verification-matrix.yaml", matrix)
-    _write(epic / "epic_audit.md", f"# Epic Audit\n\nDecision: {status.upper()}\n")
-    AUDIT.record_metrics(SimpleNamespace(epic_dir=epic, attempt_dir=attempt_dir))
-
-
-def _validate(repo: Path, epic: Path, attempt: Path, phase: str) -> list[str]:
-    return AUDIT.AuditValidator(epic, attempt, phase, POLICY_PATH, repo).validate()
-
-
-def test_prepare_full_derives_scope_matrix_gate_and_three_provider_assignments(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-
-    attempt_dir = _prepare(repo, epic)
-
-    attempt = _load(attempt_dir / "audit-attempt.yaml")
-    matrix = _load(attempt_dir / "audit-verification-matrix.yaml")
-    findings = _load(epic / "audit-findings.yaml")
-    assert attempt_dir.name == "audit-001"
-    assert attempt["mode"] == "full"
-    assert attempt["scope"]["acceptance_rows"] == ["AC-001"]
-    assert attempt["review"]["required_assignments"] == [
-        {"provider": "claude", "mission": "semantic_core"},
-        {"provider": "codex", "mission": "semantic_core"},
-        {"provider": "agy", "mission": "semantic_core"},
-    ]
-    assert attempt["gates"][0]["command"] == "pytest -q tests/test_delivery.py"
-    assert attempt["gates"][0]["reused"] is True
-    assert matrix["rows"][0]["id"] == "AC-001"
-    assert matrix["rows"][0]["implementation"]["actual_files"] == ["src/delivery.py"]
-    assert matrix["rows"][0]["status"] == "ready"
-    assert findings == {"schema_version": 3, "epic_id": "E-001", "findings": []}
-    assert (attempt_dir / "review-packet.yaml").is_file()
-
-
-@pytest.mark.parametrize(
-    ("risk", "expected_focus"),
-    [
-        ("low", []),
-        ("medium", []),
-        ("high", ["llm_ml"]),
-        ("critical", ["llm_ml"]),
-    ],
-)
-def test_prepare_selects_all_providers_and_capability_focus_from_risk(
-    tmp_path: Path,
-    risk: str,
-    expected_focus: list[str],
-) -> None:
-    repo, epic = _build_repo(tmp_path, risk=risk, capabilities=["llm_ml"])
-
-    attempt = _load(_prepare(repo, epic) / "audit-attempt.yaml")
-
-    assert {
-        assignment["provider"]
-        for assignment in attempt["review"]["required_assignments"]
-    } == {"claude", "codex", "agy"}
-    assert attempt["capability_focus"] == expected_focus
-
-
-def test_critical_gate_requires_fresh_independent_execution(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path, risk="critical")
-
-    attempt = _load(_prepare(repo, epic) / "audit-attempt.yaml")
-
-    assert attempt["gates"][0]["freshness"] == "fresh"
-    assert attempt["gates"][0]["reused"] is False
-    assert attempt["gates"][0]["status"] == "pending"
-
-
-def test_targeted_prepare_requires_remediated_finding_and_scopes_siblings(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _prepare(repo, epic)
-    findings_path = epic / "audit-findings.yaml"
-    findings = _load(findings_path)
-    findings["findings"] = [_finding(status="open")]
-    _dump(findings_path, findings)
-
-    with pytest.raises(ValueError, match="not ready for verification"):
-        _prepare(repo, epic, mode="targeted", findings=["AUDIT-001"])
-
-    findings["findings"][0]["status"] = "remediated_pending_verification"
-    _dump(findings_path, findings)
-    attempt_dir = _prepare(
-        repo,
-        epic,
-        mode="targeted",
-        findings=["AUDIT-001", "AUDIT-001"],
-        siblings=["src/sibling.py", "src/sibling.py"],
-    )
-    attempt = _load(attempt_dir / "audit-attempt.yaml")
-    assert attempt["mode"] == "targeted"
-    assert attempt["scope"] == {
-        "acceptance_rows": ["AC-001"],
-        "finding_ids": ["AUDIT-001"],
-        "sibling_surfaces": ["src/sibling.py"],
-    }
-    assert attempt["review"]["required_assignments"] == [
-        {"provider": "codex", "mission": "semantic_core"}
-    ]
-
-
-def test_targeted_deterministic_finding_uses_closure_gates_without_reviewer(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _prepare(repo, epic)
-    finding = _finding(status="remediated_pending_verification")
-    finding["source"] = "deterministic"
-    finding["detected_by"] = []
-    _dump(
-        epic / "audit-findings.yaml",
-        {"schema_version": 3, "epic_id": "E-001", "findings": [finding]},
-    )
-
-    attempt = _load(
-        _prepare(repo, epic, mode="targeted", findings=["AUDIT-001"])
-        / "audit-attempt.yaml"
-    )
-
-    assert attempt["review"]["required_assignments"] == []
-    assert "deterministic closure" in attempt["review"]["skipped_reason"]
-
-
-def test_targeted_prepare_rejects_missing_unknown_and_unscoped_findings(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _prepare(repo, epic)
-
-    with pytest.raises(ValueError, match="at least one"):
-        _prepare(repo, epic, mode="targeted")
-    with pytest.raises(ValueError, match="unknown targeted findings"):
-        _prepare(repo, epic, mode="targeted", findings=["AUDIT-404"])
-
-    findings = _load(epic / "audit-findings.yaml")
-    unscoped = _finding(status="remediated_pending_verification")
-    unscoped["affected_acceptance_ids"] = []
-    findings["findings"] = [unscoped]
-    _dump(epic / "audit-findings.yaml", findings)
-    with pytest.raises(ValueError, match="do not reference any current acceptance rows"):
-        _prepare(repo, epic, mode="targeted", findings=["AUDIT-001"])
-
-
-def test_attempt_budget_requires_explicit_extra_reason(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _prepare(repo, epic)
-
-    with pytest.raises(ValueError, match="already has 1 full attempt"):
-        _prepare(repo, epic)
-    with pytest.raises(ValueError, match="requires --reason"):
-        _prepare(repo, epic, allow_extra=True)
-
-    extra = _prepare(repo, epic, allow_extra=True, reason="User authorized a new full audit.")
-    assert extra.name == "audit-002"
-
-
-def test_prepare_rejects_bad_mode_identity_and_duplicate_traceability(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    args = SimpleNamespace(
-        epic_dir=epic,
-        repo_root=repo,
-        policy=POLICY_PATH,
-        mode="invented",
-        cycle_id="audit-v3",
-        finding=[],
-        sibling_surface=[],
-        allow_extra=False,
-        reason="",
-    )
-    with pytest.raises(ValueError, match="unsupported audit mode"):
-        AUDIT.prepare(args)
-
-    trace_path = epic / "acceptance-traceability.yaml"
-    trace = _load(trace_path)
-    trace["epic_id"] = "E-WRONG"
-    _dump(trace_path, trace)
-    with pytest.raises(ValueError, match="epic_id mismatch"):
-        AUDIT.prepare(SimpleNamespace(**{**vars(args), "mode": "full"}))
-
-    _write(trace_path, "schema_version: 2\nepic_id: E-001\nepic_id: E-002\n")
-    with pytest.raises(ValueError, match="duplicate key 'epic_id'"):
-        AUDIT.prepare(SimpleNamespace(**{**vars(args), "mode": "full"}))
-
-
-def test_prepare_records_git_changes_against_main(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _write(repo / "src/removed.py", "VALUE = 1\n")
-    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Scope Test"], cwd=repo, check=True)
-    subprocess.run(["git", "config", "user.email", "scope@example.test"], cwd=repo, check=True)
-    subprocess.run(["git", "add", "."], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-m", "fixture"], cwd=repo, check=True, capture_output=True)
-    _write(repo / "src/delivery.py", "def delivered() -> bool:\n    return False\n")
-    _write(repo / "src/untracked.py", "VALUE = 1\n")
-    (repo / "src/removed.py").unlink()
-    evidence = _load(epic / "implementation-evidence.yaml")
-    evidence["stories"][0]["files_changed"].extend(
-        ["src/untracked.py", "src/removed.py"]
-    )
-    evidence["stories"][0]["strategy"]["discovered_files"].extend(
-        ["src/untracked.py", "src/removed.py"]
-    )
-    _dump(epic / "implementation-evidence.yaml", evidence)
-    _refresh_repository_fingerprint(repo, epic)
-
-    attempt = _load(_prepare(repo, epic) / "audit-attempt.yaml")
-
-    assert "src/delivery.py" in attempt["changed_files"]
-    assert "src/untracked.py" in attempt["changed_files"]
-    assert "src/removed.py" in attempt["changed_files"]
-
-
-def test_prepare_rejects_missing_v2_handoff_and_policy_helper_errors(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    (epic / "refinement-profile.yaml").unlink()
-
-    with pytest.raises(ValueError, match="missing refinement profile"):
-        _prepare(repo, epic)
-    assert AUDIT._infer_repo_root(epic) == repo.resolve()
-    assert AUDIT._infer_repo_root(tmp_path / "outside") == Path.cwd().resolve()
-    with pytest.raises(ValueError, match="invalid risk_level"):
-        AUDIT._risk_and_capabilities(
-            {"risk_level": "invalid", "capabilities": []}
-        )
-    with pytest.raises(ValueError, match="capabilities must be a list"):
-        AUDIT._risk_and_capabilities(
-            {"risk_level": "medium", "capabilities": "bad"}
-        )
-    assert AUDIT._requirements_by_id({"requirements": "bad"}) == {}
-    assert AUDIT._string_list("bad") == []
-    with pytest.raises(ValueError, match="cannot determine epic_id"):
-        AUDIT._epic_id({}, {}, {})
-    with pytest.raises(ValueError, match="must be a mapping"):
-        AUDIT._full_assignments({"risk_review_policy": []}, "low")
-    with pytest.raises(ValueError, match="has no providers"):
-        AUDIT._full_assignments({"risk_review_policy": {}}, "low")
-    with pytest.raises(ValueError, match="non-empty strings"):
-        AUDIT._full_assignments(
-            {
-                "risk_review_policy": {"low": {"providers": [""]}},
-                "review_providers": ["claude"],
-            },
-            "low",
-        )
-
-
-def test_matrix_and_gate_derivation_defensive_paths(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    policy = _load(POLICY_PATH)
-    base = {
-        "acceptance_items": [
-            {
-                "id": "AC-001",
-                "story": "story",
-                "requirement": "documentation only",
-                "source": {},
-                "implementation": {},
-                "tests": {},
-                "runtime_evidence": {},
-            }
-        ]
-    }
-    matrix = AUDIT._derive_matrix(
-        epic,
-        "audit-001",
-        "E-001",
-        "medium",
-        base,
-        {
-            "requirements": [
-                {"id": "AC-001", "risk": "invalid", "implementation_required": False}
-            ]
+            ],
         },
-        policy,
-    )
-    assert matrix["rows"][0]["risk_level"] == "medium"
-    assert matrix["rows"][0]["priority"] == "documentation"
+    }
 
-    for bad_items, message in (
-        ([], "non-empty acceptance_items"),
-        (["bad"], "must be a mapping"),
-        ([{}], "id must be a non-empty string"),
-        ([base["acceptance_items"][0], base["acceptance_items"][0]], "duplicate"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            AUDIT._derive_matrix(
-                epic,
-                "audit-001",
-                "E-001",
-                "low",
-                {"acceptance_items": bad_items},
-                {},
-                policy,
-            )
 
-    _dump(epic / "file-plan-story-02.yaml", {"proof_obligations": "bad"})
-    _dump(
-        epic / "file-plan-story-03.yaml",
+def _result(
+    repo: Path,
+    run: Path,
+    findings: list[dict[str, object]],
+    *,
+    job_id: str = "audit-synthesis-001",
+) -> Path:
+    path = repo / "tmp_debug" / f"{job_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    document = {
+        "schema_version": 2,
+        "job_id": job_id,
+        "status": "completed",
+        "summary": "synthesized",
+        "changed_paths": [],
+        "validations": [],
+        "questions": [],
+        "issues": [],
+        "payload": {"kind": "audit", "findings": findings},
+    }
+    path.write_text(json.dumps(document), encoding="utf-8")
+    run_doc = yaml.safe_load(run.read_text(encoding="utf-8"))
+    run_doc["completed_jobs"].append(
         {
-            "proof_obligations": [
-                "bad",
-                {
-                    "id": "other-row",
-                    "acceptance_rows": ["AC-404"],
-                    "command": "pytest ignored.py",
-                },
-                {
-                    "id": "duplicate",
-                    "acceptance_rows": ["AC-001"],
-                    "command": "pytest -q tests/test_delivery.py",
-                },
-            ]
-        },
-    )
-    gates = AUDIT._boundary_gates(epic, {"AC-001"}, _load(epic / "refinement-manifest.yaml"), [])
-    assert len(gates) == 1
-
-
-def test_prepare_ignores_malformed_historical_attempt_and_rejects_bad_findings_shape(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _write(epic / "reviews/audit-001/audit-attempt.yaml", "epic_id: [unterminated\n")
-    attempt = _prepare(repo, epic)
-    assert attempt.name == "audit-002"
-
-    other_repo, other_epic = _build_repo(tmp_path / "other")
-    _dump(other_epic / "audit-findings.yaml", {"schema_version": 3, "epic_id": "E-001", "findings": {}})
-    with pytest.raises(ValueError, match="must contain a findings list"):
-        _prepare(other_repo, other_epic)
-
-
-def test_pre_review_validation_passes_with_complete_direct_evidence(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path, runtime_required=True)
-    attempt = _prepare(repo, epic)
-    _set_evidence_results(epic, attempt)
-
-    assert _validate(repo, epic, attempt, "pre_review") == []
-
-
-def test_evidence_verifier_accepts_full_and_story_scopes(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    args = SimpleNamespace(
-        epic_dir=epic,
-        repo_root=repo,
-        policy=POLICY_PATH,
-        story="",
-    )
-
-    assert AUDIT.verify_evidence(args) == 0
-    assert "audit-ready handoff" in capsys.readouterr().out
-    args.story = "story-01"
-    assert AUDIT.verify_evidence(args) == 0
-    assert "story=story-01" in capsys.readouterr().out
-    assert AUDIT.print_fingerprint(
-        SimpleNamespace(epic_dir=epic, repo_root=repo)
-    ) == 0
-    assert "sha256:" in capsys.readouterr().out
-
-
-def test_evidence_verifier_rejects_stale_output_and_malformed_records(
-    tmp_path: Path,
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    path = epic / "implementation-evidence.yaml"
-    evidence = _load(path)
-    story = evidence["stories"][0]
-    record = story["commands_run"][0]
-    evidence["schema_version"] = 2
-    evidence["epic_id"] = "WRONG"
-    evidence["repository"] = {"head": "wrong", "fingerprint": "sha256:wrong"}
-    story["status"] = "invented"
-    story["strategy"]["selected_approach"] = ""
-    story["strategy"]["candidate_files_used"] = []
-    story["files_changed"].append("src/missing.py")
-    story["remaining_unproven_work"] = []
-    record.update(
-        {
-            "kind": "test",
-            "command": "",
-            "status": "pass",
-            "exit_code": 7,
-            "output_sha256": "sha256:wrong",
-            "acceptance_rows": [1],
-            "proof_obligation_ids": "bad",
-            "test_ids": ["tests/missing.py::test_missing"],
-            "test_summary": {
-                "passed": -1,
-                "failed": 1,
-                "errors": "bad",
-                "skipped": -1,
-            },
+            "job_id": job_id,
+            "status": "completed",
+            "result_path": _relative(path, repo),
+            "result_sha256": _sha(path),
         }
     )
-    story["commands_run"].extend(
-        [
-            "bad",
-            {
-                **record,
-                "id": "inspection",
-                "kind": "inspection",
-                "command": "",
-                "inspection": "",
-                "exit_code": 0,
-                "test_ids": [],
-            },
-        ]
-    )
-    evidence["epic_level"]["commands_run"] = ["bad"]
-    evidence["epic_level"]["blocked_rows"] = ["AC-001"]
-    evidence["audit_ready"] = False
-    _dump(path, evidence)
-
-    errors = AUDIT.ImplementationEvidenceVerifier(
-        epic, POLICY_PATH, repo
-    ).validate()
-    joined = "\n".join(errors)
-
-    for expected in (
-        "schema_version must be 3",
-        "epic_id does not match",
-        "HEAD does not match",
-        "repository fingerprint does not match",
-        "status must be one of",
-        "selected_approach",
-        "unclassified changed files",
-        "path does not exist",
-        "commands_run entries must be mappings",
-        "passing command must have exit_code 0",
-        "output_sha256 does not match",
-        "test_summary.passed",
-        "passing test command reports failures",
-        "inspection must be a non-empty string",
-        "inspection exit_code must be null",
-        "audit_ready must be true",
-        "blocked_rows",
-    ):
-        assert expected in joined
+    _dump(run, run_doc)
+    return path
 
 
-def test_evidence_verifier_rejects_stale_source_and_missing_story(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _write(repo / "src/delivery.py", "def delivered() -> bool:\n    return False\n")
-
-    args = SimpleNamespace(
-        epic_dir=epic,
-        repo_root=repo,
-        policy=POLICY_PATH,
-        story="missing-story",
-    )
-    assert AUDIT.verify_evidence(args) == 1
-    error = capsys.readouterr().err
-    assert "repository fingerprint does not match" in error
-    assert "has no story 'missing-story'" in error
-
-
-def test_pre_review_rejects_pending_or_missing_required_evidence(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path, runtime_required=True)
-    attempt = _prepare(repo, epic)
-    matrix_path = attempt / "audit-verification-matrix.yaml"
-    matrix = _load(matrix_path)
-    matrix["rows"][0]["implementation"]["actual_files"] = []
-    matrix["rows"][0]["tests"]["required_assertions"] = []
-    matrix["rows"][0]["tests"]["actual_tests"] = []
-    matrix["rows"][0]["runtime_evidence"]["commands"] = []
-    matrix["rows"][0]["runtime_evidence"]["evidence"] = []
-    _dump(matrix_path, matrix)
-    attempt_path = attempt / "audit-attempt.yaml"
-    attempt_data = _load(attempt_path)
-    attempt_data["gates"][0]["status"] = "pending"
-    attempt_data["gates"][0]["reused"] = False
-    attempt_data["gates"][0]["evidence"] = []
-    _dump(attempt_path, attempt_data)
-
-    errors = _validate(repo, epic, attempt, "pre_review")
-
-    assert any("no actual implementation files" in error for error in errors)
-    assert any("no required assertions" in error for error in errors)
-    assert any("no actual tests" in error for error in errors)
-    assert any("no runtime command" in error for error in errors)
-    assert any("no runtime evidence" in error for error in errors)
-    assert any("gates[1] remains pending" in error for error in errors)
+def _proposal(
+    source_ids: list[str],
+    *,
+    fingerprint: str = "runtime-defect",
+    severity: str = "minor",
+    disposition: str = "remediation_required",
+) -> dict[str, object]:
+    return {
+        "source_ids": source_ids,
+        "fingerprint": fingerprint,
+        "severity": severity,
+        "category": "implementation",
+        "disposition": disposition,
+        "title": "Runtime defect",
+        "evidence": ["src/service.py:10"],
+        "affected_paths": ["src/service.py"],
+        "closure_test": "pytest -q tests/unit/test_one.py",
+    }
 
 
-def test_validator_rederives_immutable_matrix_fields(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    _set_evidence_results(epic, attempt)
-    matrix_path = attempt / "audit-verification-matrix.yaml"
-    matrix = _load(matrix_path)
-    matrix["rows"][0]["requirement"] = "A reviewer invented a different requirement."
-    matrix["rows"][0]["implementation"]["actual_files"] = ["src/fake.py"]
-    _dump(matrix_path, matrix)
-
-    errors = _validate(repo, epic, attempt, "pre_review")
-
-    assert any("requirement differs from derived traceability" in error for error in errors)
-    assert any("implementation differs from derived traceability" in error for error in errors)
+def test_uncommitted_implementation_evidence_is_fingerprint_bound(tmp_path: Path) -> None:
+    repo, epic, _ = _fixture(tmp_path)
+    policy = AUDIT._policy(AUDIT._default_policy_path())
+    errors, _, _ = AUDIT.verify_implementation_evidence(epic, repo, policy)
+    assert errors == []
+    assert subprocess.run(["git", "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True).stdout
 
 
-def test_complete_pass_requires_and_accepts_provider_outputs_and_published_artifacts(
+def test_prepare_creates_only_canonical_attempt_packet_and_findings(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    assert (attempt / "audit-attempt.yaml").is_file()
+    assert (attempt / "review-packet.yaml").is_file()
+    assert (epic / "audit-findings.yaml").is_file()
+    assert not (attempt / "audit-verification-matrix.yaml").exists()
+    assert not (attempt / "synthesis-snapshot.yaml").exists()
+    doc = yaml.safe_load((attempt / "audit-attempt.yaml").read_text(encoding="utf-8"))
+    assert doc["repository_fingerprint"] == AUDIT.repository_fingerprint(epic, repo)
+    assert _relative(epic / "native-contract.yaml", repo) in doc["artifact_hashes"]
+    assert _relative(epic / "refinement-state.yaml", repo) in doc["artifact_hashes"]
+
+
+def test_documentation_obligation_is_attributed_and_bound_to_audit(
     tmp_path: Path,
 ) -> None:
-    repo, epic = _build_repo(tmp_path, risk="medium")
-    attempt = _prepare(repo, epic)
-    _complete_attempt(repo, epic, attempt)
+    repo, epic, run = _fixture(tmp_path, documentation_obligation=True)
+    policy = AUDIT._policy(AUDIT._default_policy_path())
+    errors, _, _ = AUDIT.verify_implementation_evidence(epic, repo, policy)
+    assert errors == []
+    attempt = _prepare(epic, run)
+    attempt_doc = yaml.safe_load(
+        (attempt / "audit-attempt.yaml").read_text(encoding="utf-8")
+    )
+    assert attempt_doc["artifact_hashes"]["docs/operations.md"] == _sha(
+        repo / "docs" / "operations.md"
+    )
+    (repo / "docs" / "operations.md").write_text(
+        "# Operations\n\nTampered.\n", encoding="utf-8"
+    )
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 1
 
-    assert _validate(repo, epic, attempt, "complete") == []
 
-
-def test_complete_rejects_missing_mismatched_or_malformed_provider_outputs(
+def test_documentation_obligation_rejects_an_unattributed_target(
     tmp_path: Path,
 ) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    _complete_attempt(repo, epic, attempt)
-    attempt_path = attempt / "audit-attempt.yaml"
-    data = _load(attempt_path)
-    output = repo / data["review"]["outputs"][0]["path"]
-    _write(
-        output,
-        "# Review\n\nAUDIT_PROVIDER: invented\nAUDIT_MISSION: invented\n"
-        "DECISION: invented\nCOVERED_ACCEPTANCE_IDS: []\n",
+    repo, epic, _ = _fixture(tmp_path, documentation_obligation=True)
+    evidence_path = epic / "implementation-evidence.yaml"
+    evidence = yaml.safe_load(evidence_path.read_text(encoding="utf-8"))
+    evidence["validated_jobs"][0]["changed_paths"] = [
+        row
+        for row in evidence["validated_jobs"][0]["changed_paths"]
+        if row["path"] != "docs/operations.md"
+    ]
+    evidence["attributed_delta"] = [
+        row
+        for row in evidence["attributed_delta"]
+        if row["path"] != "docs/operations.md"
+    ]
+    evidence["attribution_sha256"] = AUDIT._worker_module()._attribution_hash(
+        evidence
     )
-    data["review"]["required_assignments"].append(
-        {"provider": "invented", "mission": "semantic_core"}
+    _dump(evidence_path, evidence)
+    policy = AUDIT._policy(AUDIT._default_policy_path())
+    errors, _, _ = AUDIT.verify_implementation_evidence(epic, repo, policy)
+    assert (
+        "documentation obligation target is not runner-attributed: docs/operations.md"
+        in errors
     )
-    _dump(attempt_path, data)
-
-    errors = _validate(repo, epic, attempt, "complete")
-
-    assert any("unknown provider 'invented'" in error for error in errors)
-    assert any("declares AUDIT_PROVIDER 'invented'" in error for error in errors)
-    assert any("declares AUDIT_MISSION 'invented'" in error for error in errors)
-    assert any("unsupported DECISION 'invented'" in error for error in errors)
-    assert any("has no output for assignments: invented/semantic_core" in error for error in errors)
-
-    _write(output, "# Review without markers\n")
-    errors = _validate(repo, epic, attempt, "complete")
-    assert any("output has no valid AUDIT_PROVIDER" in error for error in errors)
-    assert any("output has no valid AUDIT_MISSION" in error for error in errors)
-    assert any("output has no valid DECISION" in error for error in errors)
 
 
-def test_finding_schema_and_reciprocal_matrix_links_are_enforced(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    _set_evidence_results(epic, attempt, "fail")
-    findings = _load(epic / "audit-findings.yaml")
-    first = _finding()
-    second = copy.deepcopy(first)
-    second["id"] = "AUDIT-002"
-    second["evidence"] = []
-    second["affected_acceptance_ids"] = ["AC-404"]
-    findings["findings"] = [first, second]
-    _dump(epic / "audit-findings.yaml", findings)
-    matrix_path = attempt / "audit-verification-matrix.yaml"
-    matrix = _load(matrix_path)
-    matrix["rows"][0]["finding_ids"] = ["AUDIT-404", "AUDIT-002"]
-    _dump(matrix_path, matrix)
-
-    errors = _validate(repo, epic, attempt, "pre_review")
-
-    assert any("duplicate finding fingerprints" in error for error in errors)
-    assert any("references unknown acceptance rows: AC-404" in error for error in errors)
-    assert any("evidence must not be empty" in error for error in errors)
-    assert any("references unknown findings: AUDIT-404" in error for error in errors)
-    assert any("links finding AUDIT-002 without reciprocal scope" in error for error in errors)
-    assert any("finding AUDIT-001 is missing from matrix row AC-001" in error for error in errors)
-
-
-def test_record_metrics_counts_only_new_findings_and_preserves_provider_provenance(
-    tmp_path: Path,
+@pytest.mark.parametrize("mutation", ["unapproved", "stale"])
+def test_prepare_requires_current_approved_refinement_handoff(
+    tmp_path: Path, capsys: object, mutation: str
 ) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    first = _finding()
-    first["detected_by"] = ["codex", "agy"]
-    second = _finding(finding_id="AUDIT-002")
-    second["category"] = "mechanical"
-    second["source"] = "deterministic"
-    second["detected_by"] = []
-    third = _finding(finding_id="AUDIT-003")
-    third["first_seen_attempt"] = "audit-000"
-    _dump(
-        epic / "audit-findings.yaml",
-        {
-            "schema_version": 3,
-            "epic_id": "E-001",
-            "findings": [first, second, third],
+    _, epic, run = _fixture(tmp_path)
+    if mutation == "unapproved":
+        state_path = epic / "refinement-state.yaml"
+        state = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+        state["status"] = "ready_for_final_approval"
+        _dump(state_path, state)
+    else:
+        (epic / "design.md").write_text("# Stale Design\n", encoding="utf-8")
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(run), "--mode", "full"
+    ]) == 1
+    assert not list((epic / "reviews").glob("audit-*/audit-attempt.yaml"))
+    assert "refinement handoff" in capsys.readouterr().err
+
+
+def test_audit_boundary_drift_blocks_mutation(tmp_path: Path) -> None:
+    _, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    (epic / "native-contract.yaml").write_text("schema_version: 2\n", encoding="utf-8")
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 1
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink setup differs on Windows")
+def test_mutation_lock_rejects_symlinked_tmp_debug_without_outside_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    outside = tmp_path / "outside-runtime"
+    (repo / "tmp_debug").rename(outside)
+    os.symlink(outside, repo / "tmp_debug")
+    (outside / "scope-mutation.lock").unlink(missing_ok=True)
+    before = sorted(path.relative_to(outside) for path in outside.rglob("*"))
+
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(run), "--mode", "full"
+    ]) == 1
+
+    assert "symlink" in capsys.readouterr().err
+    assert sorted(path.relative_to(outside) for path in outside.rglob("*")) == before
+    assert not (outside / "scope-mutation.lock").exists()
+    assert not list((epic / "reviews").glob("audit-*/audit-attempt.yaml"))
+
+
+def test_executable_mode_drift_blocks_audit_mutation(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    (repo / "src" / "service.py").chmod(0o755)
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 1
+
+
+def test_gate_pass_requires_positive_execution_and_zero_skip(tmp_path: Path) -> None:
+    _, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    assert _record_pass(epic, attempt, run, epic / "proof.txt", passed=0) == 1
+    assert _record_pass(epic, attempt, run, epic / "proof.txt", passed=1) == 0
+
+
+def test_not_applicable_gate_requires_hash_bound_authority(tmp_path: Path) -> None:
+    _, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    gate_id = yaml.safe_load((attempt / "audit-attempt.yaml").read_text(encoding="utf-8"))["gates"][0]["id"]
+    base = [
+        "record-gate", str(epic), str(attempt), "--run", str(run), "--gate", gate_id,
+        "--status", "not_applicable", "--summary", "n/a",
+    ]
+    assert AUDIT.main(base) == 1
+    assert AUDIT.main([
+        "record-authority", str(epic), str(attempt), "--run", str(run),
+        "--authority-id", "AUTH-NA", "--kind", "gate_not_applicable", "--subject", gate_id,
+        "--source", "user",
+    ]) == 0
+    assert AUDIT.main([*base, "--authority-id", "AUTH-NA"]) == 0
+
+
+def test_failed_receipt_candidate_is_ingested_and_no_drop_is_enforced(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    _receipt(
+        repo,
+        attempt,
+        top_status="failed",
+        row_statuses=["completed", "provider_failed", "provider_failed"],
+        candidates={"claude": [_candidate("AUDIT-CANDIDATE-001")]},
+        decisions={"claude": "findings"},
+    )
+    empty = _result(repo, run, [])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run), "--result", str(empty)
+    ]) == 1
+    source = "review:audit-001:claude:semantic_core:AUDIT-CANDIDATE-001"
+    proposal_result = _result(repo, run, [_proposal([source])], job_id="audit-synthesis-002")
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run), "--result", str(proposal_result)
+    ]) == 0
+    findings = yaml.safe_load((epic / "audit-findings.yaml").read_text(encoding="utf-8"))
+    assert findings["findings"][0]["source_ids"] == [source]
+
+
+def test_conservative_max_severity_and_conflicting_dispositions_block(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    _receipt(
+        repo,
+        attempt,
+        candidates={
+            "claude": [_candidate("C-1", severity="minor")],
+            "codex": [_candidate("C-2", severity="blocking")],
         },
+        decisions={"claude": "findings", "codex": "findings"},
+    )
+    sources = [
+        "review:audit-001:claude:semantic_core:C-1",
+        "review:audit-001:codex:semantic_core:C-2",
+    ]
+    result = _result(repo, run, [_proposal(sources, severity="minor")])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run), "--result", str(result)
+    ]) == 0
+    findings = yaml.safe_load((epic / "audit-findings.yaml").read_text(encoding="utf-8"))
+    assert findings["findings"][0]["severity"] == "blocking"
+
+    repo2, epic2, run2 = _fixture(tmp_path / "other")
+    attempt2 = _prepare(epic2, run2)
+    assert _record_pass(epic2, attempt2, run2, epic2 / "proof.txt") == 0
+    _receipt(
+        repo2,
+        attempt2,
+        candidates={
+            "claude": [_candidate("C-1", disposition="remediation_required")],
+            "codex": [_candidate("C-2", disposition="user_decision")],
+        },
+        decisions={"claude": "findings", "codex": "findings"},
+    )
+    result2 = _result(repo2, run2, [_proposal(sources)])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic2), str(attempt2), "--run", str(run2), "--result", str(result2)
+    ]) == 1
+
+
+def test_accepted_risk_requires_explicit_current_authority(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    _receipt(
+        repo,
+        attempt,
+        candidates={"claude": [_candidate("C-1")]},
+        decisions={"claude": "findings"},
+    )
+    source = "review:audit-001:claude:semantic_core:C-1"
+    result = _result(repo, run, [_proposal([source], disposition="accepted_risk")])
+    command = [
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run), "--result", str(result)
+    ]
+    assert AUDIT.main(command) == 1
+    assert AUDIT.main([
+        "record-authority", str(epic), str(attempt), "--run", str(run),
+        "--authority-id", "AUTH-RISK", "--kind", "accepted_risk",
+        "--subject", "runtime-defect", "--source", "user",
+    ]) == 0
+    assert AUDIT.main(command) == 0
+
+
+def test_bare_question_and_unverified_evidence_block_final_pass(tmp_path: Path) -> None:
+    for suffix, receipt_kwargs in (
+        ("question", {"decisions": {"claude": "blocked"}, "questions": {"claude": [{"q": "choose"}]}}),
+        ("unverified", {"decisions": {"claude": "unverified"}, "unverified": {"claude": ["runtime"]}}),
+    ):
+        repo, epic, run = _fixture(tmp_path / suffix)
+        attempt = _prepare(epic, run)
+        assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+        _receipt(repo, attempt, **receipt_kwargs)
+        result = _result(repo, run, [])
+        assert AUDIT.main([
+            "apply-synthesis", str(epic), str(attempt), "--run", str(run), "--result", str(result)
+        ]) == 0
+        assert AUDIT.main([
+            "finalize", str(epic), str(attempt), "--run", str(run)
+        ]) == 0
+        doc = yaml.safe_load((attempt / "audit-attempt.yaml").read_text(encoding="utf-8"))
+        assert doc["status"] == "blocked"
+
+
+def test_clean_full_audit_passes_and_second_full_attempt_is_blocked(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    _receipt(repo, attempt)
+    result = _result(repo, run, [])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run), "--result", str(result)
+    ]) == 0
+    assert AUDIT.main(["finalize", str(epic), str(attempt), "--run", str(run)]) == 0
+    assert AUDIT.main([
+        "validate", str(epic), str(attempt), "--phase", "complete", "--repo-root", str(repo)
+    ]) == 0
+    assert AUDIT.main(["prepare", str(epic), "--run", str(run), "--mode", "full"]) == 1
+
+
+def test_post_synthesis_findings_tamper_blocks_finalization(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    attempt = _prepare(epic, run)
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    _receipt(repo, attempt)
+    result = _result(repo, run, [])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run), "--result", str(result)
+    ]) == 0
+    findings = yaml.safe_load((epic / "audit-findings.yaml").read_text(encoding="utf-8"))
+    findings["tampered"] = True
+    _dump(epic / "audit-findings.yaml", findings)
+    assert AUDIT.main(["finalize", str(epic), str(attempt), "--run", str(run)]) == 1
+
+
+def test_targeted_prepare_requires_inline_remediation_evidence(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    finding = {
+        "id": "AF-001",
+        "fingerprint": "runtime-defect",
+        "first_seen_attempt": "audit-000",
+        "severity": "major",
+        "category": "implementation",
+        "disposition": "remediation_required",
+        "status": "remediated_pending_verification",
+        "title": "Runtime defect",
+        "evidence": ["src/service.py"],
+        "affected_paths": ["src/service.py"],
+        "closure_test": "pytest -q tests/unit/test_one.py",
+        "source_ids": ["review:audit-000:codex:semantic_core:C-1"],
+        "detected_by": [],
+        "authority_ref": None,
+    }
+    _dump(epic / "audit-findings.yaml", {"schema_version": 1, "epic_id": "E-001", "findings": [finding]})
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(run), "--mode", "targeted", "--finding", "AF-001"
+    ]) == 1
+    finding["remediation"] = {
+        "source_attempt_id": "audit-000",
+        "source_ids": ["review:audit-000:codex:semantic_core:C-1"],
+        "affected_paths": [_relative(epic / "design.md", repo)],
+        "affected_path_hashes": {
+            _relative(epic / "design.md", repo): "sha256:" + "0" * 64
+        },
+        "checks": [
+            {
+                "command": "pytest -q tests/unit/test_one.py",
+                "outcome": "pass",
+                "exit_code": 0,
+                "passed": 1,
+                "failed": 0,
+                "errors": 0,
+                "skipped": 0,
+                "summary": "1 passed",
+                "evidence_hashes": {
+                    _relative(epic / "proof.txt", repo): _sha(epic / "proof.txt")
+                },
+            }
+        ],
+    }
+    _dump(epic / "audit-findings.yaml", {"schema_version": 1, "epic_id": "E-001", "findings": [finding]})
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(run), "--mode", "targeted", "--finding", "AF-001"
+    ]) == 1
+    finding["remediation"] = {
+        "source_attempt_id": "audit-000",
+        "source_ids": ["review:audit-000:codex:semantic_core:C-1"],
+        "affected_paths": [_relative(epic / "design.md", repo)],
+        "affected_path_hashes": {_relative(epic / "design.md", repo): _sha(epic / "design.md")},
+        "checks": [
+            {
+                "command": "pytest -q tests/unit/test_one.py",
+                "outcome": "pass",
+                "exit_code": 0,
+                "passed": 1,
+                "failed": 0,
+                "errors": 0,
+                "skipped": 0,
+                "summary": "1 passed",
+                "evidence_hashes": {_relative(epic / "proof.txt", repo): _sha(epic / "proof.txt")},
+            }
+        ],
+    }
+    _dump(epic / "audit-findings.yaml", {"schema_version": 1, "epic_id": "E-001", "findings": [finding]})
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(run), "--mode", "targeted", "--finding", "AF-001"
+    ]) == 0
+
+
+def test_targeted_audit_packet_carries_snapshot_and_apply_rejects_drift(
+    tmp_path: Path, capsys: object
+) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    finding = _remediated_audit_finding(repo, epic)
+    findings_path = epic / "audit-findings.yaml"
+    _dump(
+        findings_path,
+        {"schema_version": 1, "epic_id": "E-001", "findings": [finding]},
+    )
+    attempt = _prepare(epic, run, "targeted", "--finding", "AF-001")
+    packet = yaml.safe_load((attempt / "review-packet.yaml").read_text(encoding="utf-8"))
+    target = packet["target_findings"][0]
+    assert target["id"] == "AF-001"
+    assert target["fingerprint"] == "runtime-defect"
+    assert target["finding_sha256"] == AUDIT._structured_sha256(finding)
+    assert target["affected_acceptance_ids"] == ["AC-001"]
+    assert target["source_candidate_ids"] == finding["source_ids"]
+    assert target["closure_test"] == finding["closure_test"]
+    assert target["remediation"] == finding["remediation"]
+    assert target["remediation_sha256"] == AUDIT._structured_sha256(
+        finding["remediation"]
     )
 
-    assert AUDIT.record_metrics(
-        SimpleNamespace(epic_dir=epic, attempt_dir=attempt)
-    ) == 0
-    metrics = _load(attempt / "audit-attempt.yaml")["metrics"]
-
-    assert metrics["new_findings"]["total"] == 2
-    assert metrics["new_findings"]["by_category"] == {
-        "implementation": 1,
-        "mechanical": 1,
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    verification = {
+        "fingerprint": "runtime-defect",
+        "outcome": "verified",
+        "source_candidate_ids": finding["source_ids"],
+        "closure_test": finding["closure_test"],
     }
-    assert metrics["new_findings"]["by_source"] == {
-        "deterministic": 1,
-        "reviewer": 1,
-    }
-    assert metrics["new_findings"]["by_provider"] == {"agy": 1, "codex": 1}
-    assert metrics["targeted_verification_required"] is True
-
-
-def test_valid_fail_links_nonpassing_row_to_remediation_finding(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    findings = _load(epic / "audit-findings.yaml")
-    findings["findings"] = [_finding()]
-    _dump(epic / "audit-findings.yaml", findings)
-    _complete_attempt(repo, epic, attempt, status="fail", skip_reviews=True)
-    matrix_path = attempt / "audit-verification-matrix.yaml"
-    matrix = _load(matrix_path)
-    matrix["rows"][0]["finding_ids"] = ["AUDIT-001"]
-    _dump(matrix_path, matrix)
-    _dump(epic / "audit-verification-matrix.yaml", matrix)
-
-    assert _validate(repo, epic, attempt, "complete") == []
+    _receipt(repo, attempt, verifications={"codex": [verification]})
+    current = yaml.safe_load(findings_path.read_text(encoding="utf-8"))
+    current["findings"][0]["title"] = "Drifted after audit preparation"
+    _dump(findings_path, current)
+    result = _result(repo, run, [])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run),
+        "--result", str(result),
+    ]) == 1
+    assert "targeted finding snapshot differs" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
-    ("status", "expected"),
+    ("field", "value", "message"),
     [
-        ("pass", "PASS requires passing scoped rows/gates and no active findings"),
-        ("fail", "FAIL requires non-passing evidence or remediation findings"),
-        ("blocked", "BLOCKED requires decision-gated findings or blocked evidence"),
+        ("source_candidate_ids", ["fabricated-source"], "source_candidate_ids"),
+        ("closure_test", "stale closure", "closure_test"),
     ],
 )
-def test_completion_status_must_match_evidence(
+def test_targeted_audit_verification_must_match_packet_identity(
     tmp_path: Path,
-    status: str,
-    expected: str,
+    capsys: object,
+    field: str,
+    value: object,
+    message: str,
 ) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    _complete_attempt(repo, epic, attempt, status=status)
-    if status == "pass":
-        findings = _load(epic / "audit-findings.yaml")
-        findings["findings"] = [_finding()]
-        _dump(epic / "audit-findings.yaml", findings)
-        matrix_path = attempt / "audit-verification-matrix.yaml"
-        matrix = _load(matrix_path)
-        matrix["rows"][0]["finding_ids"] = ["AUDIT-001"]
-        _dump(matrix_path, matrix)
-        _dump(epic / "audit-verification-matrix.yaml", matrix)
-    elif status in {"fail", "blocked"}:
-        _set_evidence_results(epic, attempt, "pass")
-        matrix = _load(attempt / "audit-verification-matrix.yaml")
-        _dump(epic / "audit-verification-matrix.yaml", matrix)
+    repo, epic, run = _fixture(tmp_path)
+    finding = _remediated_audit_finding(repo, epic)
+    _dump(
+        epic / "audit-findings.yaml",
+        {"schema_version": 1, "epic_id": "E-001", "findings": [finding]},
+    )
+    attempt = _prepare(epic, run, "targeted", "--finding", "AF-001")
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    verification = {
+        "fingerprint": "runtime-defect",
+        "outcome": "verified",
+        "source_candidate_ids": finding["source_ids"],
+        "closure_test": finding["closure_test"],
+    }
+    verification[field] = value
+    _receipt(repo, attempt, verifications={"codex": [verification]})
+    result = _result(repo, run, [])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run),
+        "--result", str(result),
+    ]) == 1
+    assert message in capsys.readouterr().err
 
-    errors = _validate(repo, epic, attempt, "complete")
 
-    assert any(expected in error for error in errors)
-
-
-def test_targeted_pass_requires_named_findings_to_be_terminal(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    _prepare(repo, epic)
+def test_targeted_audit_verification_accepts_exact_packet_identity(tmp_path: Path) -> None:
+    repo, epic, run = _fixture(tmp_path)
+    finding = _remediated_audit_finding(repo, epic)
     findings_path = epic / "audit-findings.yaml"
-    findings = _load(findings_path)
-    findings["findings"] = [_finding(status="remediated_pending_verification")]
-    _dump(findings_path, findings)
-    targeted = _prepare(repo, epic, mode="targeted", findings=["AUDIT-001"])
-    _complete_attempt(repo, epic, targeted)
-    matrix_path = targeted / "audit-verification-matrix.yaml"
-    matrix = _load(matrix_path)
-    matrix["rows"][0]["finding_ids"] = ["AUDIT-001"]
-    _dump(matrix_path, matrix)
-    _dump(epic / "audit-verification-matrix.yaml", matrix)
-
-    errors = _validate(repo, epic, targeted, "complete")
-    assert any("PASS requires passing scoped rows/gates and no active findings" in error for error in errors)
-    assert any("targeted PASS has unresolved findings: AUDIT-001" in error for error in errors)
-
-    findings["findings"][0]["status"] = "verified"
-    _dump(findings_path, findings)
-    assert _validate(repo, epic, targeted, "complete") == []
-
-
-def test_completion_requires_decision_report_matrix_and_nonpending_status(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    _set_evidence_results(epic, attempt)
-    attempt_path = attempt / "audit-attempt.yaml"
-    data = _load(attempt_path)
-    data["review"]["skipped_reason"] = "Evidence failed."
-    data["decision_reason"] = ""
-    _dump(attempt_path, data)
-
-    errors = _validate(repo, epic, attempt, "complete")
-
-    assert any("status remains pending" in error for error in errors)
-    assert any("missing published audit matrix" in error for error in errors)
-    assert any("missing audit report" in error for error in errors)
+    _dump(
+        findings_path,
+        {"schema_version": 1, "epic_id": "E-001", "findings": [finding]},
+    )
+    attempt = _prepare(epic, run, "targeted", "--finding", "AF-001")
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 0
+    verification = {
+        "fingerprint": "runtime-defect",
+        "outcome": "verified",
+        "source_candidate_ids": finding["source_ids"],
+        "closure_test": finding["closure_test"],
+    }
+    _receipt(repo, attempt, verifications={"codex": [verification]})
+    result = _result(repo, run, [])
+    assert AUDIT.main([
+        "apply-synthesis", str(epic), str(attempt), "--run", str(run),
+        "--result", str(result),
+    ]) == 0
+    findings = yaml.safe_load(findings_path.read_text(encoding="utf-8"))
+    assert findings["findings"][0]["status"] == "verified"
 
 
-def test_validator_early_guards_and_invalid_yaml(tmp_path: Path) -> None:
-    repo, epic = _build_repo(tmp_path)
-    attempt = _prepare(repo, epic)
-    assert AUDIT.AuditValidator(epic, attempt, "unknown", POLICY_PATH, repo).validate() == [
-        "unsupported validation phase: unknown"
-    ]
-    assert "epic directory does not exist" in AUDIT.AuditValidator(
-        repo / "missing", attempt, "pre_review", POLICY_PATH, repo
-    ).validate()[0]
-    assert "audit attempt directory does not exist" in AUDIT.AuditValidator(
-        epic, repo / "missing", "pre_review", POLICY_PATH, repo
-    ).validate()[0]
-
-    _write(epic / "audit-findings.yaml", "- not-a-mapping\n")
-    errors = _validate(repo, epic, attempt, "pre_review")
-    assert any("must contain a YAML mapping" in error for error in errors)
+def test_wrong_epic_run_cannot_mutate(tmp_path: Path) -> None:
+    _, epic, run = _fixture(tmp_path)
+    doc = yaml.safe_load(run.read_text(encoding="utf-8"))
+    doc["epic_id"] = "E-999"
+    _dump(run, doc)
+    assert AUDIT.main(["prepare", str(epic), "--run", str(run), "--mode", "full"]) == 1
 
 
-def test_cli_main_reports_prepare_validation_success_and_failure(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+def test_mutation_guard_rejects_forged_path_and_recorded_active_job(
+    tmp_path: Path, capsys: object
 ) -> None:
-    repo, epic = _build_repo(tmp_path)
-    assert AUDIT.main(
-        [
-            "prepare",
-            str(epic),
-            "--repo-root",
-            str(repo),
-            "--policy",
-            str(POLICY_PATH),
-            "--mode",
-            "full",
-        ]
-    ) == 0
-    assert "reviews/audit-001" in capsys.readouterr().out
-    attempt = epic / "reviews/audit-001"
-    _set_evidence_results(epic, attempt)
-    assert AUDIT.main(
-        [
-            "validate",
-            str(epic),
-            str(attempt),
-            "--phase",
-            "pre_review",
-            "--repo-root",
-            str(repo),
-            "--policy",
-            str(POLICY_PATH),
-        ]
-    ) == 0
-    assert "Audit artifact validation passed" in capsys.readouterr().out
+    _, epic, run = _fixture(tmp_path)
+    run_doc = yaml.safe_load(run.read_text(encoding="utf-8"))
+    forged = run.parents[4] / "forged-run.yaml"
+    _dump(forged, run_doc)
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(forged), "--mode", "full"
+    ]) == 1
+    assert "worker run path must be" in capsys.readouterr().err
 
-    (epic / "acceptance-traceability.yaml").unlink()
-    assert AUDIT.main(
-        [
-            "prepare",
-            str(epic),
-            "--repo-root",
-            str(repo),
-            "--policy",
-            str(POLICY_PATH),
-            "--mode",
-            "full",
-            "--allow-extra",
-            "--reason",
-            "test error handling",
-        ]
-    ) == 1
-    assert "Audit artifact operation failed" in capsys.readouterr().err
+    run_doc["active_job"] = {"job_id": "stale-active"}
+    _dump(run, run_doc)
+    assert AUDIT.main([
+        "prepare", str(epic), "--run", str(run), "--mode", "full"
+    ]) == 1
+    assert "recorded active job" in capsys.readouterr().err
 
 
-def test_command_and_reviewer_are_read_only_provider_based_and_isolated() -> None:
-    command = AUDIT_COMMAND_PATH.read_text(encoding="utf-8")
-    reviewer = REVIEWER_PATH.read_text(encoding="utf-8")
-    combined = f"{command}\n{reviewer}".lower()
+def test_mutation_guard_accepts_one_slugged_epic_and_rejects_ambiguity(
+    tmp_path: Path, capsys: object
+) -> None:
+    repo, epic, run = _fixture(tmp_path, "e-001-row-oriented-result-bank")
+    attempt = _prepare(epic, run)
+    (repo / "docs" / "epics" / "E-001-second-match").mkdir()
+    assert _record_pass(epic, attempt, run, epic / "proof.txt") == 1
+    assert "resolver is ambiguous" in capsys.readouterr().err
 
-    assert "audit is read-only" in combined
-    assert "one full audit" in command
-    assert "one targeted" in command
-    assert "semantic_core" in command
-    assert "{{AUDIT_PROVIDER}}" in reviewer
-    assert "claude, codex, and agy" in command.lower()
-    assert "gpt-5.6-terra" in command
-    assert 'model_reasoning_effort="\\"$CODEX_REASONING_EFFORT\\""' in command
-    assert "--sandbox read-only" in command
-    assert "--dangerously-skip-permissions" in command
-    for coupled_term in (
-        "glm-5.2",
-        "auto-fix finding",
-        "maximum audit attempts: 3",
-        "compliance percentage",
-    ):
-        assert coupled_term not in combined
+
+def test_policy_has_no_metrics_capture_matrix_or_false_positive() -> None:
+    policy = yaml.safe_load(
+        (Path(__file__).parents[2] / "src_shared" / "config" / "audit-policy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    text = yaml.safe_dump(policy).lower()
+    assert "metrics" not in text
+    assert "capture" not in text
+    assert "matrix" not in text
+    assert "false_positive" not in text
+    assert "rejected" not in text

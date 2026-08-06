@@ -83,7 +83,9 @@ If epic provided, analyze epic for product-impacting changes:
 # Sources to check
 epic_design = Read(f"docs/epics/{epic_dir}/design.md")
 epic_acceptance = Read(f"docs/epics/{epic_dir}/acceptance-criteria.md")
-agent_summaries = Read(f".scope/{epic_dir}/agent_summaries.jsonl")
+delivery_manifest = Read(f"docs/epics/{epic_dir}/delivery-manifest.yaml")
+implementation_summary = Read(f"docs/epics/{epic_dir}/implementation-summary.md")
+implementation_evidence = Read(f"docs/epics/{epic_dir}/implementation-evidence.yaml")
 
 # Detect product-level changes
 changes = {

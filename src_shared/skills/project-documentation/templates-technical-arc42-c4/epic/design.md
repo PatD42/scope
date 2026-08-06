@@ -73,16 +73,11 @@ Proof:
 Define rejection, retry, rollback, partial-success, terminal-state, and
 fail-closed behavior where applicable.
 
-## Capability Challenges
+## Capability-Specific Risks and Constraints
 
-Create one section for every common and selected-capability challenge required
-by `refinement-policy.yaml`.
-
-### CHALLENGE-authority-and-ownership
-
-Resolution:
-
-Evidence: [EVIDENCE: src/path/file.py#symbol_name]
+For each selected capability, record only the risks, constraints, failure
+modes, or proof requirements that materially affect this epic. Omit generic
+checklist sections that add no design information.
 
 ## Hostile Cases
 
@@ -101,3 +96,16 @@ Evidence: [EVIDENCE: tests/path/test_file.py#test_name]
 Name the exact native contract checks, focused tests, integration/E2E coverage,
 runtime proof, migration validation, and operational evidence required by the
 design. Record commands only when they are executable in the project.
+
+## Documentation Obligations
+
+Record only durable product, architecture, or operations documentation that the
+implementation must create or align before audit. Give each requirement a stable
+`DOC-NNN` heading. The delivery manifest assigns its repository-relative target
+path and owning implementation story. Use `None` when implementation does not
+change durable documentation.
+
+### DOC-NNN: [Required documentation alignment]
+
+State the exact product, architecture, or operational fact that the target
+documentation must contain after implementation.

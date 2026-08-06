@@ -1,0 +1,63 @@
+schema_version: 2
+provider: codex
+
+workers:
+  refinement:
+    phases:
+      product: {model: gpt-5.6-sol, reasoning_effort: high}
+      design: {model: gpt-5.6-sol, reasoning_effort: max}
+      handoff: {model: gpt-5.6-sol, reasoning_effort: high}
+      correction: {model: gpt-5.6-sol, reasoning_effort: high}
+      finalize: {model: gpt-5.6-sol, reasoning_effort: high}
+  implementation:
+    phases:
+      story: {model: gpt-5.6-terra, reasoning_effort: max}
+      epic_verify: {model: gpt-5.6-sol, reasoning_effort: max}
+      audit_remediation: {model: gpt-5.6-terra, reasoning_effort: max}
+      debugging: {model: gpt-5.6-sol, reasoning_effort: max}
+      delivery_summary: {model: gpt-5.6-terra, reasoning_effort: medium}
+  audit:
+    phases:
+      merge_findings: {model: gpt-5.6-terra, reasoning_effort: medium}
+  diagnostic:
+    phases:
+      investigate: {model: gpt-5.6-terra, reasoning_effort: high}
+
+workers_on_budget:
+  refinement:
+    phases:
+      product: {model: gpt-5.6-terra, reasoning_effort: high}
+      design: {model: gpt-5.6-terra, reasoning_effort: high}
+      handoff: {model: gpt-5.6-terra, reasoning_effort: max}
+      correction: {model: gpt-5.6-terra, reasoning_effort: max}
+      finalize: {model: gpt-5.6-terra, reasoning_effort: high}
+  implementation:
+    phases:
+      story: {model: gpt-5.6-luna, reasoning_effort: max}
+      epic_verify: {model: gpt-5.6-terra, reasoning_effort: max}
+      audit_remediation: {model: gpt-5.6-luna, reasoning_effort: max}
+      debugging: {model: gpt-5.6-terra, reasoning_effort: max}
+      delivery_summary: {model: gpt-5.6-luna, reasoning_effort: medium}
+  audit:
+    phases:
+      merge_findings: {model: gpt-5.6-luna, reasoning_effort: medium}
+  diagnostic:
+    phases:
+      investigate: {model: gpt-5.6-luna, reasoning_effort: high}
+
+provider_settings:
+  executable: codex
+
+runtime:
+  roles:
+    refinement: {timeout_seconds: 7200}
+    implementation: {timeout_seconds: 14400}
+    audit: {timeout_seconds: 7200}
+    diagnostic: {timeout_seconds: 3600}
+  lifecycle:
+    poll_interval_seconds: 1
+    heartbeat_interval_seconds: 10
+    normal_exit_grace_seconds: 0.5
+    termination_grace_seconds: 3
+    log_tail_lines: 40
+    log_tail_characters: 8000

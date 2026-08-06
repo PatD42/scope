@@ -1,0 +1,37 @@
+schema_version: 2
+epic_id: EPIC-ID
+risk_level: medium
+capabilities: []
+author_provider: codex
+acceptance_ids:
+  - AC-001
+dependencies: []
+artifact_ownership:
+  - path: details.md
+    owner: product
+    authority: canonical
+  - path: acceptance-criteria.md
+    owner: product
+    authority: canonical
+  - path: design.md
+    owner: architecture
+    authority: canonical
+  - path: delivery-manifest.yaml
+    owner: architecture
+    authority: canonical
+decisions: []
+documentation_obligations: []
+stories:
+  - id: story-01
+    plan_path: file-plan-story-01.yaml
+    acceptance_ids:
+      - AC-001
+    proof_ids:
+      - story-01-proof-001
+proofs:
+  - id: story-01-proof-001
+    classification: implementation_created
+    level: unit
+    path: tests/test_feature.py
+    command: pytest -q tests/test_feature.py
+    expected_result: The approved behavior passes with no failures, errors, or skips.

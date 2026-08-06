@@ -60,7 +60,7 @@ else
     REPO_ROOT="$(cd "$(dirname "$EPIC_DIR")/../.." && pwd)"
 fi
 
-"$PYTHON_CMD" "$VALIDATOR" "$EPIC_DIR" \
+"$PYTHON_CMD" "$VALIDATOR" validate "$EPIC_DIR" \
     --phase handoff \
     --policy "$POLICY" \
     --repo-root "$REPO_ROOT"

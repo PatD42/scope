@@ -33,7 +33,7 @@ If the config file doesn't have the value yet, add it there and read from config
 
 `candidate_files` in the boundary plan are investigation hints, not mandatory edit targets. Required contracts, required touchpoints, forbidden changes, and proof obligations are mandatory.
 
-**Self-check before completing:** Record candidate files used, relevant candidate files skipped, and developer-discovered files in implementation evidence. If you cannot justify a changed file from source inspection or a binding obligation, revert it.
+**Self-check before completing:** Report candidate files used, relevant candidate files skipped, and developer-discovered files in the worker result. If you cannot justify a changed file from source inspection or a binding obligation, leave it unchanged. Durable implementation evidence is reserved for exact proof results and content hashes.
 
 ## Rule 6: Live Smoke Test for New External Services
 

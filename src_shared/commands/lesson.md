@@ -1,6 +1,6 @@
 ---
 name: lesson
-description: Record lessons learned as detectable patterns/anti-patterns with RCA. With args, interviews the user. Without args, auto-detects lessons since last /implement or /lesson.
+description: Record lessons learned as detectable patterns/anti-patterns with RCA. With args, interviews the user. Without args, auto-detects lessons from recent durable repository evidence.
 args: "[lesson description]"
 skills: project-documentation
 ---
@@ -137,26 +137,21 @@ Saved L-{NNN}: {Title}
 ### Step 1: Determine Time Window
 
 ```python
-# Find last /lesson, /implement, or /wrap_epic marker
-lesson_markers = Glob(".scope/tracking/commands/lesson-*.jsonl")
-implement_markers = Glob(".scope/tracking/commands/implement-*.jsonl")
-wrap_markers = Glob(".scope/tracking/commands/wrap_epic-*.jsonl")
+# Use the most recent committed lesson as the discovery boundary.
+last_lesson = Bash(
+    "git log -1 --format='%aI' -- docs/lessons-learned/"
+).strip()
 
-all_markers = sorted(lesson_markers + implement_markers + wrap_markers)
-
-if all_markers:
-    last_marker = Read(all_markers[-1])
-    since_date = json.loads(last_marker)["completed_at"]
+if last_lesson:
+    since_date = last_lesson
 else:
-    # NO MARKERS EXIST — scan the entire epic context
-    # This happens on first run, after compaction, or in fresh sessions
-    # Fall back to: beginning of the active epic, or last 30 days
+    # Fall back to the active epic history, or the last 30 days.
     epic_first_commit = Bash("git log --reverse --oneline -- docs/epics/{EPIC_DIR}/ | head -1")
     if epic_first_commit:
         since_date = Bash(f"git log --format='%aI' {epic_first_commit.split()[0]}")
     else:
         since_date = "30 days ago"
-    print(f"No tracking markers found. Scanning full epic history since {since_date}.")
+    print(f"No committed lesson boundary found. Scanning since {since_date}.")
 ```
 
 **Important:** Already-recorded lessons (those in `docs/lessons-learned/`) must be filtered out. Read INDEX.md and exclude any candidates that match existing entries by title or detection rule.
@@ -165,14 +160,16 @@ else:
 
 Analyze these sources for lessons:
 
-**Source 1: Agent summaries — failures and retries**
+**Source 1: Durable delivery evidence — failures, retries, and corrections**
 ```python
-summaries = Glob(".scope/*/agent_summaries.jsonl")
+summaries = Glob("docs/epics/**/implementation-summary.md")
+evidence = Glob("docs/epics/**/implementation-evidence.yaml")
+findings = Glob("docs/epics/**/audit-findings.yaml")
+reviews = Glob("docs/epics/**/reviews/**/reviewer-receipt.yaml")
 # Look for:
-# - status: "failure" entries
-# - attempts_made > 2
-# - concerns with severity "high" or "critical"
-# - developer_discovered_files with evidence
+# - failed or repeated proof attempts
+# - major/blocking findings and their remediations
+# - implementation deviations and repeated reviewer findings
 ```
 
 **Source 2: Git history — fix patterns**
@@ -223,7 +220,7 @@ For each candidate, infer:
 Lessons detected since {date}:
 
   1. [Anti-Pattern] [Critical] Gemini Pro times out on large context
-     Signal: 3 retries in agent_summaries for story-04, timeout errors in logs
+     Signal: 3 failed proof attempts for story-04 and matching audit evidence
      Detection: When Gemini Pro prompt exceeds ~100K tokens
      Rule: Split large synthesis into chunks or use Flash for pre-processing
      RCA: Pro model has 60s timeout; large entity profiles exceed it
@@ -261,14 +258,7 @@ For `[add]`, switch to Mode 1 interview.
 
 Save each using the standard format (Step 5 from Mode 1).
 
-### Step 7: Write Tracking Marker
-
-```bash
-mkdir -p .scope/tracking/commands
-echo '{"command":"lesson","completed_at":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","lessons_recorded":{N}}' >> ".scope/tracking/commands/lesson-$(date +%Y%m%d-%H%M%S).jsonl"
-```
-
-### Step 8: Summary
+### Step 7: Summary
 
 ```
 Recorded {N} lessons:

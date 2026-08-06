@@ -1,2 +1,4 @@
 PyYAML>=6.0,<7
-pexpect>=4.9,<5
+filelock>=3.16,<4
+jsonschema>=4.23,<5
+psutil>=6.1,<8

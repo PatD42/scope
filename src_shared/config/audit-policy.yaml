@@ -1,12 +1,17 @@
-schema_version: 2
-attempt_version: 3
-matrix_version: 3
-findings_version: 3
-implementation_evidence_version: 3
+schema_version: 3
+attempt_version: 1
+findings_version: 1
+review_packet_version: 1
+reviewer_receipt_version: 2
+implementation_evidence_version: 2
 
-allowed_modes:
+modes:
   - full
   - targeted
+
+attempt_limits:
+  full: 1
+  targeted: 1
 
 attempt_statuses:
   - pending
@@ -21,88 +26,50 @@ gate_statuses:
   - blocked
   - not_applicable
 
-row_statuses:
-  - ready
-  - pass
-  - fail
-  - unverified
-  - blocked
-  - not_applicable
+review:
+  profiles:
+    - default
+    - budget
+  sets:
+    standard:
+      providers:
+        - claude
+        - codex
+        - agy
+    expanded:
+      providers:
+        - claude
+        - codex
+        - agy
+        - opencode
+  allowed_providers:
+    - claude
+    - codex
+    - agy
+    - opencode
+  mission: semantic_core
 
-row_priorities:
-  - required
-  - runtime_required
-  - high_risk
-  - optional
-  - documentation
-
-review_decisions:
-  - pass
-  - findings
-  - blocked
-  - unverified
-
-review_providers:
-  - claude
-  - codex
-  - agy
-
-review_missions:
-  - semantic_core
-
-risk_review_policy:
-  low:
-    providers:
-      - claude
-      - codex
-      - agy
-    capability_focus: false
-  medium:
-    providers:
-      - claude
-      - codex
-      - agy
-    capability_focus: false
-  high:
-    providers:
-      - claude
-      - codex
-      - agy
-    capability_focus: true
-  critical:
-    providers:
-      - claude
-      - codex
-      - agy
-    capability_focus: true
-
-review_budget:
-  maximum_full_attempts: 1
-  maximum_targeted_attempts: 1
-
-implementation_evidence:
-  story_statuses:
-    - verified
-    - implementation_complete_unverified
-    - blocked
-  command_kinds:
-    - test
-    - regression
-    - static
-    - contract
-    - runtime
-    - operational
-    - inspection
-  command_statuses:
+evidence:
+  outcomes:
     - pass
     - fail
     - blocked
 
-finding:
+authority:
+  kinds:
+    - gate_not_applicable
+    - accepted_risk
+  sources:
+    - user
+    - preapproval
+  decision: approved
+
+findings:
+  id_pattern: '^AF-[0-9]{3}$'
   severities:
-    - blocking
-    - major
     - minor
+    - major
+    - blocking
   categories:
     - implementation
     - architecture_contract
@@ -115,23 +82,29 @@ finding:
     - documentation
     - mechanical
     - specialist
-  sources:
-    - deterministic
-    - reviewer
   dispositions:
     - remediation_required
     - user_decision
     - documentation_decision
     - accepted_risk
-    - false_positive
   statuses:
     - open
     - remediated_pending_verification
     - verified
     - accepted_risk
-    - rejected
+  status_by_disposition:
+    remediation_required: open
+    user_decision: open
+    documentation_decision: open
+    accepted_risk: accepted_risk
+  terminal_statuses:
+    - verified
+    - accepted_risk
 
-terminal_finding_statuses:
-  - verified
-  - accepted_risk
-  - rejected
+paths:
+  delivery_manifest: delivery-manifest.yaml
+  implementation_evidence: implementation-evidence.yaml
+  findings: audit-findings.yaml
+  report: epic_audit.md
+  review_packet: review-packet.yaml
+  reviewer_receipt: reviewer-receipt.yaml

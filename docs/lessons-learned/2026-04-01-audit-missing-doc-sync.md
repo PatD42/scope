@@ -31,6 +31,7 @@ Three-part fix across the pipeline:
 - "update docs" — implementation is correct, docs should change
 - "code should fix" — code diverged from design, fix the code
 - "new ADR needed" — divergence is intentional, record as decision
-- "defer" — handle later in /wrap_epic
+- "return to refinement" — the documentation obligation was absent from the
+  approved handoff and must be assigned before implementation resumes
 
 This prevents the catch-22 of auto-updating docs to match divergent code, which would launder the drift and make it invisible.

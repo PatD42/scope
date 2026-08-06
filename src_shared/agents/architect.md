@@ -88,15 +88,11 @@ inventing a generic code abstraction.
 Run applicable native validators before architecture approval. Store raw output
 under `tmp_debug`.
 
-## Architecture Challenges
+## Capability Risks
 
-Apply every common and selected-capability challenge from
-`refinement-policy.yaml` while designing. Create one
-`CHALLENGE-{challenge-id}` section with a concrete resolution and evidence.
-
-Do not write checklist-only answers such as `passed`, `handled`, or
-`not applicable` without explaining the mechanism or why the challenge truly
-does not apply.
+For each selected capability, describe only the risks, constraints, failure
+modes, and proof that materially affect this epic. Do not manufacture generic
+challenge sections or checklist-only answers.
 
 For each high/critical implementation requirement, describe:
 
@@ -123,22 +119,25 @@ Each accepted decision includes:
 - affected stable requirement IDs.
 
 Scan `docs/architecture/09-adr-summary.md`, scope-specific ADR directories, and
-current v3 epic `design.md` files before assigning a new global ADR number.
+current epic `design.md` files before assigning a new global ADR number.
 
-## Manifest Judgment
+## Delivery Manifest
 
-The validator scaffolds requirement and decision rows. Complete only semantic
-judgment:
+Record only the machine-readable ownership and reference facts consumed by
+implementation and audit:
 
 - requirement type and risk;
-- implementation-required flag;
-- affected surfaces;
-- proof obligations;
+- stable acceptance and decision IDs;
+- artifact ownership;
+- proof classification and obligations;
 - owner story after story design;
+- durable documentation obligations as stable ID, owner story,
+  repository-relative target path, and `design.md` requirement reference that
+  contains the ID and resolves to its matching `### DOC-NNN` heading;
 - native artifact kind, authority, and capability tags;
 - unresolved items.
 
-Do not restate canonical requirement or decision prose in the manifest.
+Do not restate canonical acceptance or decision prose in the manifest.
 
 ## Story Boundaries
 
@@ -159,8 +158,10 @@ Every `file-plan-story-*.yaml` distinguishes:
 - binding `proof_obligations`;
 - YAML `depends_on`.
 
-Every implementation-required manifest row has exactly one owner story, and
-that story owns a proof obligation referencing the row.
+Every acceptance and proof ID has exactly one owner story.
+Every manifest v2 documentation obligation also has exactly one owner story.
+The target document remains expected-to-change implementation output: bind the
+obligation declaration into handoff, not the target's pre-implementation bytes.
 
 ## Proof Strategy
 
@@ -184,14 +185,15 @@ is an architecture gap, not work to defer silently to audit.
 Architecture is ready for independent review only when:
 
 - repository evidence supports current-state claims;
-- all applicable challenge sections are complete;
+- capability-specific risks and constraints are addressed where applicable;
 - high/critical flows and hostile cases are explicit;
 - native contracts parse or validate;
 - no product or architecture decision is deferred to implementation;
+- every material product, architecture, or operations documentation update is
+  a story-owned manifest obligation rather than deferred housekeeping;
 - story dependencies are acyclic;
 - every implementation requirement has ownership and proof;
 - deterministic reconciliation passes.
 
-Independent Claude and Codex review remains required by the approved risk
-topology. The architect does not treat its own design challenge as independent
-closure evidence.
+Independent review remains required by the packet's policy-derived assignments.
+The architect does not treat its own design as independent closure evidence.

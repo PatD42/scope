@@ -1,123 +1,81 @@
-schema_version: 2
-profile_version: 3
-manifest_version: 3
-findings_version: 2
-traceability_version: 3
+schema_version: 3
+delivery_manifest_version: 2
+compatible_delivery_manifest_versions:
+  - 1
+  - 2
+refinement_state_version: 1
+findings_version: 1
+review_packet_version: 1
+reviewer_receipt_version: 2
 
-allowed_architecture_scopes:
-  - none
-  - system
-  - backend
-  - frontend
-  - mixed
+phases:
+  product:
+    required_artifacts:
+      - details.md
+      - acceptance-criteria.md
+      - design.md
+      - delivery-manifest.yaml
+  review:
+    required_artifacts:
+      - details.md
+      - acceptance-criteria.md
+      - design.md
+      - delivery-manifest.yaml
+      - refinement-state.yaml
+      - refinement-findings.yaml
+  handoff:
+    required_artifacts:
+      - details.md
+      - acceptance-criteria.md
+      - design.md
+      - delivery-manifest.yaml
+      - refinement-state.yaml
+      - refinement-findings.yaml
+      - refinement-review.md
 
-allowed_risk_levels:
+obsolete_artifacts:
+  - refinement-profile.yaml
+  - refinement-manifest.yaml
+  - acceptance-traceability.yaml
+  - refinement-handoff.yaml
+  - refinement-approvals.yaml
+  - refinement-correction-receipts.yaml
+  - proof-preflight.yaml
+  - refinement-metrics.yaml
+
+risk_levels:
   - low
   - medium
   - high
   - critical
 
-allowed_author_providers:
+capabilities:
+  - api_interface
+  - persistence_migration
+  - async_orchestration
+  - external_integration
+  - security_privacy
+  - ui_accessibility
+  - operations_deployment
+  - llm_ml_evaluation
+  - content_configuration
+
+author_providers:
   - claude
   - codex
 
-phase_required_artifacts:
-  profile:
-    - details.md
-    - refinement-profile.yaml
-  product:
-    - details.md
-    - refinement-profile.yaml
-    - acceptance-criteria.md
-    - design.md
-  architecture:
-    - details.md
-    - refinement-profile.yaml
-    - acceptance-criteria.md
-    - design.md
-    - refinement-manifest.yaml
-  reconcile:
-    - details.md
-    - refinement-profile.yaml
-    - acceptance-criteria.md
-    - design.md
-    - refinement-manifest.yaml
-    - acceptance-traceability.yaml
-  review:
-    - details.md
-    - refinement-profile.yaml
-    - acceptance-criteria.md
-    - design.md
-    - refinement-manifest.yaml
-    - refinement-findings.yaml
-    - acceptance-traceability.yaml
-  handoff:
-    - details.md
-    - refinement-profile.yaml
-    - acceptance-criteria.md
-    - design.md
-    - refinement-manifest.yaml
-    - refinement-findings.yaml
-    - refinement-review.md
-    - acceptance-traceability.yaml
-
-review_topology:
-  low:
-    semantic_core: alternate_author
-    capability_specialist: false
-    maximum_full_reviews: 1
-    maximum_targeted_verifications: 1
-  medium:
-    semantic_core:
-      - claude
-      - codex
-    capability_specialist: false
-    maximum_full_reviews: 1
-    maximum_targeted_verifications: 1
-  high:
-    semantic_core:
-      - claude
-      - codex
-    capability_specialist: true
-    specialist_provider: author_provider
-    maximum_full_reviews: 1
-    maximum_targeted_verifications: 2
-  critical:
-    semantic_core:
-      - claude
-      - codex
-    capability_specialist: true
-    specialist_provider: author_provider
-    maximum_full_reviews: 1
-    maximum_targeted_verifications: 2
-    explicit_user_residual_risk_approval: true
-
-review_missions:
-  - semantic_core
-  - capability_specialist
-
-design:
-  required_headings:
-    - Current State and Evidence
-    - Product and Architecture Decisions
-    - Architecture and Ownership
-    - Failure and Partial States
-    - Capability Challenges
-    - Hostile Cases
-    - Verification Strategy
-  evidence_marker: "EVIDENCE"
-  flow_required_risks:
-    - high
-    - critical
-  hostile_case_required_risks:
-    - high
-    - critical
-  advisory_content_budgets:
-    details_words: 1200
-    design_words: 4000
-
-proof_obligations:
-  evidence_kinds:
+manifest:
+  artifact_authorities:
+    - canonical
+    - evidence
+  decision_statuses:
+    - pending
+    - decided
+  proof_classifications:
+    - existing_runnable
+    - implementation_created
+    - external_blocked
+  proof_levels:
     - unit
     - integration
     - e2e
@@ -126,125 +84,88 @@ proof_obligations:
     - runtime_command
     - operational
     - inspection
-  flow_closure_kinds:
-    - integration
-    - e2e
-    - live_smoke
-    - runtime_command
-    - operational
-  freshness:
-    - reusable
-    - fresh
+  documentation_obligation_id_pattern: '^DOC-[0-9]{3}$'
 
-capabilities:
-  api_interface:
-    description: Public or cross-component API, command, event, or interface behavior.
-    native_contract_required: true
-    accepted_artifact_kinds:
-      - openapi
-      - api_schema
-      - cli_contract
-      - event_schema
-      - interface_contract
-  persistence_migration:
-    description: Persistence, schema evolution, migration, backfill, or destructive data work.
-    native_contract_required: true
-    accepted_artifact_kinds:
-      - sql
-      - database_schema
-      - migration_contract
-      - data_ownership_contract
-  async_orchestration:
-    description: Queues, workers, retries, state machines, resumability, or multi-step orchestration.
-    native_contract_required: true
-    accepted_artifact_kinds:
-      - event_schema
-      - state_machine
-      - orchestration_contract
-      - validator_contract
-  external_integration:
-    description: A third-party service, remote API, external runtime, or provider boundary.
-    native_contract_required: true
-    accepted_artifact_kinds:
-      - openapi
-      - api_schema
-      - integration_contract
-      - adapter_contract
-  security_privacy:
-    description: Authentication, authorization, secrets, privacy, compliance, or sensitive data.
-    native_contract_required: true
-    accepted_artifact_kinds:
-      - authorization_contract
-      - security_model
-      - threat_model
-      - privacy_contract
-  ui_accessibility:
-    description: User-interface behavior, navigation, interaction, rendering, or accessibility.
-    native_contract_required: false
-    accepted_artifact_kinds:
-      - ui_contract
-      - accessibility_plan
-      - visual_spec
-  operations_deployment:
-    description: Deployment, rollback, live smoke, monitoring, runbooks, or operational execution.
-    native_contract_required: true
-    accepted_artifact_kinds:
-      - deployment_contract
-      - runbook
-      - smoke_contract
-      - observability_contract
-  llm_ml_evaluation:
-    description: Model prompts, model/provider variability, evaluation, confidence, quality, or cost trials.
-    native_contract_required: true
-    accepted_artifact_kinds:
-      - prompt_contract
-      - output_schema
-      - evaluation_contract
-      - trial_plan
-      - model_routing_contract
-  content_configuration:
-    description: Authored configuration, prompts, policies, or content whose semantic quality is part of the design.
-    native_contract_required: false
-    accepted_artifact_kinds:
-      - config_schema
-      - authored_config
-      - prompt_contract
-      - content_contract
+state:
+  statuses:
+    - drafting
+    - product_approved
+    - in_review
+    - ready_for_final_approval
+    - approved
+    - blocked
+  authority_kinds:
+    - product_contract
+    - final_handoff
+    - product_decision
+    - accepted_risk
+  authority_sources:
+    - user
+    - preapproval
+  gate_decision: approved
 
-manifest:
-  requirement_risks:
-    - low
-    - medium
+gate_boundaries:
+  product_contract:
+    paths:
+      - details.md
+      - acceptance-criteria.md
+  final_handoff:
+    paths:
+      - details.md
+      - acceptance-criteria.md
+      - design.md
+      - delivery-manifest.yaml
+      - refinement-findings.yaml
+      - refinement-review.md
+    include_story_plans: true
+    include_completed_reviews: true
+    include_owned_artifacts: true
+  accepted_risk:
+    paths:
+      - details.md
+      - acceptance-criteria.md
+      - design.md
+      - delivery-manifest.yaml
+
+review:
+  id_pattern: '^refine-[0-9]{3}$'
+  kinds:
+    - full
+    - targeted
+  profiles:
+    - default
+    - budget
+  sets:
+    standard:
+      semantic_providers:
+        - claude
+        - codex
+    expanded:
+      semantic_providers:
+        - claude
+        - codex
+        - agy
+        - opencode
+  allowed_providers:
+    - claude
+    - codex
+    - agy
+    - opencode
+  missions:
+    - semantic_core
+    - capability_specialist
+  specialist_risks:
     - high
     - critical
-  requirement_types:
-    - behavior
-    - quality
-    - error
-    - operational
-    - migration
-    - security
-    - evidence
-  artifact_authorities:
-    - canonical
-    - derived
-    - evidence
-  open_item_statuses:
-    - open
-    - resolved
-    - user_question
+  maximum_full_reviews: 1
+  maximum_targeted_reviews: 2
 
 findings:
+  id_pattern: '^RF-[0-9]{3}$'
   severities:
-    - blocking
-    - major
     - minor
-  statuses:
-    - open
-    - corrected
-    - verified
-    - accepted_risk
-    - rejected
+    - major
+    - blocking
   categories:
     - product_decision
     - architecture
@@ -254,53 +175,17 @@ findings:
     - mechanical
     - missing_evidence
     - specialist
-
-traceability:
   statuses:
-    - planned
-    - implemented
-    - tested
+    - open
+    - corrected
     - verified
-    - blocked
-    - deferred
-
-architecture_challenges:
-  common:
-    - authority-and-ownership
-    - producer-consumer-flow
-    - failure-and-partial-state
-    - proof-path
-  api_interface:
-    - request-response-completeness
-    - compatibility-and-errors
-  persistence_migration:
-    - composite-identity
-    - direct-write-bypass
-    - concurrency-and-mutation
-    - compatibility-and-rollback
-  async_orchestration:
-    - terminal-accounting
-    - retry-replay-and-idempotency
-    - partial-cancellation-state
-  external_integration:
-    - official-authority-freshness
-    - structured-error-precedence
-    - timeout-and-retry
-  security_privacy:
-    - authorization-bypass
-    - sensitive-data-and-audit
-  ui_accessibility:
-    - interaction-and-accessibility-state
-    - error-and-partial-rendering
-  operations_deployment:
-    - exact-commands-and-prerequisites
-    - approval-and-dry-run-boundary
-    - artifacts-and-observability
-  llm_ml_evaluation:
-    - frozen-input-and-model-identities
-    - shared-cost-authority
-    - measurement-and-partial-results
-    - positive-and-negative-fixtures
-  content_configuration:
-    - single-content-authority
-    - renderer-validator-parity
+    - accepted_risk
+  blocking_statuses:
+    - open
+    - corrected
+  closure_statuses:
+    - corrected
+    - verified
+  terminal_statuses:
+    - verified
+    - accepted_risk

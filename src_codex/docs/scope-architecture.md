@@ -1,4 +1,4 @@
-# SCOPE - Simple Claude Orchestrator for Product Engineering
+# SCOPE - Simple Claude/Codex Orchestrator for Product Engineering
 
 **Status:** Implementation
 
@@ -21,9 +21,15 @@
 
 ## 1. Overview
 
-SCOPE is a Claude Code skill-based framework for epic lifecycle management. It provides slash commands, agent definitions, and documentation skills that turn Claude Code into a structured product engineering environment.
+SCOPE is a Claude Code and Codex framework for epic lifecycle management. It
+provides public command contracts, bounded worker roles, deterministic
+validators, standalone agents, and documentation skills.
 
-Claude Code is the orchestrator. Commands contain the workflow logic (phases, approval gates, agent sequencing). Tasks are managed via Claude Code's built-in TaskCreate/TaskUpdate/TaskList.
+The public command is the sole conversational orchestrator. For
+`epic_refine`, `implement`, and `audit_epic`, it derives phase state from
+durable artifacts and deterministic validators, then launches fresh bounded
+provider processes for repository work. The orchestrator retains approval
+gates and all user communication.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -34,18 +40,18 @@ Claude Code is the orchestrator. Commands contain the workflow logic (phases, ap
 │   /prd_breakdown           Break PRD into epics                  │
 │   /epic_refine {epic-id}   Refine epic (contract-first)          │
 │   /implement {epic-id}     Implement (developer writes tests)    │
-│   /implement_tdd {epic-id} Implement (SDET writes tests first)   │
 │   /audit_epic {epic-id}    Audit implementation                  │
+│   /wrap_epic {epic-id}     Verify, archive, commit, and merge    │
 │   /sync_product [epic-id]  Sync product documentation            │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │
                                  ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                    Claude Code (Orchestrator)                      │
+│               Claude Code or Codex (Orchestrator)                 │
 │                                                                   │
 │   - Executes command workflows step-by-step                      │
-│   - Manages tasks via TaskCreate / TaskUpdate / TaskList          │
-│   - Spawns agents via Task tool (subagent_type)                  │
+│   - Derives workflow state from durable artifacts                │
+│   - Launches bounded workers with structured job/results         │
 │   - Manages git worktrees for implementation                     │
 │   - Handles user approval gates                                  │
 └────────────────────────────────┬─────────────────────────────────┘
@@ -58,7 +64,6 @@ Claude Code is the orchestrator. Commands contain the workflow logic (phases, ap
 │                   │  │                   │  │                   │
 │   architect       │  │   project-        │  │   docs/product/   │
 │   developer       │  │    documentation  │  │   docs/arch/      │
-│   sdet            │  │   project-        │  │   docs/epics/     │
 │   product-owner   │  │    tracking       │  │   docs/releases/  │
 └──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
@@ -71,42 +76,25 @@ Claude Code is the orchestrator. Commands contain the workflow logic (phases, ap
 
 ```
 scope/
-├── src/
-│   ├── agents/                             # Agent definitions (7 files)
-│   │   ├── architect.md
-│   │   ├── developer.md
-│   │   ├── sdet.md
-│   │   ├── product-owner.md
-│   │   ├── reverse-engineer-architect.md
-│   │   ├── reverse-engineer-pm.md
-│   │   └── REVERSE-ENGINEERING-GUIDE.md
-│   │
-│   ├── commands/                           # Slash commands
-│   │   ├── prd_refine.md
-│   │   ├── prd_refine/                    # Supporting resources
-│   │   ├── prd_breakdown.md
-│   │   ├── prd_breakdown/                 # Supporting resources
-│   │   ├── epic_refine.md
-│   │   ├── implement.md
-│   │   ├── implement_tdd.md
-│   │   ├── audit_epic.md
-│   │   ├── sync_product.md
-│   │   └── config_example.yaml
-│   │
-│   └── skills/                             # Skills
-│       ├── project-documentation/
-│       │   ├── SKILL.md                    # Local file-based documentation
-│       │   ├── templates-product-atlassian/
-│       │   └── templates-technical-arc42-c4/
-│       └── project-tracking/
-│           ├── SKILL.md                    # Wrapper (dispatches to backend)
-│           └── {backend}.md                # Backend implementations
-│
-└── docs/                                   # Documentation
-    ├── scope-architecture.md               # This document
-    ├── epic-workflow.md                    # Epic phase-by-phase workflow
-    ├── reverse-engineering-guide.md        # Guide for /re_documentation
-    └── artifact-structure.md               # Project file structure guidelines
+├── src_shared/
+│   ├── commands/                           # Cross-platform workflow contracts
+│   ├── workers/                            # Bounded refinement/implementation/audit roles
+│   ├── scripts/                            # Runner, reviewer, and validators
+│   ├── config/                             # Policies and strict JSON schemas
+│   ├── agents/                             # Shared standalone roles
+│   ├── skills/                             # Documentation and tracking skills
+│   └── governance/                         # Production quality rules and checklists
+├── src_claude/
+│   ├── commands/                           # Claude-specific commands
+│   └── agents/                             # Claude role overrides
+├── src_codex/
+│   ├── commands/                           # Codex-specific commands
+│   ├── agents/                             # Codex role overrides
+│   ├── skills/                             # Codex workflow guidance
+│   ├── docs/                               # Installed Codex reference docs
+│   └── .codex-plugin/                      # Plugin manifest
+├── tests/unit/                             # Deterministic runtime/contract tests
+└── docs/                                   # Repository documentation
 ```
 
 ### 2.2 Target Project Structure
@@ -116,22 +104,24 @@ After installing SCOPE skills into a target project:
 ```
 user-project/
 ├── .claude/
-│   ├── commands/                           # Slash commands (copied from src/commands/)
+│   ├── commands/                           # Claude workflow contracts
 │   │   ├── prd_refine.md
 │   │   ├── prd_breakdown.md
 │   │   ├── epic_refine.md
 │   │   ├── implement.md
-│   │   ├── implement_tdd.md
 │   │   ├── audit_epic.md
+│   │   ├── wrap_epic.md
 │   │   └── sync_product.md
 │   │
-│   ├── agents/                             # Agent definitions (copied from src/agents/)
+│   ├── agents/                             # Standalone role definitions
 │   │   ├── architect.md
 │   │   ├── developer.md
-│   │   ├── sdet.md
 │   │   └── product-owner.md
 │   │
-│   └── skills/                             # Skills (copied from src/skills/)
+│   ├── workers/                            # Fresh bounded worker contracts
+│   ├── scripts/                            # Runner, reviewer, and validators
+│   ├── config/                             # Policies and strict schemas
+│   └── skills/                             # Shared skills
 │       ├── project-documentation/
 │       │   ├── SKILL.md
 │       │   ├── templates-product-atlassian/
@@ -139,6 +129,15 @@ user-project/
 │       └── project-tracking/
 │           ├── SKILL.md
 │           └── {backend}.md
+│
+├── plugins/scope/                          # Equivalent Codex plugin assets
+│   ├── commands/
+│   ├── agents/
+│   ├── workers/
+│   ├── scripts/
+│   ├── config/
+│   ├── skills/
+│   └── docs/
 │
 ├── .scope/
 │   └── config.yaml                         # Project configuration
@@ -149,7 +148,7 @@ user-project/
 │   ├── epics/{epic-id}/                    # Per-epic documentation
 │   └── releases/{version}/                 # Release documentation
 │
-├── ./wip/                                       # Worktrees for implementation
+├── ./worktree/                                  # Worktrees for implementation
 │   └── {epic-id}/                          # Worktree per epic
 │       ├── .git                            # Worktree link
 │       └── src/                            # Code changes
@@ -159,9 +158,10 @@ user-project/
 
 **Key points:**
 - Documentation is always local markdown files in `docs/`
-- Implementation happens in git worktrees under `./wip/`
+- Implementation happens in git worktrees under `./worktree/`
 - Main branch holds refinement artifacts; worktrees hold implementation
-- No `.scope/` runtime state beyond `config.yaml`
+- Canonical workflow state and reviewer receipts remain in epic/audit
+  artifacts; only runner snapshots, prompts, and logs live under `tmp_debug/`
 
 ---
 
@@ -180,20 +180,15 @@ Create PRD draft or run /prd_create
        │                       (architecture, dependency analysis)
        ▼
 /epic_refine {epic-id}         Adaptive epic refinement
-       │                       (4 approval gates, native contracts)
+       │                       (product + final authority, native contracts)
        ▼
-┌──────┴──────┐
-│             │
-▼             ▼
-/implement    /implement_tdd   Story-by-story implementation
-│             │                (choose one per epic)
-└──────┬──────┘
+/implement {epic-id}          Story-by-story implementation
        │
        ▼
 /audit_epic {epic-id}          Read-only evidence audit
        │                       (one full + one targeted verification)
        ▼
-User merges worktree           Manual merge when satisfied
+/wrap_epic {epic-id}           Verify seal, archive, approved exact merge
 ```
 
 **Supporting commands:**
@@ -203,17 +198,19 @@ User merges worktree           Manual merge when satisfied
 
 ## 4. Commands
 
-Each command is a self-contained workflow definition in markdown with YAML frontmatter.
+Each public command is a workflow contract in Markdown with YAML frontmatter.
+The three worker-backed commands keep orchestration in that contract and put
+repository execution behind shared worker/result schemas.
 
-| Command | Description | Agents Used | Skills Used |
-|---------|-------------|-------------|-------------|
+| Command | Description | Execution context | Supporting context |
+|---------|-------------|-------------------|--------------------|
 | `/prd_create` | Lightweight interview to create a first-pass PRD | (inline) | project-documentation |
 | `/prd_refine` | Interactive PRD refinement with checklist | (inline) | project-documentation |
 | `/prd_breakdown` | Convert PRD into implementable epics | (inline) | project-documentation, project-tracking |
-| `/epic_refine` | Contract-first epic refinement, 4 gates | product-owner, architect | project-documentation |
-| `/implement` | Developer implements + writes tests | architect, developer | project-documentation |
-| `/implement_tdd` | TDD: SDET tests first, developer implements | architect, sdet, developer | project-documentation |
-| `/audit_epic` | Audit implementation against design | (inline) | project-documentation |
+| `/epic_refine` | Contract-first epic refinement, product and final authority | fresh refinement workers + independent reviewers | durable epic artifacts and validators |
+| `/implement` | Story implementation, proof, nested audit, and remediation | fresh implementation workers | boundary plans, governance, and validators |
+| `/audit_epic` | Read-only evidence and semantic audit | deterministic tooling + independent reviewers + audit synthesis worker | durable audit artifacts and validators |
+| `/wrap_epic` | Verify and close an already completed delivery | deterministic finalizer after one bound approval | delivery seal, exact staged tree, and hardened Git helpers |
 | `/sync_product` | Sync product docs after implementation | (inline) | project-documentation |
 
 ### Command Frontmatter
@@ -221,56 +218,50 @@ Each command is a self-contained workflow definition in markdown with YAML front
 ```yaml
 ---
 name: implement
-description: Implement an epic story-by-story. Developer implements and writes tests.
+description: Orchestrate bounded story workers through proof, audit, remediation, and delivery evidence.
 args: "{epic-id}"
-skills: project-documentation
-agents: architect, developer
 ---
 ```
 
 - `name` - Slash command name
 - `description` - What the command does
 - `args` - Expected arguments
-- `skills` - Skills the command uses (loaded by agents)
-- `agents` - Agent definitions spawned during execution
+- `skills` - Optional skills used by commands that still require them
+- `agents` - Optional agent definitions used by non-worker workflows
+
+### Bounded Workers
+
+`epic_refine`, `implement`, and `audit_epic` launch shared worker roles from
+`workers/` through `scripts/scope-worker.py`. Each fresh process receives one
+job packet, a role prompt, exact read/write boundaries, validation obligations,
+and a strict result schema. The runner owns the write lock, one pre/post
+snapshot for write jobs, timeout, cancellation, and compact recovery state
+under ignored `tmp_debug/`.
+Independent semantic review is launched separately through
+`scripts/scope-reviewer.py` and remains read-only.
 
 ---
 
 ## 5. Agents
 
-Agents are markdown files that define persona, responsibilities, and constraints for Claude Code subagents.
+Agents are Markdown files that define persona, responsibilities, and
+constraints for workflows and standalone roles that have not moved to bounded
+workers. The three worker-backed commands do not use native subagent inheritance
+for repository execution.
 
 | Agent | File | Role |
 |-------|------|------|
 | **Architect** | `architect.md` | System design, story breakdown, implementation boundary plans, ADRs, contracts |
 | **Developer** | `developer.md` | Implements stories, writes tests, follows implementation boundary plan intent |
-| **SDET** | `sdet.md` | Writes tests first (TDD mode), test strategy |
 | **Product Owner** | `product-owner.md` | Business requirements, acceptance criteria, PDRs |
 | **RE Architect** | `reverse-engineer-architect.md` | Reverse-engineer architecture from existing code |
-| **RE PM** | `reverse-engineer-pm.md` | Reverse-engineer product requirements from existing code |
+| **RE Product Owner** | `reverse-engineer-po.md` | Reverse-engineer product requirements from existing code |
+| **RE Operations** | `reverse-engineer-ops.md` | Reverse-engineer operational behavior and runbooks |
 
-### Agent Spawning
-
-Claude Code spawns agents via the Task tool:
-
-```
-Task(
-  prompt: "Implement story 3 for epic SCOPE-42. File plan: ...",
-  subagent_type: "general-purpose"
-)
-```
-
-The command workflow controls sequencing:
-- **Story 0:** Optional architect-authored content or shared scaffolding
-- **Stories 1-N:** Developer implements in declared dependency order
-- **Audit remediation:** Developer corrects named findings before targeted verification
-
-### Agent Constraints
-
-- **One agent per story** - No splitting implementation across agents
-- **Single developer agent** - Prevents concurrent worktree write conflicts
-- **Sequential SDET** (TDD mode) - SDET tasks are sequential to prevent test conflicts
-- **Agents read, not write, documentation** - Developer reads docs but doesn't write to docs/ (writes code only)
+The worker-backed epic commands use `workers/*.md` through `scope-worker.py`,
+not these standalone role files or native Task inheritance. The runner permits
+one write worker per working root and records one result plus one completed-job
+row before the command advances.
 
 ---
 
@@ -278,7 +269,7 @@ The command workflow controls sequencing:
 
 ### 6.1 Project Documentation
 
-**File:** `src/skills/project-documentation/SKILL.md`
+**File:** `src_shared/skills/project-documentation/SKILL.md`
 
 Local markdown files in `docs/`. The skill defines:
 - Folder structure (`docs/product/`, `docs/architecture/`, `docs/epics/`, `docs/releases/`)
@@ -294,7 +285,7 @@ documentation:
 
 ### 6.2 Project Tracking
 
-**File:** `src/skills/project-tracking/SKILL.md`
+**File:** `src_shared/skills/project-tracking/SKILL.md`
 
 Wrapper skill that dispatches to a configured backend. Supports:
 - Local file-based tracking
@@ -327,22 +318,22 @@ Implementation happens in git worktrees, not on the main branch.
 
 ```
 /implement {epic-id}
-  → Creates worktree at ./wip/{epic-id} on branch epic/{epic-id}
+  → Creates worktree at ./worktree/{epic-id} on branch epic/{epic-id}
   → All stories implemented in the worktree
-  → User merges when satisfied with quality
-  → Worktree NOT cleaned up automatically (user decides when to merge/remove)
+  → Audit PASS and delivery summary are sealed without committing
+  → /wrap_epic archives and merges the exact seal-bound delta after approval
+  → Worktree cleanup remains a separate user decision
 ```
 
-### 7.3 Built-In Task Management
+### 7.3 Artifact-Derived Worker State
 
-Claude Code provides TaskCreate, TaskUpdate, TaskList tools that replace the need for custom plan schemas and state management.
-
-**Implementation commands use tasks like:**
-```
-TaskCreate(subject: "architect-story-0", description: "Scaffold shared modules...")
-TaskCreate(subject: "dev-story-1", description: "Implement authentication...")
-TaskUpdate(taskId: "1", addBlockedBy: ["0"])  # story-1 blocked by story-0
-```
+The worker-backed public commands derive the next legal phase or story from
+epic/audit artifacts and deterministic validation output. The runner records
+job, process, result, and recovery summaries under ignored
+`tmp_debug/scope-runs/`; those operational records do not become a second
+semantic workflow ledger or permanent evidence source. For implementation
+jobs, the runner—not the worker—promotes observed path identities and proof
+provenance into durable `implementation-evidence.yaml`.
 
 ### 7.4 Story Sizing
 
@@ -352,7 +343,9 @@ count, file count, or line count.
 
 ### 7.5 Inter-Story Dependencies
 
-Parsed from each boundary plan's YAML `depends_on` field.
+Dependencies are parsed from each boundary plan's YAML `depends_on` field. The
+public command validates them and launches one eligible implementation worker
+at a time, preserving the declared order and one-writer invariant.
 
 ### 7.6 Test-as-Soon-as-Possible
 
@@ -389,9 +382,9 @@ require a material approved boundary change or explicit user authorization.
 
 ### 7.10 Context Window Optimization
 
-- Agent files loaded at session start are in high-attention area
-- Commands keep agent prompts minimal (epic_id + phase + task description)
-- Agents fetch documentation on demand via direct file paths
+- Worker prompts contain only the bounded role contract
+- Job packets carry the epic, phase/story, exact paths, and validation commands
+- Workers fetch authorized repository context on demand via direct file paths
 - Progressive disclosure: parent files link to details, agents load only what's needed
 
 ---
@@ -400,55 +393,49 @@ require a material approved boundary change or explicit user authorization.
 
 ### 8.1 Refinement (`/epic_refine`)
 
-Adaptive epic refinement with four approval gates:
+Adaptive epic refinement with two preapprovable authority gates:
 
 ```
-Phase 0: Intent and risk profile
-  → USER APPROVAL GATE #1
-
-Phase 1: Product contract
-  → USER APPROVAL GATE #2
+Phase 1: Observable product contract and negative cases
+  → PRODUCT-CONTRACT AUTHORITY
 
 Phase 2: Repository-grounded architecture and native contracts
-  → USER APPROVAL GATE #3
 
-Phase 3: Story boundaries, ownership, traceability, and proof obligations
+Phase 3: Story boundaries and proof obligations
+  → RUN EACH PRE-EXISTING PROOF ONCE
 
-Phase 4: Deterministic validation and risk-directed independent review
-  → USER APPROVAL GATE #4
+Phase 4: Independent review and bounded correction
+  → FINAL HANDOFF AUTHORITY
 ```
 
-**Output:** A v3 refinement profile and manifest, evidence-backed `design.md`,
-native contracts, per-story boundary plans, generated acceptance traceability,
-findings, and approval record.
+**Output:** A canonical `delivery-manifest.yaml`, evidence-backed `design.md`,
+native contracts, per-story boundary plans, durable findings, and
+`refinement-state.yaml` containing hash-bound authority.
 
-### 8.2 Implementation (`/implement` or `/implement_tdd`)
+### 8.2 Implementation (`/implement`)
 
-**`/implement` (non-TDD):**
+**`/implement`:**
 ```
 Optional Story 0: Architect-authored content or shared scaffolding
 Story 1-N: Developer implements and proves each boundary-plan obligation
 After all stories: Project-native tests, static checks, runtime proof, and audit
 ```
 
-**`/implement_tdd`:**
-```
-Optional Story 0: Architect-authored content or shared scaffolding
-Story 1-N:
-  SDET writes tests first (from implementation boundary plan + acceptance criteria)
-    → Developer implements to make tests pass
-  → Each story: project-native contract and proof verification
-After all stories: Project-native regression, runtime proof, and audit
-```
-
-**Orchestration:** Claude Code uses TaskCreate to create tasks for each story with proper `addBlockedBy` dependencies, then processes them in order.
+**Orchestration:** The public command validates dependency order and launches a
+fresh bounded worker for each eligible story. It verifies the result hash,
+actual changed paths, durable proof evidence, and story boundary before
+advancing. Material product, architecture, or operations documentation is a
+manifest v2 obligation owned by an implementation story, so it is current
+before audit rather than rewritten during wrap. After audit PASS, the delivery
+summary is written and the deterministic finalizer seals the exact audited
+workspace.
 
 ### 8.3 Audit (`/audit_epic`)
 
 Audit is read-only and evidence based:
 
-1. validate the v2 implementation handoff;
-2. derive one verification row per traceability item;
+1. validate the implementation handoff and durable evidence;
+2. derive scoped acceptance and gate rows from canonical artifacts;
 3. run project-native evidence gates;
 4. execute risk-directed reviewer roles in fresh contexts;
 5. merge stable findings and return `PASS`, `FAIL`, or `BLOCKED`;
@@ -461,7 +448,27 @@ Audit is read-only and evidence based:
 2. The user resolves decision-gated findings.
 3. Audit performs one targeted verification.
 
-### 8.4 Supporting Operations
+### 8.4 Closure (`/wrap_epic`)
+
+`/wrap_epic` is a thin controller over the deterministic wrap finalizer. It
+verifies the durable seal without relying on prunable runtime logs, stages only
+the sealed delta plus the epic archival rename, and presents the staged tree,
+fixed labels, and current main HEAD for one approval. The finalizer then commits
+that exact tree, rechecks main HEAD under both mutation locks, merges the exact
+closure commit, verifies the merge, and refreshes CodeGraph at the main root.
+
+Wrap does not discover decisions or lessons, author documentation, regenerate
+the implementation summary, infer dirty-file ownership, or write a tracking
+marker. Incomplete deliveries return `NOT_READY` without mutation; automated
+abandonment remains explicitly deferred.
+
+The finalizer neutralizes Git hooks, fsmonitor commands, injected Git
+environment, replace refs, and grafts. Repository-configured merge drivers and
+clean/process filters remain enabled so legitimate custom merges and Git LFS
+continue to work; the selected repository's local Git configuration is therefore
+an explicit trust boundary.
+
+### 8.5 Supporting Operations
 
 - **`/sync_product`** - When implementation reveals product-level changes (new capabilities, terminology changes, scope shifts), updates `docs/product/` accordingly
 
@@ -557,12 +564,15 @@ docs/epics/{epic-id}/
 ├── details.md                  # Goal, scope, non-goals, lifecycle status
 ├── acceptance-criteria.md      # Canonical observable product behavior
 ├── design.md                   # Evidence, decisions, architecture, failures, proof
-├── refinement-profile.yaml     # Risk and required review assignments
-├── refinement-manifest.yaml    # Requirement and decision ownership
-├── acceptance-traceability.yaml # Generated ownership/proof index
+├── delivery-manifest.yaml      # Risk, acceptance, decisions, stories, proof ownership
+├── refinement-state.yaml       # Workflow state and hash-bound user authority
 ├── file-plan-story-*.yaml      # Per-story implementation boundaries
 ├── refinement-findings.yaml    # Independent review findings
-└── refinement-review.md        # Approved implementation handoff
+├── refinement-review.md        # Approved implementation handoff
+├── implementation-evidence.yaml # Runner-observed paths and proof provenance
+├── implementation-summary.md   # Post-audit delivery summary
+├── delivery-seal.yaml          # Deterministic closure boundary
+└── epic_audit.md               # Terminal audit report
 ```
 
 ### Agent Documentation Responsibilities
@@ -571,16 +581,60 @@ docs/epics/{epic-id}/
 |-------|--------|-------|
 | **Product Owner** | product/*, epics/*/details, acceptance-criteria, product decisions in design | architecture/10-quality |
 | **Architect** | architecture/*, epics/*/design, native contracts, boundary plans | product/strategy, product/definition |
-| **SDET** | (none) | product/definition, architecture/06-runtime, 10-quality, 08-cross-cutting/testing, epics/* |
-| **Developer** | code and implementation evidence | architecture/08-cross-cutting/*, epics/*/design, boundary plans |
+| **Developer** | code, tests, proof results, and required documentation targets | architecture/08-cross-cutting/*, epics/*/design, boundary plans |
+| **Runner/finalizer** | durable implementation evidence and delivery seal | worker results, Git identities, audit artifacts, delivery manifest |
 
 ---
 
 ## 10. Architectural Decisions
 
-### 10.1 Claude Code as Orchestrator
+### 10.1 Conversational Orchestrator and Bounded Workers
 
-Commands are self-contained workflows. Claude Code executes them step-by-step, manages tasks via TaskCreate/TaskUpdate/TaskList, and spawns agents via the Task tool. No separate orchestrator agent, planner, or execution engine.
+Public commands own user decisions, the product/final gates, status, and lifecycle.
+Fresh Scope-managed provider processes perform one refinement phase,
+implementation story or remediation batch, or audit-synthesis pass. The shared
+runner enforces structured results, one mutation at a time, timeout,
+cancellation, scoped write snapshots, and three-case recovery. Its small
+`run.yaml` contains operational job summaries only; semantic state and closure
+evidence remain in canonical epic and audit artifacts.
+
+Worker routing is provider-local. A Codex installation reads
+`plugins/scope/config/worker-policy.yaml`, where every worker phase uses the
+GPT-5.6 family; a Claude installation reads `.claude/config/worker-policy.yaml`,
+where every worker phase uses Claude. Each file defines `workers` (quality) and
+`workers_on_budget`; the orchestrator selects the profile at run initialization.
+The worker receives only its bounded job, never the routing profile.
+
+Claude routing uses the evergreen Claude Code aliases `fable`, `opus`, and
+`sonnet`: Fable owns high-leverage product/design judgment, Opus owns critical
+verification, debugging, and remediation, and Sonnet owns bounded execution and
+mechanical synthesis. The budget profile lowers effort on bounded work but keeps
+Fable and Opus at critical gates. Completed jobs record the requested alias and
+raw model IDs reported by Claude Code `modelUsage` without maintaining a
+version-sensitive fallback-family taxonomy. The Claude reviewer uses CLI text
+output directly; because that
+transport does not report resolved model IDs, its receipt marks actual-model and
+transparent-fallback status as unavailable rather than treating the requested
+alias as proof of execution.
+
+Independent reviewers use shared `reviewer-policy.yaml`. Reviewer profile
+(`default` or `budget`) and reviewer set (`standard` or `expanded`) are separate
+choices bound into the durable review packet/attempt and receipt. Expanded
+review can add Antigravity/Gemini 3.1 Pro High and OpenCode/GLM 5.2 Max without
+changing the primary provider used for workers.
+
+#### CodeGraph-assisted repository investigation
+
+Workers and independent reviewers use the CodeGraph 1.5+ CLI, never its MCP.
+The shared lifecycle policy initializes only a Git-ignored missing index and
+prepares it once per command run. Implementation incrementally synchronizes it
+before each new write job; refinement and read-only audit do not repeat the
+lifecycle. Agents receive query-only commands and one compact
+ready/degraded/unavailable state.
+Focused `explore`/`node` queries accelerate navigation and relationship
+analysis; direct source, tests, and validators remain authoritative. Affected
+tests require explicit configured filters and supplement rather than replace
+the workflow's required validation.
 
 ### 10.2 Native Contracts over Generic Prose
 
@@ -591,19 +645,15 @@ each important boundary. No language-specific contract type is mandatory.
 
 Documentation is always local markdown files in `docs/`. Files are in git alongside code. Agents read/write directly. Follows Arc42+C4 and Atlassian Blueprint patterns for structure.
 
-### 10.4 Two Implementation Modes
-
-`/implement` (developer writes code + tests) for straightforward features. `/implement_tdd` (SDET writes tests first, developer implements) for complex integration scenarios. User chooses per epic.
-
-### 10.5 One Agent Per Story
+### 10.4 One Worker Per Story
 
 A single agent implements the complete story. Splitting across agents creates context coordination complexity. Story boundaries align with technical component boundaries.
 
-### 10.6 Test-as-Soon-as-Possible
+### 10.5 Test-as-Soon-as-Possible
 
 Tests are written at the earliest possible point, not deferred to epic end. Fixing issues in closed stories is expensive (context lost). Early testing catches issues while context is fresh.
 
-### 10.7 Architect-Led Story Breakdown
+### 10.6 Architect-Led Story Breakdown
 
 Architect leads story breakdown; Product Owner validates business alignment. Technical boundaries drive story structure (component alignment, dependencies).
 

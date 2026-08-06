@@ -1,6 +1,6 @@
 ---
 name: decision
-description: Record architectural (ADR) or product (PDR) decisions with intent and rationale. With args, interviews the user. Without args, auto-detects decisions since last /implement or /decision.
+description: Record architectural (ADR) or product (PDR) decisions with intent and rationale. With args, interviews the user. Without args, auto-detects decisions from recent durable repository evidence.
 args: "[decision description]"
 skills: project-documentation
 ---
@@ -15,7 +15,7 @@ Capture decisions and their rationale so they survive beyond the conversation. W
 - Saves only the decision and rationale (not the full conversation)
 
 **Without argument:** `/decision`
-- Auto-detects all decisions made since last `/implement` or `/decision`
+- Auto-detects decisions from recent Git and canonical epic evidence
 - Presents candidates for discussion, refinement, and approval
 - You choose which to keep, edit, or discard
 
@@ -198,27 +198,22 @@ Saved {ADR|PDR}-{NNN}: {Title}
 ### Step 1: Determine Time Window
 
 ```python
-# Find the last /decision, /implement, or /wrap_epic marker
-decision_markers = Glob(".scope/tracking/commands/decision-*.jsonl")
-implement_markers = Glob(".scope/tracking/commands/implement-*.jsonl")
-wrap_markers = Glob(".scope/tracking/commands/wrap_epic-*.jsonl")
+# Use the most recent committed decision artifact as the discovery boundary.
+last_decision = Bash(
+    "git log -1 --format='%aI' -- docs/architecture/adr/ "
+    "docs/product/decisions.md docs/epics/*/design.md"
+).strip()
 
-# Use the most recent marker as the "since" timestamp
-all_markers = sorted(decision_markers + implement_markers + wrap_markers)
-
-if all_markers:
-    last_marker = Read(all_markers[-1])
-    since_date = json.loads(last_marker)["completed_at"]
+if last_decision:
+    since_date = last_decision
 else:
-    # NO MARKERS EXIST — scan the entire epic context
-    # This happens on first run, after compaction, or in fresh sessions
-    # Fall back to: beginning of the active epic, or last 30 days, whichever is shorter
+    # Fall back to the active epic history, or the last 30 days.
     epic_first_commit = Bash("git log --reverse --oneline -- docs/epics/{EPIC_DIR}/ | head -1")
     if epic_first_commit:
         since_date = Bash(f"git log --format='%aI' {epic_first_commit.split()[0]}")
     else:
         since_date = "30 days ago"
-    print(f"No tracking markers found. Scanning full epic history since {since_date}.")
+    print(f"No committed decision boundary found. Scanning since {since_date}.")
 ```
 
 **Important:** Already-recorded decisions (those already in epic `design.md`,
@@ -232,7 +227,7 @@ Analyze the following sources for decisions made in the time window:
 
 **Source 1: Git history**
 ```bash
-# Commits since last marker
+# Commits since the durable decision boundary
 git log --oneline --since="{since_date}"
 
 # File changes (what was modified)
@@ -246,11 +241,11 @@ Look for signals in commit messages and diffs:
 - New patterns introduced (new base classes, utilities, middleware)
 - Infrastructure changes (Dockerfile, CI/CD, IaC)
 
-**Source 2: Agent summaries**
+**Source 2: Durable implementation and audit evidence**
 ```python
-# Check agent summaries for architectural choices
-summaries = Glob(".scope/*/agent_summaries.jsonl")
-# Look for "developer_discovered_files", "concerns", "decisions" fields
+summaries = Glob("docs/epics/**/implementation-summary.md")
+evidence = Glob("docs/epics/**/implementation-evidence.yaml")
+findings = Glob("docs/epics/**/audit-findings.yaml")
 ```
 
 **Source 3: Code patterns**
@@ -326,15 +321,7 @@ For `[add]`, switch to Mode 1 interview for that decision.
 
 Save each approved decision using the same format as Mode 1, Step 4.
 
-### Step 6: Write Tracking Marker
-
-```bash
-# Record that /decision was run (for next auto-detect window)
-mkdir -p .scope/tracking/commands
-echo '{"command":"decision","completed_at":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","decisions_recorded":{N}}' >> ".scope/tracking/commands/decision-$(date +%Y%m%d-%H%M%S).jsonl"
-```
-
-### Step 7: Summary
+### Step 6: Summary
 
 ```
 Recorded {N} decisions:

@@ -93,12 +93,13 @@ UNTRACKED_FILES="$(git ls-files --others --exclude-standard 2>/dev/null || true)
 Also inspect likely Scope artifacts when present:
 
 - `docs/epics/*/details.md`
-- `docs/epics/*/acceptance-traceability.yaml`
+- `docs/epics/*/delivery-manifest.yaml`
+- `docs/epics/*/refinement-state.yaml`
 - `docs/epics/*/implementation-evidence.yaml`
-- `docs/epics/*/audit-verification-matrix.yaml`
 - `docs/epics/*/audit-findings.yaml`
 - `docs/epics/*/epic_audit.md`
 - `docs/epics/*/reviews/audit-*/audit-attempt.yaml`
+- `docs/epics/*/reviews/*/reviewer-receipt.yaml`
 - `.scope/*/*summaries*.jsonl`
 - `session-handoff.md` if it already exists
 
